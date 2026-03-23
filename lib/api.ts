@@ -4,6 +4,10 @@ const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
 const COINS_API = 'https://coins.llama.fi'
 
+function normProtocolId(s: string): string {
+  return s.toLowerCase().replace(/-/g, '')
+}
+
 // Fetch all pools from DeFiLlama
 export async function fetchPools(): Promise<Pool[]> {
   const response = await fetch(`${DEFILLAMA_YIELDS}/pools`)
@@ -17,7 +21,7 @@ export async function fetchPools(): Promise<Pool[]> {
   
   return pools.filter(pool => 
     supportedChainIds.includes(pool.chain) &&
-    SUPPORTED_PROTOCOLS.some(p => pool.project.toLowerCase().includes(p.replace('-', '')))
+    SUPPORTED_PROTOCOLS.some(p => normProtocolId(pool.project).includes(normProtocolId(p)))
   )
 }
 

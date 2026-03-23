@@ -38,11 +38,20 @@ const PROTOCOL_OPTIONS = [
   { value: 'pancakeswap', label: 'PancakeSwap' },
   { value: 'velodrome', label: 'Velodrome' },
   { value: 'aerodrome', label: 'Aerodrome' },
+  { value: 'camelot', label: 'Camelot' },
+  { value: 'meteora', label: 'Meteora' },
+  { value: 'hyperliquid', label: 'Hyperliquid' },
+  { value: 'jupiter', label: 'Jupiter' },
+  { value: 'raydium', label: 'Raydium' },
+  { value: 'orca', label: 'Orca' },
+  { value: 'drift', label: 'Drift' },
+  { value: 'vertex', label: 'Vertex' },
+  { value: 'gmx', label: 'GMX' },
+  { value: 'dydx', label: 'dYdX' },
+  { value: 'kyberswap', label: 'KyberSwap' },
   { value: 'aave', label: 'Aave' },
   { value: 'compound', label: 'Compound' },
   { value: 'morpho', label: 'Morpho' },
-  { value: 'raydium', label: 'Raydium' },
-  { value: 'orca', label: 'Orca' },
 ]
 
 export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersProps) {

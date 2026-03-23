@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, BarChart3, ArrowLeftRight, Coins } from 'lucide-react'
+import { Activity, BarChart3, ArrowLeftRight, Coins, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Activity },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
+  { name: 'DEX', href: '/dex', icon: LayoutGrid },
   { name: 'Swap', href: '/swap', icon: ArrowLeftRight },
 ]
 
