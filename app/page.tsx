@@ -47,7 +47,7 @@ export default function DashboardPage() {
     if (!pools) return []
     return sortPools(
       pools.filter(p => p.apy > 0 && p.apy < 10000 && p.tvlUsd > 100000),
-      'apy',
+      'apr',
       'desc'
     ).slice(0, 5)
   }, [pools])
@@ -78,7 +78,7 @@ export default function DashboardPage() {
             valueClassName="text-foreground"
           />
           <StatCard
-            title="Maior APY"
+            title="Maior APR"
             value={stats ? formatPercent(stats.maxApy) : '-'}
             icon={TrendingUp}
             description="Pool com maior rendimento"
@@ -86,7 +86,7 @@ export default function DashboardPage() {
             valueClassName="text-success"
           />
           <StatCard
-            title="APY Medio"
+            title="APR médio"
             value={stats ? formatPercent(stats.avgApy) : '-'}
             icon={Activity}
             description="Media de todos os pools"
@@ -108,8 +108,8 @@ export default function DashboardPage() {
           <TopPoolsTable
             pools={topPoolsByApy}
             isLoading={poolsLoading}
-            title="Top 5 Pools por APY"
-            sortBy="apy"
+            title="Top 5 pools por APR"
+            sortBy="apr"
           />
           <TopPoolsTable
             pools={topPoolsByVolume}

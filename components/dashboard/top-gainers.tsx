@@ -90,7 +90,7 @@ export function TopGainers() {
             </div>
             <div>
               <CardTitle className="text-lg">Maiores Ganhos</CardTitle>
-              <CardDescription>Pools com maior variacao positiva de APY</CardDescription>
+              <CardDescription>Pools com maior variacao positiva de APR</CardDescription>
             </div>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function TopGainers() {
                 <TableHead className="w-12 text-muted-foreground">#</TableHead>
                 <TableHead className="text-muted-foreground">Pool</TableHead>
                 <TableHead className="text-muted-foreground">Chain</TableHead>
-                <TableHead className="text-right text-muted-foreground">APY Atual</TableHead>
+                <TableHead className="text-right text-muted-foreground">APR atual</TableHead>
                 <TableHead className="text-right text-muted-foreground">Variacao</TableHead>
                 <TableHead className="text-right text-muted-foreground">TVL</TableHead>
                 <TableHead className="w-10"></TableHead>

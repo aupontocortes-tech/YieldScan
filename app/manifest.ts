@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'YieldScan — DeFi Intelligence',
     short_name: 'YieldScan',
     description:
-      'Agregador DeFi em tempo real: yields, TVL e oportunidades de yield farming.',
+      'Agregador DeFi em tempo real: APR de pools, TVL e oportunidades em varias chains.',
     start_url: '/',
     scope: '/',
     display: 'standalone',

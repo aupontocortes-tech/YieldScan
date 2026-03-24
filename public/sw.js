@@ -1,4 +1,4 @@
-/* YieldScan — service worker mínimo (requisito de PWA instalável em vários browsers) */
+/* YieldScan — service worker v2 (atualiza cache após deploy; rendimento na UI = APR) */
 self.addEventListener('install', () => {
   self.skipWaiting()
 })

@@ -27,7 +27,7 @@ import {
   YAxis,
 } from 'recharts'
 import { ChainBadge } from '@/components/chain-badge'
-import { fetchPools, formatCurrency, formatPercent, getApyColorClass, sortPools } from '@/lib/api'
+import { fetchPools, formatCurrency, formatPercent, getAprColorClass, sortPools } from '@/lib/api'
 import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -69,7 +69,7 @@ export default function TokenPage() {
         pool.symbol.toUpperCase().includes(symbol) ||
         pool.underlyingTokens?.some(t => t.toUpperCase().includes(symbol))
       ),
-      'apy',
+      'apr',
       'desc'
     ).slice(0, 20)
   }, [pools, symbol])
@@ -205,7 +205,7 @@ export default function TokenPage() {
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="text-muted-foreground">Pool</TableHead>
                     <TableHead className="text-muted-foreground">Chain</TableHead>
-                    <TableHead className="text-right text-muted-foreground">APY</TableHead>
+                    <TableHead className="text-right text-muted-foreground">APR</TableHead>
                     <TableHead className="text-right text-muted-foreground">TVL</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
@@ -227,7 +227,7 @@ export default function TokenPage() {
                         <ChainBadge chain={pool.chain} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className={cn('font-mono font-semibold', getApyColorClass(pool.apy))}>
+                        <span className={cn('font-mono font-semibold', getAprColorClass(pool.apy))}>
                           {formatPercent(pool.apy)}
                         </span>
                       </TableCell>

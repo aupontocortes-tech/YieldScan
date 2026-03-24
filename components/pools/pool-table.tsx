@@ -21,7 +21,7 @@ import {
 import { ChainBadge } from '@/components/chain-badge'
 import { PoolApyChart } from './pool-apy-chart'
 import { Pool, PoolFilters } from '@/lib/types'
-import { formatCurrency, formatPercent, getApyColorClass, getChangeIndicator } from '@/lib/api'
+import { formatCurrency, formatPercent, getAprColorClass, getChangeIndicator } from '@/lib/api'
 import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -65,7 +65,7 @@ export function PoolTable({ pools, isLoading, filters, onSortChange }: PoolTable
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-[300px]">Pool</TableHead>
               <TableHead>Chain</TableHead>
-              <TableHead className="text-right">APY</TableHead>
+              <TableHead className="text-right">APR</TableHead>
               <TableHead className="text-right">TVL</TableHead>
               <TableHead className="text-right">Volume 24h</TableHead>
               <TableHead className="text-right">Var. 7d</TableHead>
@@ -99,7 +99,7 @@ export function PoolTable({ pools, isLoading, filters, onSortChange }: PoolTable
               <TableHead className="w-[300px] text-muted-foreground">Pool</TableHead>
               <TableHead className="text-muted-foreground">Chain</TableHead>
               <TableHead className="text-right">
-                <SortableHeader column="apy">APY</SortableHeader>
+                <SortableHeader column="apr">APR</SortableHeader>
               </TableHead>
               <TableHead className="text-right">
                 <SortableHeader column="tvl">TVL</SortableHeader>
@@ -152,7 +152,7 @@ export function PoolTable({ pools, isLoading, filters, onSortChange }: PoolTable
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-col items-end">
-                            <span className={cn('font-mono font-semibold', getApyColorClass(pool.apy))}>
+                            <span className={cn('font-mono font-semibold', getAprColorClass(pool.apy))}>
                               {formatPercent(pool.apy)}
                             </span>
                             {pool.apyReward && pool.apyReward > 0 && (

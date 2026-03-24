@@ -34,7 +34,7 @@ export default function PoolsPage() {
       stablecoinOnly: filters.stablecoinOnly,
     })
 
-    // Apply period filter to APY display
+    // Apply period filter to APR display (dados: campos apy* na API)
     if (period !== 'current') {
       result = result.filter(pool => {
         if (period === '1d') return pool.apyBase1d !== null
@@ -66,7 +66,7 @@ export default function PoolsPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">Explorador de Pools</h1>
           <p className="mt-1 text-muted-foreground">
-            Compare rendimentos de {filteredAndSortedPools.length.toLocaleString()} pools em multiplas chains
+            Compare APR de {filteredAndSortedPools.length.toLocaleString()} pools em multiplas chains
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export default function PoolsPage() {
         <div className="mb-6">
           <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
             <TabsList className="bg-card border border-border">
-              <TabsTrigger value="current">APY Base</TabsTrigger>
+              <TabsTrigger value="current">APR Base</TabsTrigger>
               <TabsTrigger value="1d">24h</TabsTrigger>
               <TabsTrigger value="7d">7 Dias</TabsTrigger>
               <TabsTrigger value="30d">30 Dias</TabsTrigger>

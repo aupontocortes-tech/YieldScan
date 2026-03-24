@@ -47,7 +47,7 @@ export function PoolApyChart({ poolId }: PoolApyChartProps) {
   return (
     <div className="h-[200px] w-full">
       <h4 className="mb-2 text-sm font-medium text-muted-foreground">
-        Historico APY (30 dias)
+        Historico de APR (30 dias)
       </h4>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -77,7 +77,7 @@ export function PoolApyChart({ poolId }: PoolApyChartProps) {
               borderRadius: '8px',
             }}
             labelStyle={{ color: '#f0f4f8', fontWeight: 600 }}
-            formatter={(value: number) => [formatPercent(value), 'APY']}
+            formatter={(value: number) => [formatPercent(value), 'APR']}
           />
           <Area
             type="monotone"

@@ -16,8 +16,9 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: 'YieldScan - DeFi Intelligence Dashboard',
-  description: 'Agregador de dados DeFi em tempo real. Compare rendimentos, TVL e encontre as melhores oportunidades de yield farming.',
-  keywords: ['DeFi', 'yield farming', 'APY', 'TVL', 'crypto', 'Ethereum', 'Solana'],
+  description:
+    'Agregador DeFi em tempo real. Compare APR de pools de liquidez, TVL e oportunidades em varias chains.',
+  keywords: ['DeFi', 'yield farming', 'APR', 'liquidez', 'TVL', 'crypto', 'Ethereum', 'Solana'],
   applicationName: 'YieldScan',
   manifest: '/manifest.webmanifest',
   appleWebApp: {

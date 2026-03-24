@@ -113,7 +113,7 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
               <SelectValue placeholder="Ordenar por" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="apy">APY</SelectItem>
+              <SelectItem value="apr">APR</SelectItem>
               <SelectItem value="tvl">TVL</SelectItem>
               <SelectItem value="volume">Volume 24h</SelectItem>
               <SelectItem value="change7d">Var. 7d</SelectItem>
@@ -192,7 +192,7 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
                 {/* APR Range */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">APY Range</Label>
+                    <Label className="text-sm font-medium">Intervalo de APR</Label>
                     <span className="text-xs text-muted-foreground">
                       {filters.aprMin}% - {filters.aprMax}%
                     </span>

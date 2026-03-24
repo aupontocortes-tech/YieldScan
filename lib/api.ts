@@ -110,10 +110,10 @@ export function formatNumber(value: number, decimals = 2): string {
   }).format(value)
 }
 
-// Get APY color class based on value
-export function getApyColorClass(apy: number): string {
-  if (apy >= 20) return 'text-success'
-  if (apy >= 5) return 'text-cyan'
+/** Cor da taxa exibida (valor vem como `apy` na API DefiLlama; UI mostra como APR de pool.) */
+export function getAprColorClass(rate: number): string {
+  if (rate >= 20) return 'text-success'
+  if (rate >= 5) return 'text-cyan'
   return 'text-muted-foreground'
 }
 
@@ -149,7 +149,7 @@ export function sortPools(pools: Pool[], sortBy: string, direction: 'asc' | 'des
     let valueB: number
     
     switch (sortBy) {
-      case 'apy':
+      case 'apr':
         valueA = a.apy ?? 0
         valueB = b.apy ?? 0
         break

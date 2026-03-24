@@ -72,7 +72,7 @@ export interface PoolFilters {
   ilRisk: 'all' | 'no' | 'yes'
   exposure: 'single' | 'multi' | 'all'
   stablecoinOnly: boolean
-  sortBy: 'apy' | 'apy1d' | 'apy7d' | 'apy30d' | 'tvl' | 'volume' | 'change7d'
+  sortBy: 'apr' | 'apy1d' | 'apy7d' | 'apy30d' | 'tvl' | 'volume' | 'change7d'
   sortDirection: 'asc' | 'desc'
   period: 'current' | '1d' | '7d' | '30d'
 }
@@ -150,7 +150,7 @@ export const DEFAULT_FILTERS: PoolFilters = {
   ilRisk: 'all',
   exposure: 'all',
   stablecoinOnly: false,
-  sortBy: 'apy',
+  sortBy: 'apr',
   sortDirection: 'desc',
   period: 'current',
 }

@@ -49,7 +49,7 @@ export function TokenPoolsSearch() {
              pool.tvlUsd > 50000
     })
     
-    return sortPools(filtered, 'apy', 'desc').slice(0, 15)
+    return sortPools(filtered, 'apr', 'desc').slice(0, 15)
   }, [pools, activeToken])
 
   const handleSearch = () => {
@@ -140,7 +140,7 @@ export function TokenPoolsSearch() {
                     <TableHead className="w-12 text-muted-foreground">#</TableHead>
                     <TableHead className="text-muted-foreground">Pool</TableHead>
                     <TableHead className="text-muted-foreground">Chain</TableHead>
-                    <TableHead className="text-right text-muted-foreground">APY</TableHead>
+                    <TableHead className="text-right text-muted-foreground">APR</TableHead>
                     <TableHead className="text-right text-muted-foreground">TVL</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>

@@ -11,7 +11,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChainBadge } from '@/components/chain-badge'
 import { Pool } from '@/lib/types'
-import { formatCurrency, formatPercent, getApyColorClass } from '@/lib/api'
+import { formatCurrency, formatPercent, getAprColorClass } from '@/lib/api'
 import { ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +19,7 @@ interface TopPoolsTableProps {
   pools: Pool[]
   isLoading: boolean
   title: string
-  sortBy: 'apy' | 'volume'
+  sortBy: 'apr' | 'volume'
 }
 
 export function TopPoolsTable({ pools, isLoading, title, sortBy }: TopPoolsTableProps) {
@@ -34,7 +34,7 @@ export function TopPoolsTable({ pools, isLoading, title, sortBy }: TopPoolsTable
                 <TableHead className="text-muted-foreground">Pool</TableHead>
                 <TableHead className="text-muted-foreground">Chain</TableHead>
                 <TableHead className="text-right text-muted-foreground">
-                  {sortBy === 'apy' ? 'APY' : 'Volume 24h'}
+                  {sortBy === 'apr' ? 'APR' : 'Volume 24h'}
                 </TableHead>
                 <TableHead className="text-right text-muted-foreground">TVL</TableHead>
               </TableRow>
@@ -65,7 +65,7 @@ export function TopPoolsTable({ pools, isLoading, title, sortBy }: TopPoolsTable
               <TableHead className="text-muted-foreground">Pool</TableHead>
               <TableHead className="text-muted-foreground">Chain</TableHead>
               <TableHead className="text-right text-muted-foreground">
-                {sortBy === 'apy' ? 'APY' : 'Volume 24h'}
+                {sortBy === 'apr' ? 'APR' : 'Volume 24h'}
               </TableHead>
               <TableHead className="text-right text-muted-foreground">TVL</TableHead>
               <TableHead className="w-10"></TableHead>
@@ -88,9 +88,9 @@ export function TopPoolsTable({ pools, isLoading, title, sortBy }: TopPoolsTable
                   <ChainBadge chain={pool.chain} />
                 </TableCell>
                 <TableCell className="text-right">
-                  <span className={cn('font-mono font-semibold', getApyColorClass(pool.apy))}>
-                    {sortBy === 'apy' 
-                      ? formatPercent(pool.apy) 
+                  <span className={cn('font-mono font-semibold', getAprColorClass(pool.apy))}>
+                    {sortBy === 'apr'
+                      ? formatPercent(pool.apy)
                       : formatCurrency(pool.volumeUsd1d ?? 0)
                     }
                   </span>
