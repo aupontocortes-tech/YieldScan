@@ -104,47 +104,6 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   { id: 'Hyperliquid L1', name: 'Hyperliquid', color: '#00FFB7' },
 ]
 
-// Supported protocols
-export const SUPPORTED_PROTOCOLS = [
-  'uniswap-v2',
-  'uniswap-v3',
-  'uniswap-v4',
-  'curve-dex',
-  'balancer-v2',
-  'sushiswap',
-  'pancakeswap-amm-v3',
-  'velodrome-v2',
-  'aerodrome-v1',
-  'camelot-v3',
-  'trader-joe-v2.1',
-  'quickswap-v3',
-  'raydium',
-  'orca',
-  'meteora',
-  'jupiter',
-  'hyperliquid',
-  'drift',
-  'phoenix',
-  'lifinity',
-  'kamino',
-  'vertex',
-  'kyberswap',
-  'gmx-v2',
-  'gmx-v2-synthetics',
-  'dydx-v4',
-  'paraswap',
-  '1inch',
-  'thruster',
-  'ambient',
-  'pangolin',
-  'aave-v2',
-  'aave-v3',
-  'compound-v3',
-  'morpho-aave',
-  'venus',
-  'spark',
-]
-
 // Default filters
 export const DEFAULT_FILTERS: PoolFilters = {
   search: '',
@@ -169,3 +128,38 @@ export interface GlobalStats {
   avgApy: number
   maxApy: number
 }
+
+export const PROTOCOL_SLUGS = {
+  // Solana
+  'Meteora DLMM': 'meteora-dlmm',
+  'Meteora DAMM V1': 'meteora-pools',
+  'Meteora DAMM V2': 'meteora-ag',
+  'Raydium AMM': 'raydium',
+  'Raydium CLMM': 'raydium-cl',
+  Orca: 'orca',
+  Jupiter: 'jupiter',
+  PumpSwap: 'pumpswap',
+
+  // Ethereum / EVM
+  'Uniswap V2': 'uniswap-v2',
+  'Uniswap V3': 'uniswap-v3',
+  'Uniswap V4': 'uniswap-v4',
+  'Curve Finance': 'curve',
+  'Balancer V2': 'balancer-v2',
+  'Balancer V3': 'balancer-v3',
+  'Aave V2': 'aave-v2',
+  'Aave V3': 'aave-v3',
+  'Compound V2': 'compound',
+  'Compound V3': 'compound-v3',
+  SushiSwap: 'sushiswap',
+  'PancakeSwap V2': 'pancakeswap',
+  'PancakeSwap V3': 'pancakeswap-v3',
+  Velodrome: 'velodrome',
+  Aerodrome: 'aerodrome-sl',
+  Camelot: 'camelot-v3',
+  'Trader Joe V2': 'traderjoe-v2',
+  Morpho: 'morpho-blue',
+  Spark: 'spark',
+} as const
+
+export const SUPPORTED_PROTOCOLS = Object.values(PROTOCOL_SLUGS)

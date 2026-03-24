@@ -27,9 +27,11 @@ export async function fetchPools(): Promise<Pool[]> {
   // Filter by supported chains and protocols
   const supportedChainIds = SUPPORTED_CHAINS.map(c => c.id)
   
+  const supportedProtocolIds = new Set(SUPPORTED_PROTOCOLS.map(normProtocolId))
+
   return pools.filter(pool => 
     supportedChainIds.includes(pool.chain) &&
-    SUPPORTED_PROTOCOLS.some(p => normProtocolId(pool.project).includes(normProtocolId(p)))
+    supportedProtocolIds.has(normProtocolId(pool.project))
   )
 }
 
@@ -245,6 +247,10 @@ export function filterPools(
   },
   period: PoolAprPeriod = 'current'
 ): Pool[] {
+  const selectedProtocols = filters.protocols?.length
+    ? new Set(filters.protocols.map(normProtocolId))
+    : null
+
   return pools.filter(pool => {
     if (period !== 'current' && !poolHasAprDataForPeriod(pool, period)) return false
 
@@ -263,8 +269,8 @@ export function filterPools(
     }
     
     // Protocol filter
-    if (filters.protocols && filters.protocols.length > 0) {
-      if (!filters.protocols.some(p => pool.project.toLowerCase().includes(p.toLowerCase()))) return false
+    if (selectedProtocols) {
+      if (!selectedProtocols.has(normProtocolId(pool.project))) return false
     }
     
     // APR filter (usa o mesmo APR exibido para o periodo selecionado)

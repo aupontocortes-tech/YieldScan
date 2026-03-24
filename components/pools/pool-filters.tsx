@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PoolFilters, SUPPORTED_CHAINS, DEFAULT_FILTERS } from '@/lib/types'
+import { PoolFilters, SUPPORTED_CHAINS, DEFAULT_FILTERS, PROTOCOL_SLUGS } from '@/lib/types'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,29 +30,7 @@ interface PoolFiltersProps {
   onFiltersChange: (filters: PoolFilters) => void
 }
 
-const PROTOCOL_OPTIONS = [
-  { value: 'uniswap', label: 'Uniswap' },
-  { value: 'curve', label: 'Curve' },
-  { value: 'balancer', label: 'Balancer' },
-  { value: 'sushiswap', label: 'SushiSwap' },
-  { value: 'pancakeswap', label: 'PancakeSwap' },
-  { value: 'velodrome', label: 'Velodrome' },
-  { value: 'aerodrome', label: 'Aerodrome' },
-  { value: 'camelot', label: 'Camelot' },
-  { value: 'meteora', label: 'Meteora' },
-  { value: 'hyperliquid', label: 'Hyperliquid' },
-  { value: 'jupiter', label: 'Jupiter' },
-  { value: 'raydium', label: 'Raydium' },
-  { value: 'orca', label: 'Orca' },
-  { value: 'drift', label: 'Drift' },
-  { value: 'vertex', label: 'Vertex' },
-  { value: 'gmx', label: 'GMX' },
-  { value: 'dydx', label: 'dYdX' },
-  { value: 'kyberswap', label: 'KyberSwap' },
-  { value: 'aave', label: 'Aave' },
-  { value: 'compound', label: 'Compound' },
-  { value: 'morpho', label: 'Morpho' },
-]
+const PROTOCOL_OPTIONS = Object.entries(PROTOCOL_SLUGS).map(([label, value]) => ({ label, value }))
 
 export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersProps) {
   const [isOpen, setIsOpen] = useState(false)
