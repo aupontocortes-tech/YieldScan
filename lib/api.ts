@@ -5,33 +5,25 @@ import {
   PoolChartData,
   TokenPrice,
   SUPPORTED_CHAINS,
-  SUPPORTED_PROTOCOLS,
 } from './types'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
 const COINS_API = 'https://coins.llama.fi'
 
-function normProtocolId(s: string): string {
-  return s.toLowerCase().replace(/-/g, '')
-}
-
-// Fetch all pools from DeFiLlama
+// Fetch pools from DeFiLlama (sem lista fixa de protocolos; só filtro mínimo de qualidade)
 export async function fetchPools(): Promise<Pool[]> {
   const response = await fetch(`${DEFILLAMA_YIELDS}/pools`)
   if (!response.ok) throw new Error('Failed to fetch pools')
   
   const data = await response.json()
   const pools: Pool[] = data.data
-  
-  // Filter by supported chains and protocols
-  const supportedChainIds = SUPPORTED_CHAINS.map(c => c.id)
-  
-  const supportedProtocolIds = new Set(SUPPORTED_PROTOCOLS.map(normProtocolId))
 
-  return pools.filter(pool => 
-    supportedChainIds.includes(pool.chain) &&
-    supportedProtocolIds.has(normProtocolId(pool.project))
+  return pools.filter(
+    (pool) =>
+      pool.tvlUsd > 10_000 &&
+      pool.apy !== null &&
+      pool.apy !== undefined
   )
 }
 
@@ -248,7 +240,7 @@ export function filterPools(
   period: PoolAprPeriod = 'current'
 ): Pool[] {
   const selectedProtocols = filters.protocols?.length
-    ? new Set(filters.protocols.map(normProtocolId))
+    ? new Set(filters.protocols)
     : null
 
   return pools.filter(pool => {
@@ -268,9 +260,9 @@ export function filterPools(
       if (!filters.chains.includes(pool.chain)) return false
     }
     
-    // Protocol filter
+    // Protocol filter (valor exato do campo `project` da API)
     if (selectedProtocols) {
-      if (!selectedProtocols.has(normProtocolId(pool.project))) return false
+      if (!selectedProtocols.has(pool.project)) return false
     }
     
     // APR filter (usa o mesmo APR exibido para o periodo selecionado)

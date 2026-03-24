@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Fragment, useState } from 'react'
 import {
   Table,
   TableBody,
@@ -14,10 +13,11 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { ChainBadge } from '@/components/chain-badge'
 import { PoolApyChart } from './pool-apy-chart'
 import { Pool, PoolAprPeriod, PoolFilters } from '@/lib/types'
@@ -25,22 +25,13 @@ import {
   formatCurrency,
   formatPercent,
   getAprColorClass,
-  getChangeIndicator,
   poolDisplayApr,
 } from '@/lib/api'
-import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown } from 'lucide-react'
+import { getDexScreenerUrl } from '@/lib/dexscreener'
+import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
+import { ExternalLink, ChevronDown, ChevronUp, ArrowUpDown, LineChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-function aprColumnLabel(period: PoolAprPeriod): string {
-  switch (period) {
-    case '7d':
-      return 'APR (7d)'
-    case '30d':
-      return 'APR (30d)'
-    default:
-      return 'APR'
-  }
-}
 
 interface PoolTableProps {
   pools: Pool[]
@@ -50,8 +41,11 @@ interface PoolTableProps {
   onSortChange: (sortBy: PoolFilters['sortBy']) => void
 }
 
+const COL_COUNT = 7
+
 export function PoolTable({ pools, isLoading, filters, period, onSortChange }: PoolTableProps) {
   const [expandedPool, setExpandedPool] = useState<string | null>(null)
+  const [selectedPool, setSelectedPool] = useState<Pool | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
 
@@ -64,41 +58,47 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
 
   const SortableHeader = ({ column, children }: { column: PoolFilters['sortBy']; children: React.ReactNode }) => (
     <button
+      type="button"
       onClick={() => handleSort(column)}
       className={cn(
-        'flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors',
+        'flex w-full items-center justify-end gap-1 text-muted-foreground hover:text-foreground transition-colors',
         filters.sortBy === column && 'text-cyan'
       )}
     >
       {children}
-      <ArrowUpDown className="h-3 w-3" />
+      <ArrowUpDown className="h-3 w-3 shrink-0" />
     </button>
   )
 
+  const openDexScreener = (pool: Pool, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedPool(pool)
+  }
+
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-card">
+      <div className="rounded-lg border border-border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="w-[300px]">Pool</TableHead>
-              <TableHead>Chain</TableHead>
-              <TableHead className="text-right">{aprColumnLabel(period)}</TableHead>
-              <TableHead className="text-right">TVL</TableHead>
+              <TableHead>Par</TableHead>
+              <TableHead>Taxa · gráfico</TableHead>
+              <TableHead>Rede</TableHead>
               <TableHead className="text-right">Volume 24h</TableHead>
-              <TableHead className="text-right">Var. 7d</TableHead>
-              <TableHead className="w-10"></TableHead>
+              <TableHead className="text-right">TVL</TableHead>
+              <TableHead className="text-right">APR</TableHead>
+              <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {Array.from({ length: 10 }).map((_, i) => (
               <TableRow key={i} className="border-border">
-                <TableCell><Skeleton className="h-10 w-48" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-9 w-44" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-28" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                 <TableCell><Skeleton className="ml-auto h-4 w-20" /></TableCell>
                 <TableCell><Skeleton className="ml-auto h-4 w-20" /></TableCell>
-                <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="ml-auto h-4 w-14" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-4" /></TableCell>
               </TableRow>
             ))}
@@ -110,146 +110,217 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <Dialog open={selectedPool !== null} onOpenChange={(open) => !open && setSelectedPool(null)}>
+        <DialogContent
+          showCloseButton
+          className="max-h-[90vh] max-w-4xl w-full gap-0 overflow-hidden border-blue-900 bg-[#0a1628] p-0 sm:max-w-4xl"
+        >
+          <DialogHeader className="border-b border-border/60 p-4 pb-3">
+            <DialogTitle className="font-mono text-base text-cyan">
+              {selectedPool?.symbol} — {selectedPool?.project} — {selectedPool?.chain}
+            </DialogTitle>
+            {selectedPool && (
+              <Button variant="link" className="h-auto p-0 text-xs text-blue-400" asChild>
+                <a href={getDexScreenerUrl(selectedPool)} target="_blank" rel="noopener noreferrer">
+                  Abrir DEXScreener em nova aba
+                  <ExternalLink className="ml-1 inline h-3 w-3" />
+                </a>
+              </Button>
+            )}
+          </DialogHeader>
+          {selectedPool && (
+            <iframe
+              title="DEXScreener"
+              src={getDexScreenerUrl(selectedPool)}
+              className="h-[min(560px,70vh)] w-full border-0"
+              allow="clipboard-write"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <div className="rounded-lg border border-border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="w-[300px] text-muted-foreground">Pool</TableHead>
-              <TableHead className="text-muted-foreground">Chain</TableHead>
-              <TableHead className="text-right">
-                <SortableHeader column="apr">{aprColumnLabel(period)}</SortableHeader>
-              </TableHead>
-              <TableHead className="text-right">
-                <SortableHeader column="tvl">TVL</SortableHeader>
-              </TableHead>
-              <TableHead className="text-right">
+              <TableHead className="min-w-[200px] text-muted-foreground">Par</TableHead>
+              <TableHead className="min-w-[140px] text-muted-foreground">Taxa · gráfico</TableHead>
+              <TableHead className="min-w-[100px] text-muted-foreground">Rede</TableHead>
+              <TableHead className="text-right text-muted-foreground">
                 <SortableHeader column="volume">Volume 24h</SortableHeader>
               </TableHead>
-              <TableHead className="text-right">
-                <SortableHeader column="change7d">Var. 7d</SortableHeader>
+              <TableHead className="text-right text-muted-foreground">
+                <SortableHeader column="tvl">TVL</SortableHeader>
               </TableHead>
-              <TableHead className="w-10"></TableHead>
+              <TableHead className="text-right text-muted-foreground">
+                <SortableHeader column="apr">APR</SortableHeader>
+              </TableHead>
+              <TableHead className="w-10 p-2 text-muted-foreground" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedPools.map((pool, index) => {
               const isExpanded = expandedPool === pool.pool
-              const change = getChangeIndicator(pool.apyPct7D)
               const displayApr = poolDisplayApr(pool, period)
+              const feeLabel = getPoolSwapFeeLabel(pool)
+              const metaHint = getPoolMetaHint(pool)
 
               return (
-                <Collapsible
-                  key={pool.pool}
-                  open={isExpanded}
-                  onOpenChange={() => setExpandedPool(isExpanded ? null : pool.pool)}
-                  asChild
-                >
-                  <>
-                    <CollapsibleTrigger asChild>
-                      <TableRow 
-                        className={cn(
-                          'table-row-animate border-border cursor-pointer transition-colors',
-                          isExpanded ? 'bg-secondary/50' : 'hover:bg-secondary/30'
-                        )}
-                        style={{ animationDelay: `${index * 30}ms` }}
-                      >
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="flex flex-col">
-                              <span className="font-medium text-foreground">{pool.symbol}</span>
-                              <span className="text-xs text-muted-foreground">{pool.project}</span>
-                            </div>
+                <Fragment key={pool.pool}>
+                  <TableRow
+                    className={cn(
+                      'table-row-animate border-border cursor-pointer transition-colors',
+                      isExpanded ? 'bg-secondary/50' : 'hover:bg-secondary/30'
+                    )}
+                    style={{ animationDelay: `${index * 30}ms` }}
+                    onClick={() => setExpandedPool(isExpanded ? null : pool.pool)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <PairTokenAvatars pool={pool} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-foreground">{pool.symbol}</span>
                             {pool.stablecoin && (
-                              <Badge variant="outline" className="text-xs border-gold text-gold">
+                              <Badge variant="outline" className="text-[10px] border-gold text-gold">
                                 Stable
                               </Badge>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <ChainBadge chain={pool.chain} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className={cn('font-mono font-semibold', getAprColorClass(displayApr))}>
-                              {formatPercent(displayApr)}
+                          <p className="truncate text-xs text-muted-foreground" title={pool.project}>
+                            {pool.project}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {feeLabel ? (
+                            <Badge
+                              variant="secondary"
+                              className="border border-border bg-secondary/80 px-2 font-mono text-xs font-semibold"
+                              title={pool.poolMeta ?? feeLabel}
+                            >
+                              {feeLabel}
+                            </Badge>
+                          ) : metaHint ? (
+                            <Badge
+                              variant="outline"
+                              className="max-w-[120px] truncate px-2 text-[10px] text-muted-foreground"
+                              title={pool.poolMeta ?? ''}
+                            >
+                              {metaHint}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-cyan hover:bg-cyan/10 hover:text-cyan"
+                          title="DEXScreener"
+                          onClick={(e) => openDexScreener(pool, e)}
+                        >
+                          <LineChart className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <ChainBadge chain={pool.chain} className="text-[11px]" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="font-mono text-sm tabular-nums text-foreground">
+                        {pool.volumeUsd1d != null ? formatCurrency(pool.volumeUsd1d) : '—'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="font-mono text-sm tabular-nums text-foreground">
+                        {formatCurrency(pool.tvlUsd)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={cn('font-mono text-sm font-semibold tabular-nums', getAprColorClass(displayApr))}>
+                        {formatPercent(displayApr)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="p-2 text-center">
+                      {isExpanded ? (
+                        <ChevronUp className="mx-auto h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="mx-auto h-4 w-4 text-muted-foreground" />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded && (
+                    <TableRow className="border-border bg-secondary/30 hover:bg-secondary/30">
+                      <TableCell colSpan={COL_COUNT} className="p-0">
+                        <div className="p-4">
+                          <button
+                            type="button"
+                            className="mb-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setExpandedPool(null)
+                            }}
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                            Fechar detalhe
+                          </button>
+                          <div className="mb-4 flex flex-wrap gap-3 text-sm">
+                            <span className="text-muted-foreground">
+                              APR base:{' '}
+                              <span className="font-mono text-foreground">{formatPercent(pool.apyBase)}</span>
                             </span>
-                            {period === 'current' && pool.apyReward && pool.apyReward > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                +{formatPercent(pool.apyReward)} recompensas
+                            <span className="text-muted-foreground">
+                              Recompensa:{' '}
+                              <span className="font-mono text-foreground">{formatPercent(pool.apyReward)}</span>
+                            </span>
+                            {pool.poolMeta && (
+                              <span className="text-muted-foreground" title={pool.poolMeta}>
+                                Meta: <span className="font-mono text-xs text-foreground">{pool.poolMeta}</span>
                               </span>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-mono text-muted-foreground">
-                            {formatCurrency(pool.tvlUsd)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-mono text-muted-foreground">
-                            {pool.volumeUsd1d ? formatCurrency(pool.volumeUsd1d) : '-'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={cn('font-mono text-sm', change.color)}>
-                            {change.text}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent asChild>
-                      <TableRow className="border-border bg-secondary/30 hover:bg-secondary/30">
-                        <TableCell colSpan={7} className="p-0">
-                          <div className="p-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
-                                <PoolApyChart poolId={pool.pool} />
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                {pool.url ? (
-                                  <a href={pool.url} target="_blank" rel="noopener noreferrer">
-                                    <Button variant="outline" size="sm" className="gap-2">
-                                      <ExternalLink className="h-4 w-4" />
-                                      Abrir no {pool.project}
-                                    </Button>
-                                  </a>
-                                ) : (
-                                  <Button variant="outline" size="sm" className="gap-2" disabled>
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <PoolApyChart poolId={pool.pool} />
+                            </div>
+                            <div className="flex flex-col gap-2 shrink-0">
+                              {pool.url ? (
+                                <a href={pool.url} target="_blank" rel="noopener noreferrer">
+                                  <Button variant="outline" size="sm" className="gap-2">
                                     <ExternalLink className="h-4 w-4" />
-                                    {pool.project}
+                                    Abrir no {pool.project}
                                   </Button>
-                                )}
-                                {pool.underlyingTokens && pool.underlyingTokens.length > 0 && (
-                                  <div className="text-xs text-muted-foreground">
-                                    <span className="font-medium">Tokens:</span>{' '}
-                                    {pool.underlyingTokens.slice(0, 3).join(', ')}
-                                  </div>
-                                )}
-                              </div>
+                                </a>
+                              ) : (
+                                <Button variant="outline" size="sm" className="gap-2" disabled>
+                                  <ExternalLink className="h-4 w-4" />
+                                  {pool.project}
+                                </Button>
+                              )}
+                              {pool.underlyingTokens && pool.underlyingTokens.length > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  <span className="font-medium">Tokens:</span>{' '}
+                                  {pool.underlyingTokens.slice(0, 3).join(', ')}
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    </CollapsibleContent>
-                  </>
-                </Collapsible>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               )
             })}
           </TableBody>
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
@@ -278,13 +349,13 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
             Anterior
           </Button>
           <span className="text-sm text-muted-foreground">
-            Pagina {page + 1} de {totalPages}
+            Pagina {page + 1} de {totalPages || 1}
           </span>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
+            disabled={page >= totalPages - 1 || totalPages === 0}
           >
             Proxima
           </Button>

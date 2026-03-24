@@ -18,6 +18,16 @@ export default function PoolsPage() {
     queryFn: fetchPools,
   })
 
+  const chainOptions = useMemo(() => {
+    if (!pools?.length) return []
+    return [...new Set(pools.map((p) => p.chain))].sort((a, b) => a.localeCompare(b))
+  }, [pools])
+
+  const protocolOptions = useMemo(() => {
+    if (!pools?.length) return []
+    return [...new Set(pools.map((p) => p.project))].sort((a, b) => a.localeCompare(b))
+  }, [pools])
+
   const filteredAndSortedPools = useMemo(() => {
     if (!pools) return []
 
@@ -84,7 +94,12 @@ export default function PoolsPage() {
 
         {/* Filters */}
         <div className="mb-6">
-          <PoolFiltersComponent filters={filters} onFiltersChange={setFilters} />
+          <PoolFiltersComponent
+            filters={filters}
+            onFiltersChange={setFilters}
+            chainOptions={chainOptions}
+            protocolOptions={protocolOptions}
+          />
         </div>
 
         {/* Table */}

@@ -4,8 +4,11 @@ export interface Pool {
   symbol: string
   project: string
   chain: string
+  /** Taxa total da pool; na UI mostramos como APR (API usa o nome `apy`). */
   apy: number
+  /** Componente base; na UI: APR base. */
   apyBase: number
+  /** Recompensas em token; na UI: Recompensa (APR). */
   apyReward: number | null
   /** Base APR médio ~7d (DefiLlama). */
   apyBase7d: number | null
@@ -23,6 +26,8 @@ export interface Pool {
   rewardTokens: string[] | null
   url: string
   underlyingTokens: string[] | null
+  /** Metadados do protocolo (ex. tier 0,3% em Uniswap v3) — DefiLlama. */
+  poolMeta?: string | null
 }
 
 // Protocol data from DeFiLlama API
@@ -43,6 +48,7 @@ export interface Protocol {
 export interface PoolChartData {
   timestamp: string
   tvlUsd: number
+  /** Serie temporal exibida como APR no grafico. */
   apy: number
   apyBase: number
   apyReward: number | null
@@ -128,38 +134,3 @@ export interface GlobalStats {
   avgApy: number
   maxApy: number
 }
-
-export const PROTOCOL_SLUGS = {
-  // Solana
-  'Meteora DLMM': 'meteora-dlmm',
-  'Meteora DAMM V1': 'meteora-pools',
-  'Meteora DAMM V2': 'meteora-ag',
-  'Raydium AMM': 'raydium',
-  'Raydium CLMM': 'raydium-cl',
-  Orca: 'orca',
-  Jupiter: 'jupiter',
-  PumpSwap: 'pumpswap',
-
-  // Ethereum / EVM
-  'Uniswap V2': 'uniswap-v2',
-  'Uniswap V3': 'uniswap-v3',
-  'Uniswap V4': 'uniswap-v4',
-  'Curve Finance': 'curve',
-  'Balancer V2': 'balancer-v2',
-  'Balancer V3': 'balancer-v3',
-  'Aave V2': 'aave-v2',
-  'Aave V3': 'aave-v3',
-  'Compound V2': 'compound',
-  'Compound V3': 'compound-v3',
-  SushiSwap: 'sushiswap',
-  'PancakeSwap V2': 'pancakeswap',
-  'PancakeSwap V3': 'pancakeswap-v3',
-  Velodrome: 'velodrome',
-  Aerodrome: 'aerodrome-sl',
-  Camelot: 'camelot-v3',
-  'Trader Joe V2': 'traderjoe-v2',
-  Morpho: 'morpho-blue',
-  Spark: 'spark',
-} as const
-
-export const SUPPORTED_PROTOCOLS = Object.values(PROTOCOL_SLUGS)

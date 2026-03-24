@@ -21,18 +21,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PoolFilters, SUPPORTED_CHAINS, DEFAULT_FILTERS, PROTOCOL_SLUGS } from '@/lib/types'
+import { PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PoolFiltersProps {
   filters: PoolFilters
   onFiltersChange: (filters: PoolFilters) => void
+  /** Valores exatos de `chain` vindos da API (ex.: Solana, Ethereum). */
+  chainOptions: string[]
+  /** Valores exatos de `project` vindos da API. */
+  protocolOptions: string[]
 }
 
-const PROTOCOL_OPTIONS = Object.entries(PROTOCOL_SLUGS).map(([label, value]) => ({ label, value }))
-
-export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersProps) {
+export function PoolFiltersComponent({
+  filters,
+  onFiltersChange,
+  chainOptions,
+  protocolOptions,
+}: PoolFiltersProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const updateFilter = <K extends keyof PoolFilters>(key: K, value: PoolFilters[K]) => {
@@ -70,7 +77,6 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Search and Filter Button Row */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -123,51 +129,56 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
               </SheetHeader>
               
               <div className="mt-6 space-y-6">
-                {/* Chains */}
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium">Chains</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {SUPPORTED_CHAINS.map((chain) => (
-                      <Badge
-                        key={chain.id}
-                        variant="outline"
-                        className={cn(
-                          'cursor-pointer transition-colors',
-                          filters.chains.includes(chain.id)
-                            ? 'border-cyan bg-cyan/10 text-cyan'
-                            : 'border-border hover:border-muted-foreground'
-                        )}
-                        onClick={() => toggleChain(chain.id)}
-                      >
-                        {chain.name}
-                      </Badge>
-                    ))}
+                  <Label className="text-sm font-medium">Redes (da API)</Label>
+                  <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto pr-1">
+                    {chainOptions.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Carregando chains...</span>
+                    ) : (
+                      chainOptions.map((chain) => (
+                        <Badge
+                          key={chain}
+                          variant="outline"
+                          className={cn(
+                            'cursor-pointer transition-colors',
+                            filters.chains.includes(chain)
+                              ? 'border-cyan bg-cyan/10 text-cyan'
+                              : 'border-border hover:border-muted-foreground'
+                          )}
+                          onClick={() => toggleChain(chain)}
+                        >
+                          {chain}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
 
-                {/* Protocols */}
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium">Protocolos</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {PROTOCOL_OPTIONS.map((protocol) => (
-                      <Badge
-                        key={protocol.value}
-                        variant="outline"
-                        className={cn(
-                          'cursor-pointer transition-colors',
-                          filters.protocols.includes(protocol.value)
-                            ? 'border-cyan bg-cyan/10 text-cyan'
-                            : 'border-border hover:border-muted-foreground'
-                        )}
-                        onClick={() => toggleProtocol(protocol.value)}
-                      >
-                        {protocol.label}
-                      </Badge>
-                    ))}
+                  <Label className="text-sm font-medium">Protocolos (da API)</Label>
+                  <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto pr-1">
+                    {protocolOptions.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Carregando protocolos...</span>
+                    ) : (
+                      protocolOptions.map((project) => (
+                        <Badge
+                          key={project}
+                          variant="outline"
+                          className={cn(
+                            'max-w-full cursor-pointer break-all text-left transition-colors',
+                            filters.protocols.includes(project)
+                              ? 'border-cyan bg-cyan/10 text-cyan'
+                              : 'border-border hover:border-muted-foreground'
+                          )}
+                          onClick={() => toggleProtocol(project)}
+                        >
+                          {project}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
 
-                {/* APR Range */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-medium">Intervalo de APR</Label>
@@ -190,7 +201,6 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
                   </div>
                 </div>
 
-                {/* TVL Minimum */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-medium">TVL Minimo</Label>
@@ -210,7 +220,6 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
                   </div>
                 </div>
 
-                {/* IL Risk */}
                 <div className="space-y-3">
                   <Label className="text-sm font-medium">Risco de IL</Label>
                   <Select
@@ -228,7 +237,6 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
                   </Select>
                 </div>
 
-                {/* Exposure */}
                 <div className="space-y-3">
                   <Label className="text-sm font-medium">Exposicao</Label>
                   <Select
@@ -246,7 +254,6 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
                   </Select>
                 </div>
 
-                {/* Stablecoin Only */}
                 <div className="flex items-center justify-between">
                   <Label htmlFor="stablecoin" className="text-sm font-medium">
                     Apenas Stablecoins
@@ -263,7 +270,6 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
         </div>
       </div>
 
-      {/* Active Filters Display */}
       {(filters.chains.length > 0 || filters.protocols.length > 0) && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Filtros ativos:</span>
@@ -284,11 +290,11 @@ export function PoolFiltersComponent({ filters, onFiltersChange }: PoolFiltersPr
             <Badge
               key={protocol}
               variant="secondary"
-              className="gap-1 bg-secondary"
+              className="max-w-[220px] gap-1 break-all bg-secondary"
             >
-              {PROTOCOL_OPTIONS.find(p => p.value === protocol)?.label ?? protocol}
+              {protocol}
               <X
-                className="h-3 w-3 cursor-pointer"
+                className="h-3 w-3 shrink-0 cursor-pointer"
                 onClick={() => toggleProtocol(protocol)}
               />
             </Badge>
