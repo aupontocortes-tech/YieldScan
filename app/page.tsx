@@ -81,7 +81,7 @@ export default function DashboardPage() {
             title="Maior APR"
             value={stats ? formatPercent(stats.maxApy) : '-'}
             icon={TrendingUp}
-            description="Pool com maior rendimento"
+            description="Pool com maior APR"
             isLoading={isLoading}
             valueClassName="text-success"
           />

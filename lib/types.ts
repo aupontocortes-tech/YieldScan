@@ -7,9 +7,13 @@ export interface Pool {
   apy: number
   apyBase: number
   apyReward: number | null
-  apyBase1d: number | null
+  /** Base APR médio ~7d (DefiLlama). */
+  apyBase7d: number | null
   apyMean30d: number | null
+  /** Variacao % do APR em 24h (nao e o APR em si). */
+  apyPct1D: number | null
   apyPct7D: number | null
+  apyPct30D: number | null
   tvlUsd: number
   volumeUsd1d: number | null
   volumeUsd7d: number | null
@@ -76,6 +80,8 @@ export interface PoolFilters {
   sortDirection: 'asc' | 'desc'
   period: 'current' | '1d' | '7d' | '30d'
 }
+
+export type PoolAprPeriod = PoolFilters['period']
 
 // Chain configuration
 export interface ChainConfig {

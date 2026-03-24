@@ -40,8 +40,8 @@ function getPoolChangeValue(pool: Pool, period: TimePeriod): number | null {
     case '5m':
     case '10m':
     case '1h':
-      // DeFiLlama nao tem dados de 5m, 10m e 1h, usamos apyBase1d como aproximacao
-      return pool.apyBase1d ?? pool.apyPct1D ?? null
+      // DefiLlama nao tem 5m/10m/1h; aproximamos pela variacao % 24h do APR
+      return pool.apyPct1D ?? null
     case '24h':
       return pool.apyPct1D ?? null
     case '7d':

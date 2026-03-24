@@ -22,30 +22,23 @@ export default function PoolsPage() {
     if (!pools) return []
 
     // Apply filters
-    let result = filterPools(pools, {
-      search: filters.search,
-      chains: filters.chains,
-      protocols: filters.protocols,
-      aprMin: filters.aprMin,
-      aprMax: filters.aprMax,
-      tvlMin: filters.tvlMin,
-      ilRisk: filters.ilRisk,
-      exposure: filters.exposure,
-      stablecoinOnly: filters.stablecoinOnly,
-    })
+    const result = filterPools(
+      pools,
+      {
+        search: filters.search,
+        chains: filters.chains,
+        protocols: filters.protocols,
+        aprMin: filters.aprMin,
+        aprMax: filters.aprMax,
+        tvlMin: filters.tvlMin,
+        ilRisk: filters.ilRisk,
+        exposure: filters.exposure,
+        stablecoinOnly: filters.stablecoinOnly,
+      },
+      period
+    )
 
-    // Apply period filter to APR display (dados: campos apy* na API)
-    if (period !== 'current') {
-      result = result.filter(pool => {
-        if (period === '1d') return pool.apyBase1d !== null
-        if (period === '7d') return pool.apyPct7D !== null
-        if (period === '30d') return pool.apyMean30d !== null
-        return true
-      })
-    }
-
-    // Sort
-    return sortPools(result, filters.sortBy, filters.sortDirection)
+    return sortPools(result, filters.sortBy, filters.sortDirection, period)
   }, [pools, filters, period])
 
   const handleSortChange = (sortBy: PoolFilters['sortBy']) => {
@@ -71,15 +64,22 @@ export default function PoolsPage() {
         </div>
 
         {/* Period Tabs */}
-        <div className="mb-6">
+        <div className="mb-6 space-y-2">
           <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
             <TabsList className="bg-card border border-border">
-              <TabsTrigger value="current">APR Base</TabsTrigger>
+              <TabsTrigger value="current">APR atual</TabsTrigger>
               <TabsTrigger value="1d">24h</TabsTrigger>
-              <TabsTrigger value="7d">7 Dias</TabsTrigger>
-              <TabsTrigger value="30d">30 Dias</TabsTrigger>
+              <TabsTrigger value="7d">7 dias</TabsTrigger>
+              <TabsTrigger value="30d">30 dias</TabsTrigger>
             </TabsList>
           </Tabs>
+          <p className="text-xs text-muted-foreground">
+            {period === 'current' && 'APR total atual da pool (DefiLlama).'}
+            {period === '1d' &&
+              'Pools com dados de variacao 24h; coluna APR = taxa atual.'}
+            {period === '7d' && 'APR de componente base media ~7 dias (apyBase7d), quando existir.'}
+            {period === '30d' && 'APR medio dos ultimos 30 dias (apyMean30d), quando existir.'}
+          </p>
         </div>
 
         {/* Filters */}
@@ -92,6 +92,7 @@ export default function PoolsPage() {
           pools={filteredAndSortedPools}
           isLoading={isLoading}
           filters={filters}
+          period={period}
           onSortChange={handleSortChange}
         />
       </main>

@@ -1,4 +1,12 @@
-import { Pool, Protocol, PoolChartData, TokenPrice, SUPPORTED_CHAINS, SUPPORTED_PROTOCOLS } from './types'
+import {
+  Pool,
+  PoolAprPeriod,
+  Protocol,
+  PoolChartData,
+  TokenPrice,
+  SUPPORTED_CHAINS,
+  SUPPORTED_PROTOCOLS,
+} from './types'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
@@ -142,20 +150,55 @@ export function getChainConfig(chainId: string) {
   return SUPPORTED_CHAINS.find(c => c.id === chainId)
 }
 
+/** APR mostrado na tabela conforme o separador (campos DefiLlama). */
+export function poolDisplayApr(pool: Pool, period: PoolAprPeriod): number {
+  switch (period) {
+    case 'current':
+    case '1d':
+      return pool.apy
+    case '7d':
+      return pool.apyBase7d ?? pool.apy
+    case '30d':
+      return pool.apyMean30d ?? pool.apy
+    default:
+      return pool.apy
+  }
+}
+
+export function poolHasAprDataForPeriod(pool: Pool, period: PoolAprPeriod): boolean {
+  switch (period) {
+    case 'current':
+      return true
+    case '1d':
+      return pool.apyPct1D != null
+    case '7d':
+      return pool.apyBase7d != null || pool.apyPct7D != null
+    case '30d':
+      return pool.apyMean30d != null
+    default:
+      return true
+  }
+}
+
 // Sort pools
-export function sortPools(pools: Pool[], sortBy: string, direction: 'asc' | 'desc'): Pool[] {
+export function sortPools(
+  pools: Pool[],
+  sortBy: string,
+  direction: 'asc' | 'desc',
+  period: PoolAprPeriod = 'current'
+): Pool[] {
   return [...pools].sort((a, b) => {
     let valueA: number
     let valueB: number
     
     switch (sortBy) {
       case 'apr':
-        valueA = a.apy ?? 0
-        valueB = b.apy ?? 0
+        valueA = poolDisplayApr(a, period)
+        valueB = poolDisplayApr(b, period)
         break
       case 'apy1d':
-        valueA = a.apyBase1d ?? 0
-        valueB = b.apyBase1d ?? 0
+        valueA = a.apyPct1D ?? 0
+        valueB = b.apyPct1D ?? 0
         break
       case 'apy7d':
         valueA = a.apyPct7D ?? 0
@@ -178,8 +221,8 @@ export function sortPools(pools: Pool[], sortBy: string, direction: 'asc' | 'des
         valueB = b.apyPct7D ?? 0
         break
       default:
-        valueA = a.apy ?? 0
-        valueB = b.apy ?? 0
+        valueA = poolDisplayApr(a, period)
+        valueB = poolDisplayApr(b, period)
     }
     
     return direction === 'desc' ? valueB - valueA : valueA - valueB
@@ -187,18 +230,24 @@ export function sortPools(pools: Pool[], sortBy: string, direction: 'asc' | 'des
 }
 
 // Filter pools
-export function filterPools(pools: Pool[], filters: {
-  search?: string
-  chains?: string[]
-  protocols?: string[]
-  aprMin?: number
-  aprMax?: number
-  tvlMin?: number
-  ilRisk?: 'all' | 'no' | 'yes'
-  exposure?: 'single' | 'multi' | 'all'
-  stablecoinOnly?: boolean
-}): Pool[] {
+export function filterPools(
+  pools: Pool[],
+  filters: {
+    search?: string
+    chains?: string[]
+    protocols?: string[]
+    aprMin?: number
+    aprMax?: number
+    tvlMin?: number
+    ilRisk?: 'all' | 'no' | 'yes'
+    exposure?: 'single' | 'multi' | 'all'
+    stablecoinOnly?: boolean
+  },
+  period: PoolAprPeriod = 'current'
+): Pool[] {
   return pools.filter(pool => {
+    if (period !== 'current' && !poolHasAprDataForPeriod(pool, period)) return false
+
     // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase()
@@ -218,9 +267,10 @@ export function filterPools(pools: Pool[], filters: {
       if (!filters.protocols.some(p => pool.project.toLowerCase().includes(p.toLowerCase()))) return false
     }
     
-    // APR filter
-    if (filters.aprMin !== undefined && pool.apy < filters.aprMin) return false
-    if (filters.aprMax !== undefined && pool.apy > filters.aprMax) return false
+    // APR filter (usa o mesmo APR exibido para o periodo selecionado)
+    const displayApr = poolDisplayApr(pool, period)
+    if (filters.aprMin !== undefined && displayApr < filters.aprMin) return false
+    if (filters.aprMax !== undefined && displayApr > filters.aprMax) return false
     
     // TVL filter
     if (filters.tvlMin !== undefined && pool.tvlUsd < filters.tvlMin) return false

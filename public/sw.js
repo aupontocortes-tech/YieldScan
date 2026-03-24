@@ -1,4 +1,4 @@
-/* YieldScan — service worker v2 (atualiza cache após deploy; rendimento na UI = APR) */
+/* YieldScan — service worker v3 (APR por periodo nas pools; atualizar app instalada) */
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
