@@ -5,13 +5,15 @@ import {
   PoolChartData,
   TokenPrice,
   SUPPORTED_CHAINS,
+  ALLOWED_POOL_CHAINS,
+  POOL_PROJECT_KEYWORDS_BY_CHAIN,
 } from './types'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
 const COINS_API = 'https://coins.llama.fi'
 
-// Fetch pools from DeFiLlama (sem lista fixa de protocolos; só filtro mínimo de qualidade)
+// Fetch pools from DeFiLlama (escopo fixo por redes/protocolos relevantes)
 export async function fetchPools(): Promise<Pool[]> {
   const response = await fetch(`${DEFILLAMA_YIELDS}/pools`)
   if (!response.ok) throw new Error('Failed to fetch pools')
@@ -19,12 +21,19 @@ export async function fetchPools(): Promise<Pool[]> {
   const data = await response.json()
   const pools: Pool[] = data.data
 
-  return pools.filter(
-    (pool) =>
-      pool.tvlUsd > 10_000 &&
-      pool.apy !== null &&
-      pool.apy !== undefined
-  )
+  return pools.filter(pool => {
+    if (!ALLOWED_POOL_CHAINS.includes(pool.chain)) return false
+
+    const keywords = POOL_PROJECT_KEYWORDS_BY_CHAIN[pool.chain] ?? []
+    if (keywords.length > 0) {
+      const projectLower = String(pool.project ?? '').toLowerCase()
+      const matchesProject = keywords.some((k) => projectLower.includes(k))
+      if (!matchesProject) return false
+    }
+
+    // Filtro mínimo de qualidade
+    return pool.tvlUsd > 10_000 && pool.apy !== null && pool.apy !== undefined
+  })
 }
 
 // Fetch pool chart data

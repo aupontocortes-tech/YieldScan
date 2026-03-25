@@ -110,10 +110,41 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   { id: 'Hyperliquid L1', name: 'Hyperliquid', color: '#00FFB7' },
 ]
 
+/**
+ * Escopo fixo do app: limitar a busca a redes/protocolos citados pelo usuário.
+ *
+ * Observações:
+ * - “Uniswap” na API aparece como `uniswap-v2|v3|v4` etc; por isso usamos `includes('uniswap')`.
+ * - “Rhydon” -> assumido como Raydium (projetos como `raydium-amm`).
+ * - Se uma rede tiver lista vazia, aceitamos todos os projetos daquela rede.
+ */
+export const ALLOWED_POOL_CHAINS = [
+  'Solana',
+  'Optimism',
+  'Arbitrum',
+  'Polygon',
+  'Base',
+  'Hyperliquid L1',
+]
+
+export const POOL_PROJECT_KEYWORDS_BY_CHAIN: Record<string, string[]> = {
+  // “Corretoras”/DEX na Solana (ajustável depois)
+  Solana: ['raydium', 'orca', 'jupiter', 'drift', 'meteora'],
+
+  // “Hyper Liquid” é o recorte de chain. Mantemos todos os projetos na Hyperliquid L1.
+  'Hyperliquid L1': [],
+
+  // Uniswap nos EVMs escolhidos
+  Optimism: ['uniswap'],
+  Arbitrum: ['uniswap'],
+  Polygon: ['uniswap'],
+  Base: ['uniswap'],
+}
+
 // Default filters
 export const DEFAULT_FILTERS: PoolFilters = {
   search: '',
-  chains: [],
+  chains: [...ALLOWED_POOL_CHAINS],
   protocols: [],
   aprMin: 0,
   aprMax: 1000,
