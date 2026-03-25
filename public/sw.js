@@ -1,4 +1,4 @@
-/* YieldScan — service worker v4 (pass-through; dados via /api no servidor) */
+/* YieldScan — service worker v4.1 (pass-through; dados via /api no servidor) */
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
