@@ -9,12 +9,19 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
 import { PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
 import { useNovelChains } from '@/hooks/use-novel-chains'
+import { DataLoadError } from '@/components/data-load-error'
 
 export default function PoolsPage() {
   const [filters, setFilters] = useState<PoolFilters>(DEFAULT_FILTERS)
   const [period, setPeriod] = useState<'current' | '1d' | '7d' | '30d'>('current')
 
-  const { data: pools, isLoading } = useQuery({
+  const {
+    data: pools,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ['pools', filters.tvlMin],
     queryFn: () => fetchPools(filters.tvlMin),
   })
@@ -63,7 +70,16 @@ export default function PoolsPage() {
             Meteora DLMM). Ajuste o TVL mínimo nos filtros para recarregar mais opções — no celular o total
             é limitado para o app abrir rápido.
           </p>
+          {isFetching && !isLoading && (
+            <p className="mt-2 text-xs text-gold">Atualizando lista…</p>
+          )}
         </div>
+
+        {isError && (
+          <div className="mb-6">
+            <DataLoadError onRetry={() => void refetch()} />
+          </div>
+        )}
 
         {/* Period Tabs */}
         <div className="mb-6 space-y-2">
@@ -105,7 +121,7 @@ export default function PoolsPage() {
         {/* Table */}
         <PoolTable
           pools={filteredAndSortedPools}
-          isLoading={isLoading}
+          isLoading={isLoading && !isError}
           filters={filters}
           period={period}
           novelChains={novelChains}

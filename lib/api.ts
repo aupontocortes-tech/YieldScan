@@ -30,23 +30,64 @@ function internalApiBase(): string {
   )
 }
 
+function clientTimeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms)
+  }
+  const c = new AbortController()
+  setTimeout(() => c.abort(), ms)
+  return c.signal
+}
+
 /**
- * Pools agregadas no servidor: DefiLlama (limite + prioridade redes em foco) + Meteora DLMM (API oficial).
- * Evita baixar ~13MB no celular e contorna restrições de alguns browsers.
+ * DefiLlama (/api/pools) + Meteora (/api/meteora-pools) em paralelo — evita timeout do servidor
+ * e trava “carregando para sempre” no celular.
  */
 export async function fetchPools(minTvlUsd: number = 10_000): Promise<Pool[]> {
-  const url = `${internalApiBase()}/api/pools?minTvl=${encodeURIComponent(String(minTvlUsd))}`
-  const response = await fetch(url)
-  if (!response.ok) throw new Error('Failed to fetch pools')
-  const data = (await response.json()) as { data?: Pool[] }
-  return data.data ?? []
+  const q = encodeURIComponent(String(minTvlUsd))
+  const base = internalApiBase()
+  const llamaUrl = `${base}/api/pools?minTvl=${q}`
+  const metaUrl = `${base}/api/meteora-pools?minTvl=${q}`
+  const signal = clientTimeoutSignal(90_000)
+
+  const [llamaRes, metaRes] = await Promise.all([
+    fetch(llamaUrl, { signal }),
+    fetch(metaUrl, { signal }).catch(() => null as Response | null),
+  ])
+
+  if (!llamaRes.ok) {
+    throw new Error('Não foi possível carregar pools (DefiLlama). Tente de novo.')
+  }
+
+  const llamaJson = (await llamaRes.json()) as { data?: Pool[] }
+  let pools = llamaJson.data ?? []
+
+  if (metaRes?.ok) {
+    try {
+      const mj = (await metaRes.json()) as { data?: Pool[] }
+      const meta = mj.data ?? []
+      const seen = new Set(pools.map((p) => p.pool))
+      for (const p of meta) {
+        if (!seen.has(p.pool)) {
+          seen.add(p.pool)
+          pools.push(p)
+        }
+      }
+      pools.sort((a, b) => b.tvlUsd - a.tvlUsd)
+      pools = pools.slice(0, 9200)
+    } catch {
+      /* Meteora opcional */
+    }
+  }
+
+  return pools
 }
 
 // Fetch pool chart data (só DefiLlama; pools Meteora não têm série aqui)
 export async function fetchPoolChart(poolId: string): Promise<PoolChartData[]> {
   if (poolId.startsWith('meteora-dlmm-')) return []
   const url = `${internalApiBase()}/api/yields-chart?poolId=${encodeURIComponent(poolId)}`
-  const response = await fetch(url)
+  const response = await fetch(url, { signal: clientTimeoutSignal(45_000) })
   if (!response.ok) return []
   const raw = await response.json()
   return Array.isArray(raw) ? raw : []
@@ -75,14 +116,16 @@ export async function fetchTokenPrices(tokens: string[]): Promise<Record<string,
 // Fetch historical TVL by chain
 export async function fetchHistoricalTvl(chain: string): Promise<{ date: number; tvl: number }[]> {
   const url = `${internalApiBase()}/api/historical-chain-tvl?chain=${encodeURIComponent(chain)}`
-  const response = await fetch(url)
+  const response = await fetch(url, { signal: clientTimeoutSignal(45_000) })
   if (!response.ok) return []
   return response.json()
 }
 
 // Fetch TVL for all chains
 export async function fetchAllChainsTvl(): Promise<Record<string, number>> {
-  const response = await fetch(`${internalApiBase()}/api/chains-tvl`)
+  const response = await fetch(`${internalApiBase()}/api/chains-tvl`, {
+    signal: clientTimeoutSignal(45_000),
+  })
   if (!response.ok) throw new Error('Failed to fetch chains TVL')
   return response.json()
 }

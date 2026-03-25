@@ -11,14 +11,25 @@ import { TokenPoolsSearch } from '@/components/dashboard/token-pools-search'
 import { fetchPools, fetchAllChainsTvl, sortPools } from '@/lib/api'
 import { formatCurrency, formatPercent } from '@/lib/api'
 import { Activity, TrendingUp, Layers, BarChart3 } from 'lucide-react'
+import { DataLoadError } from '@/components/data-load-error'
 
 export default function DashboardPage() {
-  const { data: pools, isLoading: poolsLoading } = useQuery({
+  const {
+    data: pools,
+    isLoading: poolsLoading,
+    isError: poolsError,
+    refetch: refetchPools,
+  } = useQuery({
     queryKey: ['pools', 10_000],
     queryFn: () => fetchPools(10_000),
   })
 
-  const { data: chainsTvl, isLoading: tvlLoading } = useQuery({
+  const {
+    data: chainsTvl,
+    isLoading: tvlLoading,
+    isError: tvlError,
+    refetch: refetchTvl,
+  } = useQuery({
     queryKey: ['chainsTvl'],
     queryFn: fetchAllChainsTvl,
   })
@@ -62,11 +73,29 @@ export default function DashboardPage() {
   }, [pools])
 
   const isLoading = poolsLoading || tvlLoading
+  const hasLoadError = poolsError || tvlError
+  const statsLoading = !hasLoadError && isLoading
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {hasLoadError && (
+          <div className="mb-6">
+            <DataLoadError
+              message={
+                poolsError
+                  ? 'Não foi possível carregar os pools (DefiLlama / Meteora). Toque para tentar de novo.'
+                  : 'Não foi possível carregar o TVL por rede.'
+              }
+              onRetry={() => {
+                void refetchPools()
+                void refetchTvl()
+              }}
+            />
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -74,7 +103,7 @@ export default function DashboardPage() {
             value={stats ? formatCurrency(stats.totalTvl) : '-'}
             icon={Layers}
             description="Valor total bloqueado"
-            isLoading={isLoading}
+            isLoading={statsLoading}
             valueClassName="text-foreground"
           />
           <StatCard
@@ -82,7 +111,7 @@ export default function DashboardPage() {
             value={stats ? formatPercent(stats.maxApy) : '-'}
             icon={TrendingUp}
             description="Pool com maior APR"
-            isLoading={isLoading}
+            isLoading={statsLoading}
             valueClassName="text-success"
           />
           <StatCard
@@ -90,7 +119,7 @@ export default function DashboardPage() {
             value={stats ? formatPercent(stats.avgApy) : '-'}
             icon={Activity}
             description="Media de todos os pools"
-            isLoading={isLoading}
+            isLoading={statsLoading}
             valueClassName="text-cyan"
           />
           <StatCard
@@ -98,7 +127,7 @@ export default function DashboardPage() {
             value={stats ? stats.totalPools.toLocaleString() : '-'}
             icon={BarChart3}
             description={`${stats?.totalProtocols ?? '-'} protocolos`}
-            isLoading={isLoading}
+            isLoading={statsLoading}
             valueClassName="text-foreground"
           />
         </div>
@@ -107,13 +136,13 @@ export default function DashboardPage() {
         <div className="mb-8 grid gap-8 lg:grid-cols-2">
           <TopPoolsTable
             pools={topPoolsByApy}
-            isLoading={poolsLoading}
+            isLoading={poolsLoading && !poolsError}
             title="Top 5 pools por APR"
             sortBy="apr"
           />
           <TopPoolsTable
             pools={topPoolsByVolume}
-            isLoading={poolsLoading}
+            isLoading={poolsLoading && !poolsError}
             title="Top 5 Pools por Volume 24h"
             sortBy="volume"
           />

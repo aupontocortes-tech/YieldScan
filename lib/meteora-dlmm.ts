@@ -73,29 +73,48 @@ export async function fetchMeteoraDlmmPools(options: {
   pageSize?: number
 }): Promise<Pool[]> {
   const { minTvlUsd, maxPages = 14, pageSize = 100 } = options
-  const out: Pool[] = []
+  const pages = Array.from({ length: maxPages }, (_, i) => i + 1)
+  return fetchMeteoraDlmmPoolsParallel({ minTvlUsd, pages, pageSize })
+}
 
-  for (let page = 1; page <= maxPages; page++) {
-    const u = new URL(`${METEORA_DLMM_API}/pools`)
-    u.searchParams.set('page', String(page))
-    u.searchParams.set('page_size', String(pageSize))
-
-    const res = await fetch(u.toString(), {
-      headers: { Accept: 'application/json' },
-      next: { revalidate: 120 },
+/** Várias páginas em paralelo (muito mais rápido que sequencial no servidor). */
+export async function fetchMeteoraDlmmPoolsParallel(options: {
+  minTvlUsd: number
+  pages: number[]
+  pageSize?: number
+  perRequestMs?: number
+}): Promise<Pool[]> {
+  const { minTvlUsd, pages, pageSize = 100, perRequestMs = 10000 } = options
+  const pageResults = await Promise.all(
+    pages.map(async (page) => {
+      const u = new URL(`${METEORA_DLMM_API}/pools`)
+      u.searchParams.set('page', String(page))
+      u.searchParams.set('page_size', String(pageSize))
+      try {
+        const res = await fetch(u.toString(), {
+          headers: { Accept: 'application/json' },
+          next: { revalidate: 120 },
+          signal: AbortSignal.timeout(perRequestMs),
+        })
+        if (!res.ok) return [] as MeteoraDlmmPoolRow[]
+        const json = (await res.json()) as MeteoraListResponse
+        return json.data ?? []
+      } catch {
+        return [] as MeteoraDlmmPoolRow[]
+      }
     })
-    if (!res.ok) break
+  )
 
-    const json = (await res.json()) as MeteoraListResponse
-    const rows = json.data ?? []
-    if (rows.length === 0) break
-
+  const out: Pool[] = []
+  const seenAddr = new Set<string>()
+  for (const rows of pageResults) {
     for (const row of rows) {
-      if (row.is_blacklisted) continue
-      if (row.tvl < minTvlUsd) continue
-      out.push(mapMeteoraRowToPool(row))
+      if (row.is_blacklisted || row.tvl < minTvlUsd) continue
+      const p = mapMeteoraRowToPool(row)
+      if (seenAddr.has(p.pool)) continue
+      seenAddr.add(p.pool)
+      out.push(p)
     }
   }
-
   return out
 }
