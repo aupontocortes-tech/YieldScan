@@ -71,11 +71,38 @@ export interface SwapQuote {
   gas: number
 }
 
+export type ChainCategoryFilter = 'all' | 'safe' | 'opportunity'
+
+export type AprPreset = 'all' | 'lte20' | 'b20_50' | 'b50_100' | 'gt100'
+
+export type RiskLevelFilter = 'all' | 'low' | 'medium' | 'high'
+
+export type VolumePreset = 'all' | 'low' | 'medium' | 'high'
+
+export type PoolTypeFilter =
+  | 'stable'
+  | 'volatile'
+  | 'concentrated'
+  | 'farming'
+  | 'autocompound'
+
+export type QuickPreset = 'none' | 'yield' | 'safe' | 'balanced' | 'volume'
+
 // Filters for pool table
 export interface PoolFilters {
   search: string
   chains: string[]
   protocols: string[]
+  /** Filtro por categoria de rede (consolidada vs oportunidade). */
+  chainCategory: ChainCategoryFilter
+  /** Faixas rápidas de APR (intersecta com aprMin/aprMax quando `all`). */
+  aprPreset: AprPreset
+  riskLevel: RiskLevelFilter
+  volumePreset: VolumePreset
+  poolTypes: PoolTypeFilter[]
+  /** Só Uniswap, Orca, Raydium, Meteora, Balancer (match parcial no `project`). */
+  primaryDexOnly: boolean
+  quickPreset: QuickPreset
   aprMin: number
   aprMax: number
   tvlMin: number
@@ -110,45 +137,21 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   { id: 'Hyperliquid L1', name: 'Hyperliquid', color: '#00FFB7' },
 ]
 
-/**
- * Escopo fixo do app: limitar a busca a redes/protocolos citados pelo usuário.
- *
- * Observações:
- * - “Uniswap” na API aparece como `uniswap-v2|v3|v4` etc; por isso usamos `includes('uniswap')`.
- * - “Rhydon” -> assumido como Raydium (projetos como `raydium-amm`).
- * - Se uma rede tiver lista vazia, aceitamos todos os projetos daquela rede.
- */
-export const ALLOWED_POOL_CHAINS = [
-  'Solana',
-  'Optimism',
-  'Arbitrum',
-  'Polygon',
-  'Base',
-  'Hyperliquid L1',
-]
-
-export const POOL_PROJECT_KEYWORDS_BY_CHAIN: Record<string, string[]> = {
-  // “Corretoras”/DEX na Solana (ajustável depois)
-  Solana: ['raydium', 'orca', 'jupiter', 'drift', 'meteora'],
-
-  // “Hyper Liquid” é o recorte de chain. Mantemos todos os projetos na Hyperliquid L1.
-  'Hyperliquid L1': [],
-
-  // Uniswap nos EVMs escolhidos
-  Optimism: ['uniswap'],
-  Arbitrum: ['uniswap'],
-  Polygon: ['uniswap'],
-  Base: ['uniswap'],
-}
-
 // Default filters
 export const DEFAULT_FILTERS: PoolFilters = {
   search: '',
-  chains: [...ALLOWED_POOL_CHAINS],
+  chains: [],
   protocols: [],
+  chainCategory: 'all',
+  aprPreset: 'all',
+  riskLevel: 'all',
+  volumePreset: 'all',
+  poolTypes: [],
+  primaryDexOnly: false,
+  quickPreset: 'none',
   aprMin: 0,
   aprMax: 1000,
-  tvlMin: 0,
+  tvlMin: 10_000,
   ilRisk: 'all',
   exposure: 'all',
   stablecoinOnly: false,

@@ -27,6 +27,14 @@ import {
   getAprColorClass,
   poolDisplayApr,
 } from '@/lib/api'
+import {
+  computePoolRiskLevel,
+  getChainCategory,
+  getVolumeTier,
+  inferPoolTypes,
+  isPrimaryDexProject,
+  shouldExtremeAprWarning,
+} from '@/lib/pool-classification'
 import { getDexScreenerUrl } from '@/lib/dexscreener'
 import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
 import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
@@ -38,12 +46,21 @@ interface PoolTableProps {
   isLoading: boolean
   filters: PoolFilters
   period: PoolAprPeriod
+  /** Redes novas vs. visitas anteriores (localStorage). */
+  novelChains?: Set<string>
   onSortChange: (sortBy: PoolFilters['sortBy']) => void
 }
 
 const COL_COUNT = 7
 
-export function PoolTable({ pools, isLoading, filters, period, onSortChange }: PoolTableProps) {
+export function PoolTable({
+  pools,
+  isLoading,
+  filters,
+  period,
+  novelChains = new Set(),
+  onSortChange,
+}: PoolTableProps) {
   const [expandedPool, setExpandedPool] = useState<string | null>(null)
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null)
   const [page, setPage] = useState(0)
@@ -61,8 +78,8 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
       type="button"
       onClick={() => handleSort(column)}
       className={cn(
-        'flex w-full items-center justify-end gap-1 text-muted-foreground hover:text-foreground transition-colors',
-        filters.sortBy === column && 'text-cyan'
+        'flex w-full items-center justify-end gap-1 text-muted-foreground transition-colors hover:text-foreground',
+        filters.sortBy === column && 'text-gold'
       )}
     >
       {children}
@@ -113,14 +130,14 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
       <Dialog open={selectedPool !== null} onOpenChange={(open) => !open && setSelectedPool(null)}>
         <DialogContent
           showCloseButton
-          className="max-h-[90vh] max-w-4xl w-full gap-0 overflow-hidden border-blue-900 bg-[#0a1628] p-0 sm:max-w-4xl"
+          className="max-h-[90vh] max-w-4xl w-full gap-0 overflow-hidden border-gold/30 bg-card p-0 sm:max-w-4xl"
         >
           <DialogHeader className="border-b border-border/60 p-4 pb-3">
-            <DialogTitle className="font-mono text-base text-cyan">
+            <DialogTitle className="font-mono text-base text-gold">
               {selectedPool?.symbol} — {selectedPool?.project} — {selectedPool?.chain}
             </DialogTitle>
             {selectedPool && (
-              <Button variant="link" className="h-auto p-0 text-xs text-blue-400" asChild>
+              <Button variant="link" className="h-auto p-0 text-xs text-gold" asChild>
                 <a href={getDexScreenerUrl(selectedPool)} target="_blank" rel="noopener noreferrer">
                   Abrir DEXScreener em nova aba
                   <ExternalLink className="ml-1 inline h-3 w-3" />
@@ -164,13 +181,16 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
               const displayApr = poolDisplayApr(pool, period)
               const feeLabel = getPoolSwapFeeLabel(pool)
               const metaHint = getPoolMetaHint(pool)
+              const primaryDex = isPrimaryDexProject(pool.project)
+              const chainSafe = getChainCategory(pool.chain) === 'safe'
 
               return (
                 <Fragment key={pool.pool}>
                   <TableRow
                     className={cn(
-                      'table-row-animate border-border cursor-pointer transition-colors',
-                      isExpanded ? 'bg-secondary/50' : 'hover:bg-secondary/30'
+                      'table-row-animate cursor-pointer border-border transition-colors',
+                      isExpanded ? 'bg-secondary/50' : 'hover:bg-secondary/30',
+                      primaryDex && 'ring-1 ring-inset ring-gold/35'
                     )}
                     style={{ animationDelay: `${index * 30}ms` }}
                     onClick={() => setExpandedPool(isExpanded ? null : pool.pool)}
@@ -181,13 +201,27 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold text-foreground">{pool.symbol}</span>
+                            {primaryDex && (
+                              <Badge
+                                variant="outline"
+                                className="border-gold/70 bg-gold/10 text-[10px] font-semibold text-gold"
+                              >
+                                DEX principal
+                              </Badge>
+                            )}
                             {pool.stablecoin && (
                               <Badge variant="outline" className="text-[10px] border-gold text-gold">
                                 Stable
                               </Badge>
                             )}
                           </div>
-                          <p className="truncate text-xs text-muted-foreground" title={pool.project}>
+                          <p
+                            className={cn(
+                              'truncate text-xs',
+                              primaryDex ? 'text-gold/90' : 'text-muted-foreground'
+                            )}
+                            title={pool.project}
+                          >
                             {pool.project}
                           </p>
                         </div>
@@ -220,7 +254,7 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 shrink-0 text-cyan hover:bg-cyan/10 hover:text-cyan"
+                          className="h-8 w-8 shrink-0 text-gold hover:bg-gold/10 hover:text-gold"
                           title="DEXScreener"
                           onClick={(e) => openDexScreener(pool, e)}
                         >
@@ -229,7 +263,13 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
                       </div>
                     </TableCell>
                     <TableCell>
-                      <ChainBadge chain={pool.chain} className="text-[11px]" />
+                      <ChainBadge
+                        chain={pool.chain}
+                        className="text-[11px]"
+                        isSafe={chainSafe}
+                        isNovel={novelChains.has(pool.chain)}
+                        showHighApr={displayApr >= 50}
+                      />
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="font-mono text-sm tabular-nums text-foreground">
@@ -242,9 +282,20 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className={cn('font-mono text-sm font-semibold tabular-nums', getAprColorClass(displayApr))}>
-                        {formatPercent(displayApr)}
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span
+                          className={cn(
+                            'font-mono text-sm font-semibold tabular-nums',
+                            getAprColorClass(displayApr),
+                            shouldExtremeAprWarning(displayApr) && 'rounded px-1 ring-1 ring-destructive/60'
+                          )}
+                        >
+                          {formatPercent(displayApr)}
+                        </span>
+                        {shouldExtremeAprWarning(displayApr) && (
+                          <span className="text-[10px] font-medium text-destructive">APR extremo — alto risco</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="p-2 text-center">
                       {isExpanded ? (
@@ -277,6 +328,24 @@ export function PoolTable({ pools, isLoading, filters, period, onSortChange }: P
                             <span className="text-muted-foreground">
                               Recompensa:{' '}
                               <span className="font-mono text-foreground">{formatPercent(pool.apyReward)}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Risco (estim.):{' '}
+                              <span className="font-mono text-foreground">
+                                {computePoolRiskLevel(pool, displayApr)}
+                              </span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Volume:{' '}
+                              <span className="font-mono text-foreground">
+                                {getVolumeTier(pool.volumeUsd1d)}
+                              </span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Tipos:{' '}
+                              <span className="font-mono text-xs text-foreground">
+                                {inferPoolTypes(pool).join(', ')}
+                              </span>
                             </span>
                             {pool.poolMeta && (
                               <span className="text-muted-foreground" title={pool.poolMeta}>

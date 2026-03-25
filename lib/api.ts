@@ -5,15 +5,22 @@ import {
   PoolChartData,
   TokenPrice,
   SUPPORTED_CHAINS,
-  ALLOWED_POOL_CHAINS,
-  POOL_PROJECT_KEYWORDS_BY_CHAIN,
+  PoolFilters,
 } from './types'
+import {
+  aprPresetBounds,
+  computePoolRiskLevel,
+  inferPoolTypes,
+  isPrimaryDexProject,
+  matchesVolumePreset,
+  passesChainCategory,
+} from './pool-classification'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
 const COINS_API = 'https://coins.llama.fi'
 
-// Fetch pools from DeFiLlama (escopo fixo por redes/protocolos relevantes)
+// Fetch pools from DeFiLlama (todas as chains retornadas pela API; filtro mínimo de qualidade)
 export async function fetchPools(): Promise<Pool[]> {
   const response = await fetch(`${DEFILLAMA_YIELDS}/pools`)
   if (!response.ok) throw new Error('Failed to fetch pools')
@@ -21,19 +28,12 @@ export async function fetchPools(): Promise<Pool[]> {
   const data = await response.json()
   const pools: Pool[] = data.data
 
-  return pools.filter(pool => {
-    if (!ALLOWED_POOL_CHAINS.includes(pool.chain)) return false
-
-    const keywords = POOL_PROJECT_KEYWORDS_BY_CHAIN[pool.chain] ?? []
-    if (keywords.length > 0) {
-      const projectLower = String(pool.project ?? '').toLowerCase()
-      const matchesProject = keywords.some((k) => projectLower.includes(k))
-      if (!matchesProject) return false
-    }
-
-    // Filtro mínimo de qualidade
-    return pool.tvlUsd > 10_000 && pool.apy !== null && pool.apy !== undefined
-  })
+  return pools.filter(
+    (pool) =>
+      pool.tvlUsd > 10_000 &&
+      pool.apy !== null &&
+      pool.apy !== undefined
+  )
 }
 
 // Fetch pool chart data
@@ -123,8 +123,10 @@ export function formatNumber(value: number, decimals = 2): string {
 
 /** Cor da taxa exibida (valor vem como `apy` na API DefiLlama; UI mostra como APR de pool.) */
 export function getAprColorClass(rate: number): string {
-  if (rate >= 20) return 'text-success'
-  if (rate >= 5) return 'text-cyan'
+  if (rate >= 100) return 'text-destructive'
+  if (rate >= 50) return 'text-gold'
+  if (rate >= 20) return 'text-[#fcd34d]'
+  if (rate >= 5) return 'text-foreground'
   return 'text-muted-foreground'
 }
 
@@ -145,7 +147,13 @@ export function getChangeIndicator(change: number | null): { text: string; color
 // Get chain color
 export function getChainColor(chainId: string): string {
   const chain = SUPPORTED_CHAINS.find(c => c.id === chainId)
-  return chain?.color || '#6B7280'
+  if (chain) return chain.color
+  let h = 0
+  for (let i = 0; i < chainId.length; i++) {
+    h = chainId.charCodeAt(i) + ((h << 5) - h)
+  }
+  const hue = Math.abs(h) % 360
+  return `hsl(${hue}, 50%, 58%)`
 }
 
 // Get chain config
@@ -235,66 +243,55 @@ export function sortPools(
 // Filter pools
 export function filterPools(
   pools: Pool[],
-  filters: {
-    search?: string
-    chains?: string[]
-    protocols?: string[]
-    aprMin?: number
-    aprMax?: number
-    tvlMin?: number
-    ilRisk?: 'all' | 'no' | 'yes'
-    exposure?: 'single' | 'multi' | 'all'
-    stablecoinOnly?: boolean
-  },
+  filters: PoolFilters,
   period: PoolAprPeriod = 'current'
 ): Pool[] {
-  const selectedProtocols = filters.protocols?.length
-    ? new Set(filters.protocols)
-    : null
+  const selectedProtocols = filters.protocols.length ? new Set(filters.protocols) : null
 
-  return pools.filter(pool => {
+  return pools.filter((pool) => {
     if (period !== 'current' && !poolHasAprDataForPeriod(pool, period)) return false
 
-    // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase()
-      const matchesSearch = 
+      const matchesSearch =
         pool.symbol.toLowerCase().includes(searchLower) ||
         pool.project.toLowerCase().includes(searchLower)
       if (!matchesSearch) return false
     }
-    
-    // Chain filter
-    if (filters.chains && filters.chains.length > 0) {
-      if (!filters.chains.includes(pool.chain)) return false
-    }
-    
-    // Protocol filter (valor exato do campo `project` da API)
-    if (selectedProtocols) {
-      if (!selectedProtocols.has(pool.project)) return false
-    }
-    
-    // APR filter (usa o mesmo APR exibido para o periodo selecionado)
+
+    if (!passesChainCategory(pool, filters.chainCategory)) return false
+
+    if (filters.chains.length > 0 && !filters.chains.includes(pool.chain)) return false
+
+    if (selectedProtocols && !selectedProtocols.has(pool.project)) return false
+
+    if (filters.primaryDexOnly && !isPrimaryDexProject(pool.project)) return false
+
     const displayApr = poolDisplayApr(pool, period)
-    if (filters.aprMin !== undefined && displayApr < filters.aprMin) return false
-    if (filters.aprMax !== undefined && displayApr > filters.aprMax) return false
-    
-    // TVL filter
-    if (filters.tvlMin !== undefined && pool.tvlUsd < filters.tvlMin) return false
-    
-    // IL Risk filter
-    if (filters.ilRisk && filters.ilRisk !== 'all') {
-      if (pool.ilRisk !== filters.ilRisk) return false
+    const presetBounds = aprPresetBounds(filters.aprPreset)
+    const aprLo = presetBounds?.min ?? filters.aprMin
+    const aprHi = presetBounds?.max ?? filters.aprMax
+    if (displayApr < aprLo || displayApr > aprHi) return false
+
+    if (filters.riskLevel !== 'all') {
+      if (computePoolRiskLevel(pool, displayApr) !== filters.riskLevel) return false
     }
-    
-    // Exposure filter
-    if (filters.exposure && filters.exposure !== 'all') {
-      if (pool.exposure !== filters.exposure) return false
+
+    if (!matchesVolumePreset(pool, filters.volumePreset)) return false
+
+    if (filters.poolTypes.length > 0) {
+      const types = inferPoolTypes(pool)
+      if (!filters.poolTypes.some((t) => types.includes(t))) return false
     }
-    
-    // Stablecoin filter
+
+    if (pool.tvlUsd < filters.tvlMin) return false
+
+    if (filters.ilRisk !== 'all' && pool.ilRisk !== filters.ilRisk) return false
+
+    if (filters.exposure !== 'all' && pool.exposure !== filters.exposure) return false
+
     if (filters.stablecoinOnly && !pool.stablecoin) return false
-    
+
     return true
   })
 }

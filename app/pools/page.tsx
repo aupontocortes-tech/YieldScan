@@ -8,6 +8,7 @@ import { PoolTable } from '@/components/pools/pool-table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
 import { PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
+import { useNovelChains } from '@/hooks/use-novel-chains'
 
 export default function PoolsPage() {
   const [filters, setFilters] = useState<PoolFilters>(DEFAULT_FILTERS)
@@ -23,6 +24,8 @@ export default function PoolsPage() {
     return [...new Set(pools.map((p) => p.chain))].sort((a, b) => a.localeCompare(b))
   }, [pools])
 
+  const novelChains = useNovelChains(chainOptions)
+
   const protocolOptions = useMemo(() => {
     if (!pools?.length) return []
     return [...new Set(pools.map((p) => p.project))].sort((a, b) => a.localeCompare(b))
@@ -31,22 +34,7 @@ export default function PoolsPage() {
   const filteredAndSortedPools = useMemo(() => {
     if (!pools) return []
 
-    // Apply filters
-    const result = filterPools(
-      pools,
-      {
-        search: filters.search,
-        chains: filters.chains,
-        protocols: filters.protocols,
-        aprMin: filters.aprMin,
-        aprMax: filters.aprMax,
-        tvlMin: filters.tvlMin,
-        ilRisk: filters.ilRisk,
-        exposure: filters.exposure,
-        stablecoinOnly: filters.stablecoinOnly,
-      },
-      period
-    )
+    const result = filterPools(pools, filters, period)
 
     return sortPools(result, filters.sortBy, filters.sortDirection, period)
   }, [pools, filters, period])
@@ -67,20 +55,31 @@ export default function PoolsPage() {
       <Header />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Explorador de Pools</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            Explorador de Pools
+          </h1>
           <p className="mt-1 text-muted-foreground">
-            Compare APR de {filteredAndSortedPools.length.toLocaleString()} pools em multiplas chains
+            {filteredAndSortedPools.length.toLocaleString()} pools após filtros — todas as redes listadas na
+            API (classificação Seguro / Oportunidade).
           </p>
         </div>
 
         {/* Period Tabs */}
         <div className="mb-6 space-y-2">
           <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
-            <TabsList className="bg-card border border-border">
-              <TabsTrigger value="current">APR atual</TabsTrigger>
-              <TabsTrigger value="1d">24h</TabsTrigger>
-              <TabsTrigger value="7d">7 dias</TabsTrigger>
-              <TabsTrigger value="30d">30 dias</TabsTrigger>
+            <TabsList className="border border-gold/30 bg-card">
+              <TabsTrigger value="current" className="data-[state=active]:bg-gold data-[state=active]:text-background">
+                APR atual
+              </TabsTrigger>
+              <TabsTrigger value="1d" className="data-[state=active]:bg-gold data-[state=active]:text-background">
+                24h
+              </TabsTrigger>
+              <TabsTrigger value="7d" className="data-[state=active]:bg-gold data-[state=active]:text-background">
+                7 dias
+              </TabsTrigger>
+              <TabsTrigger value="30d" className="data-[state=active]:bg-gold data-[state=active]:text-background">
+                30 dias
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           <p className="text-xs text-muted-foreground">
@@ -108,6 +107,7 @@ export default function PoolsPage() {
           isLoading={isLoading}
           filters={filters}
           period={period}
+          novelChains={novelChains}
           onSortChange={handleSortChange}
         />
       </main>
