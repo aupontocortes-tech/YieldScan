@@ -71,8 +71,8 @@ export function TopGainers() {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('24h')
 
   const { data: pools, isLoading } = useQuery({
-    queryKey: ['pools'],
-    queryFn: fetchPools,
+    queryKey: ['pools', 10_000],
+    queryFn: () => fetchPools(10_000),
   })
 
   const topGainers = useMemo(() => {

@@ -56,8 +56,8 @@ export default function TokenPage() {
   const symbol = (params.symbol as string)?.toUpperCase() || 'ETH'
 
   const { data: pools, isLoading: poolsLoading } = useQuery({
-    queryKey: ['pools'],
-    queryFn: fetchPools,
+    queryKey: ['pools', 10_000],
+    queryFn: () => fetchPools(10_000),
   })
 
   // Filter pools that contain this token

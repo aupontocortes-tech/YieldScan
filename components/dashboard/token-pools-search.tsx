@@ -32,8 +32,8 @@ export function TokenPoolsSearch() {
   const [activeToken, setActiveToken] = useState('')
 
   const { data: pools, isLoading } = useQuery({
-    queryKey: ['pools'],
-    queryFn: fetchPools,
+    queryKey: ['pools', 10_000],
+    queryFn: () => fetchPools(10_000),
   })
 
   const filteredPools = useMemo(() => {

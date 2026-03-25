@@ -1,4 +1,4 @@
-/* YieldScan — service worker v3 (APR por periodo nas pools; atualizar app instalada) */
+/* YieldScan — service worker v4 (pass-through; dados via /api no servidor) */
 self.addEventListener('install', () => {
   self.skipWaiting()
 })

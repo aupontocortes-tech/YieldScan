@@ -21,8 +21,13 @@ export function getDexScreenerUrl(pool: Pool): string {
     return `https://dexscreener.com/${chain}/${pool.pool}`
   }
 
-  if (pool.chain === 'Solana' && pool.pool?.trim()) {
-    return `https://dexscreener.com/solana/${pool.pool.trim()}`
+  if (pool.chain === 'Solana') {
+    const raw = pool.pool?.trim() ?? ''
+    const solMint =
+      raw.startsWith('meteora-dlmm-') ? raw.replace(/^meteora-dlmm-/, '') : raw
+    if (solMint && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solMint)) {
+      return `https://dexscreener.com/solana/${solMint}`
+    }
   }
 
   const symbol = pool.symbol.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()

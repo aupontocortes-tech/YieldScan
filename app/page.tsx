@@ -14,8 +14,8 @@ import { Activity, TrendingUp, Layers, BarChart3 } from 'lucide-react'
 
 export default function DashboardPage() {
   const { data: pools, isLoading: poolsLoading } = useQuery({
-    queryKey: ['pools'],
-    queryFn: fetchPools,
+    queryKey: ['pools', 10_000],
+    queryFn: () => fetchPools(10_000),
   })
 
   const { data: chainsTvl, isLoading: tvlLoading } = useQuery({

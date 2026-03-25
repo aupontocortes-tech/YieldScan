@@ -20,29 +20,36 @@ const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
 const COINS_API = 'https://coins.llama.fi'
 
-// Fetch pools from DeFiLlama (todas as chains retornadas pela API; filtro mínimo de qualidade)
-export async function fetchPools(): Promise<Pool[]> {
-  const response = await fetch(`${DEFILLAMA_YIELDS}/pools`)
-  if (!response.ok) throw new Error('Failed to fetch pools')
-  
-  const data = await response.json()
-  const pools: Pool[] = data.data
-
-  return pools.filter(
-    (pool) =>
-      pool.tvlUsd > 10_000 &&
-      pool.apy !== null &&
-      pool.apy !== undefined
+/** Base para chamadas às rotas internas (SSR / testes). No browser usa path relativo. */
+function internalApiBase(): string {
+  if (typeof window !== 'undefined') return ''
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
+    'http://localhost:3000'
   )
 }
 
-// Fetch pool chart data
+/**
+ * Pools agregadas no servidor: DefiLlama (limite + prioridade redes em foco) + Meteora DLMM (API oficial).
+ * Evita baixar ~13MB no celular e contorna restrições de alguns browsers.
+ */
+export async function fetchPools(minTvlUsd: number = 10_000): Promise<Pool[]> {
+  const url = `${internalApiBase()}/api/pools?minTvl=${encodeURIComponent(String(minTvlUsd))}`
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Failed to fetch pools')
+  const data = (await response.json()) as { data?: Pool[] }
+  return data.data ?? []
+}
+
+// Fetch pool chart data (só DefiLlama; pools Meteora não têm série aqui)
 export async function fetchPoolChart(poolId: string): Promise<PoolChartData[]> {
-  const response = await fetch(`${DEFILLAMA_YIELDS}/chart/${poolId}`)
-  if (!response.ok) throw new Error('Failed to fetch pool chart')
-  
-  const data = await response.json()
-  return data.data
+  if (poolId.startsWith('meteora-dlmm-')) return []
+  const url = `${internalApiBase()}/api/yields-chart?poolId=${encodeURIComponent(poolId)}`
+  const response = await fetch(url)
+  if (!response.ok) return []
+  const raw = await response.json()
+  return Array.isArray(raw) ? raw : []
 }
 
 // Fetch all protocols
@@ -67,29 +74,17 @@ export async function fetchTokenPrices(tokens: string[]): Promise<Record<string,
 
 // Fetch historical TVL by chain
 export async function fetchHistoricalTvl(chain: string): Promise<{ date: number; tvl: number }[]> {
-  const response = await fetch(`${DEFILLAMA_API}/v2/historicalChainTvl/${chain}`)
-  if (!response.ok) throw new Error('Failed to fetch historical TVL')
-  
+  const url = `${internalApiBase()}/api/historical-chain-tvl?chain=${encodeURIComponent(chain)}`
+  const response = await fetch(url)
+  if (!response.ok) return []
   return response.json()
 }
 
 // Fetch TVL for all chains
 export async function fetchAllChainsTvl(): Promise<Record<string, number>> {
-  const response = await fetch(`${DEFILLAMA_API}/v2/chains`)
+  const response = await fetch(`${internalApiBase()}/api/chains-tvl`)
   if (!response.ok) throw new Error('Failed to fetch chains TVL')
-  
-  const data = await response.json()
-  const tvlByChain: Record<string, number> = {}
-  
-  const supportedChainIds = SUPPORTED_CHAINS.map(c => c.id)
-  
-  for (const chain of data) {
-    if (supportedChainIds.includes(chain.name)) {
-      tvlByChain[chain.name] = chain.tvl
-    }
-  }
-  
-  return tvlByChain
+  return response.json()
 }
 
 // Format currency

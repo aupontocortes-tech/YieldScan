@@ -98,6 +98,8 @@ export function inferPoolTypes(pool: Pool): PoolTypeFilter[] {
     proj.includes('univ3') ||
     proj.includes('uniswap-v3') ||
     proj.includes('uniswap-v4') ||
+    proj.includes('meteora') ||
+    proj.includes('dlmm') ||
     meta.includes('concentrated') ||
     meta.includes('clamm')
   ) {

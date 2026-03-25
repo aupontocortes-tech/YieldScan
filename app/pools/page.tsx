@@ -15,8 +15,8 @@ export default function PoolsPage() {
   const [period, setPeriod] = useState<'current' | '1d' | '7d' | '30d'>('current')
 
   const { data: pools, isLoading } = useQuery({
-    queryKey: ['pools'],
-    queryFn: fetchPools,
+    queryKey: ['pools', filters.tvlMin],
+    queryFn: () => fetchPools(filters.tvlMin),
   })
 
   const chainOptions = useMemo(() => {
@@ -59,9 +59,9 @@ export default function PoolsPage() {
             Explorador de Pools
           </h1>
           <p className="mt-1 text-muted-foreground">
-            {filteredAndSortedPools.length.toLocaleString()} pools — padrão{' '}
-            <span className="text-gold">Em foco</span> (famosas + hypadas + DEXs fortes). Abra filtros para
-            ver todas as chains da API.
+            {filteredAndSortedPools.length.toLocaleString()} pools na lista (dados via servidor: DefiLlama +
+            Meteora DLMM). Ajuste o TVL mínimo nos filtros para recarregar mais opções — no celular o total
+            é limitado para o app abrir rápido.
           </p>
         </div>
 
