@@ -34,6 +34,7 @@ import {
 import {
   applyQuickPreset,
   isPrimaryDexProject,
+  PREFERRED_CHAINS,
   SAFE_CHAINS,
   PRIMARY_DEX_KEYWORDS,
 } from '@/lib/pool-classification'
@@ -63,10 +64,15 @@ const POOL_TYPE_OPTS: { id: PoolTypeFilter; label: string }[] = [
 ]
 
 const QUICK: { id: QuickPreset; label: string; hint: string }[] = [
-  { id: 'yield', label: 'Maior rendimento', hint: 'Inclui redes emergentes; ordena por APR.' },
-  { id: 'safe', label: 'Mais seguro', hint: 'Só redes consolidadas; TVL maior.' },
-  { id: 'balanced', label: 'Equilibrado', hint: 'Mix amplo com TVL mínimo moderado.' },
-  { id: 'volume', label: 'Maior volume', hint: 'Redes grandes + volume 24h alto.' },
+  {
+    id: 'myNetworks',
+    label: 'Minhas redes',
+    hint: 'Foco nas redes famosas + hypadas que você usa (ETH, L2s, Solana, Hyperliquid, etc.).',
+  },
+  { id: 'yield', label: 'Maior rendimento', hint: 'Todas as chains da API; ordena por APR.' },
+  { id: 'safe', label: 'Mais seguro', hint: 'Só redes blue-chip; TVL maior.' },
+  { id: 'balanced', label: 'Equilibrado', hint: 'Lista em foco com TVL mínimo mais alto.' },
+  { id: 'volume', label: 'Maior volume', hint: 'Redes blue-chip + volume 24h alto.' },
 ]
 
 interface PoolFiltersProps {
@@ -96,7 +102,11 @@ export function PoolFiltersComponent({
     const newChains = filters.chains.includes(chainId)
       ? filters.chains.filter((c) => c !== chainId)
       : [...filters.chains, chainId]
-    onFiltersChange({ ...filters, chains: newChains, quickPreset: 'none' })
+    let chainCategory = filters.chainCategory
+    if (chainCategory === 'focus' && newChains.some((c) => !PREFERRED_CHAINS.has(c))) {
+      chainCategory = 'all'
+    }
+    onFiltersChange({ ...filters, chains: newChains, chainCategory, quickPreset: 'none' })
   }
 
   const toggleProtocol = (protocol: string) => {
@@ -121,8 +131,12 @@ export function PoolFiltersComponent({
     () => chainOptions.filter((c) => SAFE_CHAINS.has(c)),
     [chainOptions]
   )
-  const opportunityChains = useMemo(
-    () => chainOptions.filter((c) => !SAFE_CHAINS.has(c)),
+  const focusChains = useMemo(
+    () => chainOptions.filter((c) => PREFERRED_CHAINS.has(c)),
+    [chainOptions]
+  )
+  const otherChains = useMemo(
+    () => chainOptions.filter((c) => !PREFERRED_CHAINS.has(c)),
     [chainOptions]
   )
 
@@ -138,7 +152,7 @@ export function PoolFiltersComponent({
   const activeFiltersCount = [
     filters.chains.length > 0,
     filters.protocols.length > 0,
-    filters.chainCategory !== 'all',
+    filters.chainCategory !== 'all' && filters.chainCategory !== DEFAULT_FILTERS.chainCategory,
     filters.aprPreset !== 'all',
     filters.aprMin > 0,
     filters.aprMax < 1000,
@@ -159,7 +173,7 @@ export function PoolFiltersComponent({
       size="sm"
       variant="outline"
       className={cn(
-        'flex-1 border-border text-xs',
+        'min-w-[5.5rem] flex-1 border-border text-xs',
         filters.chainCategory === value && 'border-gold bg-gold/15 text-gold'
       )}
       onClick={() => updateFilter('chainCategory', value)}
@@ -261,21 +275,52 @@ export function PoolFiltersComponent({
 
                 <div className="space-y-3">
                   <Label className="text-sm font-medium text-gold">Redes (classificação)</Label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {chainCategoryBtn('focus', 'Em foco')}
                     {chainCategoryBtn('all', 'Todas')}
-                    {chainCategoryBtn('safe', 'Seguras')}
+                    {chainCategoryBtn('safe', 'Blue chip')}
                     {chainCategoryBtn('opportunity', 'Oportunidade')}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Seguras: Ethereum, Arbitrum, Base, Polygon, Solana. Demais chains da API entram como
-                    oportunidade (Hyperliquid, novas redes, etc.).
+                    <strong className="text-foreground">Em foco</strong>: redes famosas + hypadas (ETH, grandes L2s,
+                    Solana, BSC, Avax, Hyperliquid, Blast, Linea, Scroll, zkSync, Mantle, Monad, etc.).{' '}
+                    <strong className="text-foreground">Blue chip</strong>: ETH, Arbitrum, OP, Base, Polygon,
+                    Solana, BSC, Avalanche. Use <strong className="text-foreground">Todas</strong> para qualquer
+                    chain que a API listar.
                   </p>
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Redes seguras
+                      Lista em foco (atalhos)
                     </p>
                     <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto pr-1">
+                      {focusChains.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        focusChains.map((chain) => (
+                          <Badge
+                            key={chain}
+                            variant="outline"
+                            className={cn(
+                              'cursor-pointer transition-colors',
+                              filters.chains.includes(chain)
+                                ? 'border-gold bg-gold/15 text-gold'
+                                : 'border-border hover:border-gold/50'
+                            )}
+                            onClick={() => toggleChain(chain)}
+                          >
+                            {chain}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Blue chip (filtro Seguras)
+                    </p>
+                    <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
                       {safeChains.length === 0 ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
@@ -300,13 +345,13 @@ export function PoolFiltersComponent({
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Oportunidade / emergentes
+                      Outras redes na API
                     </p>
                     <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto pr-1">
-                      {opportunityChains.length === 0 ? (
+                      {otherChains.length === 0 ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
-                        opportunityChains.map((chain) => (
+                        otherChains.map((chain) => (
                           <Badge
                             key={chain}
                             variant="outline"

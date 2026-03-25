@@ -71,7 +71,7 @@ export interface SwapQuote {
   gas: number
 }
 
-export type ChainCategoryFilter = 'all' | 'safe' | 'opportunity'
+export type ChainCategoryFilter = 'all' | 'focus' | 'safe' | 'opportunity'
 
 export type AprPreset = 'all' | 'lte20' | 'b20_50' | 'b50_100' | 'gt100'
 
@@ -86,7 +86,7 @@ export type PoolTypeFilter =
   | 'farming'
   | 'autocompound'
 
-export type QuickPreset = 'none' | 'yield' | 'safe' | 'balanced' | 'volume'
+export type QuickPreset = 'none' | 'myNetworks' | 'yield' | 'safe' | 'balanced' | 'volume'
 
 // Filters for pool table
 export interface PoolFilters {
@@ -100,7 +100,7 @@ export interface PoolFilters {
   riskLevel: RiskLevelFilter
   volumePreset: VolumePreset
   poolTypes: PoolTypeFilter[]
-  /** Só Uniswap, Orca, Raydium, Meteora, Balancer (match parcial no `project`). */
+  /** Só DEXs “em foco” (lista de keywords no código; Uniswap, Solana, ve(3,3), etc.). */
   primaryDexOnly: boolean
   quickPreset: QuickPreset
   aprMin: number
@@ -142,7 +142,7 @@ export const DEFAULT_FILTERS: PoolFilters = {
   search: '',
   chains: [],
   protocols: [],
-  chainCategory: 'all',
+  chainCategory: 'focus',
   aprPreset: 'all',
   riskLevel: 'all',
   volumePreset: 'all',

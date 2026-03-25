@@ -8,23 +8,67 @@ import type {
   VolumePreset,
 } from './types'
 
-/** Redes consideradas consolidadas (volume/estabilidade). */
+/** Redes muito líquidas / “blue chip” (filtro Mais seguro). */
 export const SAFE_CHAINS = new Set([
   'Ethereum',
   'Arbitrum',
+  'Optimism',
   'Base',
   'Polygon',
   'Solana',
+  'BSC',
+  'Avalanche',
 ])
 
-/** Hyperliquid e demais chains não listadas em SAFE → oportunidade / maior risco. */
+/**
+ * Famosas + hypadas + as que você citou (Uniswap-land, Solana, Hyperliquid, L2s em alta).
+ * Filtro “Em foco” / preset Minhas redes — nomes iguais ao campo `chain` da DefiLlama.
+ */
+export const PREFERRED_CHAINS = new Set<string>([
+  ...SAFE_CHAINS,
+  'Hyperliquid L1',
+  'Blast',
+  'Linea',
+  'Scroll',
+  'zkSync Era',
+  'Mantle',
+  'Manta',
+  'Mode',
+  'Berachain',
+  'Sonic',
+  'Monad',
+  'Sei',
+  'Taiko',
+])
+
+/** DEXs / AMMs fortes para destaque e filtro “só principais”. */
 export const PRIMARY_DEX_KEYWORDS = [
   'uniswap',
   'orca',
   'raydium',
   'meteora',
   'balancer',
+  'jupiter',
+  'drift',
+  'curve',
+  'aerodrome',
+  'velodrome',
+  'pancake',
+  'sushi',
+  'kamino',
+  'gmx',
+  'camelot',
+  'trader-joe',
+  'traderjoe',
+  'quickswap',
+  'osmosis',
+  'vertex',
+  'dydx',
 ] as const
+
+export function isPreferredChain(chain: string): boolean {
+  return PREFERRED_CHAINS.has(chain)
+}
 
 export function getChainCategory(chain: string): 'safe' | 'opportunity' {
   return SAFE_CHAINS.has(chain) ? 'safe' : 'opportunity'
@@ -106,91 +150,73 @@ export function shouldExtremeAprWarning(displayApr: number): boolean {
 
 export function passesChainCategory(pool: Pool, category: ChainCategoryFilter): boolean {
   if (category === 'all') return true
+  if (category === 'focus') return PREFERRED_CHAINS.has(pool.chain)
   const c = getChainCategory(pool.chain)
   return category === 'safe' ? c === 'safe' : c === 'opportunity'
 }
 
 export function applyQuickPreset(preset: QuickPreset): Partial<PoolFilters> {
+  const baseReset = {
+    chains: [] as string[],
+    protocols: [] as string[],
+    aprPreset: 'all' as const,
+    aprMin: 0,
+    aprMax: 1000,
+    volumePreset: 'all' as const,
+    riskLevel: 'all' as const,
+    poolTypes: [] as PoolTypeFilter[],
+    ilRisk: 'all' as const,
+    exposure: 'all' as const,
+    stablecoinOnly: false,
+    primaryDexOnly: false,
+  }
+
   switch (preset) {
-    case 'yield':
+    case 'myNetworks':
       return {
-        quickPreset: 'yield',
-        chainCategory: 'all',
-        primaryDexOnly: false,
-        chains: [],
-        protocols: [],
+        ...baseReset,
+        quickPreset: 'myNetworks',
+        chainCategory: 'focus',
         sortBy: 'apr',
         sortDirection: 'desc',
         tvlMin: 10_000,
-        aprPreset: 'all',
-        aprMin: 0,
-        aprMax: 1000,
-        volumePreset: 'all',
-        riskLevel: 'all',
-        poolTypes: [],
-        ilRisk: 'all',
-        exposure: 'all',
-        stablecoinOnly: false,
+      }
+    case 'yield':
+      return {
+        ...baseReset,
+        quickPreset: 'yield',
+        chainCategory: 'all',
+        sortBy: 'apr',
+        sortDirection: 'desc',
+        tvlMin: 10_000,
       }
     case 'safe':
       return {
+        ...baseReset,
         quickPreset: 'safe',
         chainCategory: 'safe',
-        primaryDexOnly: false,
-        chains: [],
-        protocols: [],
         sortBy: 'tvl',
         sortDirection: 'desc',
         tvlMin: 100_000,
-        aprPreset: 'all',
-        aprMin: 0,
-        aprMax: 1000,
-        volumePreset: 'all',
-        riskLevel: 'all',
-        poolTypes: [],
-        ilRisk: 'all',
-        exposure: 'all',
-        stablecoinOnly: false,
       }
     case 'balanced':
       return {
+        ...baseReset,
         quickPreset: 'balanced',
-        chainCategory: 'all',
-        primaryDexOnly: false,
-        chains: [],
-        protocols: [],
+        chainCategory: 'focus',
         sortBy: 'apr',
         sortDirection: 'desc',
         tvlMin: 100_000,
-        aprPreset: 'all',
-        aprMin: 0,
-        aprMax: 1000,
-        volumePreset: 'all',
-        riskLevel: 'all',
-        poolTypes: [],
-        ilRisk: 'all',
-        exposure: 'all',
-        stablecoinOnly: false,
       }
     case 'volume':
       return {
+        ...baseReset,
         quickPreset: 'volume',
         chainCategory: 'safe',
-        primaryDexOnly: false,
-        chains: [],
-        protocols: [],
         sortBy: 'volume',
         sortDirection: 'desc',
         tvlMin: 100_000,
-        aprPreset: 'all',
-        aprMin: 0,
-        aprMax: 1000,
         volumePreset: 'high',
-        riskLevel: 'all',
-        poolTypes: [],
-        ilRisk: 'all',
-        exposure: 'all',
-        stablecoinOnly: false,
       }
     default:
       return { quickPreset: 'none' }

@@ -59,8 +59,9 @@ export default function PoolsPage() {
             Explorador de Pools
           </h1>
           <p className="mt-1 text-muted-foreground">
-            {filteredAndSortedPools.length.toLocaleString()} pools após filtros — todas as redes listadas na
-            API (classificação Seguro / Oportunidade).
+            {filteredAndSortedPools.length.toLocaleString()} pools — padrão{' '}
+            <span className="text-gold">Em foco</span> (famosas + hypadas + DEXs fortes). Abra filtros para
+            ver todas as chains da API.
           </p>
         </div>
 

@@ -11,6 +11,8 @@ interface ChainBadgeProps {
   isNovel?: boolean
   /** APR da pool muito alto — alerta de risco. */
   showHighApr?: boolean
+  /** Rede na lista “em foco” (famosas + hypadas). */
+  isFocus?: boolean
 }
 
 export function ChainBadge({
@@ -19,6 +21,7 @@ export function ChainBadge({
   isSafe,
   isNovel,
   showHighApr,
+  isFocus,
 }: ChainBadgeProps) {
   const color = getChainColor(chain)
 
@@ -36,14 +39,21 @@ export function ChainBadge({
         {chain}
       </span>
       <div className="flex flex-wrap gap-1">
-        {isSafe && (
+        {isSafe ? (
           <Badge
             variant="outline"
             className="border-gold/60 bg-gold/10 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-gold"
           >
             Seguro
           </Badge>
-        )}
+        ) : isFocus ? (
+          <Badge
+            variant="outline"
+            className="border-amber-500/50 bg-amber-500/10 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-amber-200"
+          >
+            Foco
+          </Badge>
+        ) : null}
         {isNovel && (
           <Badge
             variant="outline"

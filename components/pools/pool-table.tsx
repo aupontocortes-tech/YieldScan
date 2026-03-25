@@ -32,6 +32,7 @@ import {
   getChainCategory,
   getVolumeTier,
   inferPoolTypes,
+  isPreferredChain,
   isPrimaryDexProject,
   shouldExtremeAprWarning,
 } from '@/lib/pool-classification'
@@ -267,6 +268,7 @@ export function PoolTable({
                         chain={pool.chain}
                         className="text-[11px]"
                         isSafe={chainSafe}
+                        isFocus={isPreferredChain(pool.chain)}
                         isNovel={novelChains.has(pool.chain)}
                         showHighApr={displayApr >= 50}
                       />
