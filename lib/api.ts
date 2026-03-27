@@ -132,6 +132,7 @@ export async function fetchAllChainsTvl(): Promise<Record<string, number>> {
 
 // Format currency
 export function formatCurrency(value: number, compact = true): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
   if (compact) {
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
     if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`
@@ -148,6 +149,7 @@ export function formatCurrency(value: number, compact = true): string {
 // Format percentage
 export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined) return '-'
+  if (typeof value === 'number' && !Number.isFinite(value)) return '-'
   return `${value.toFixed(2)}%`
 }
 
@@ -183,7 +185,10 @@ export function getChangeIndicator(change: number | null): { text: string; color
 }
 
 // Get chain color
-export function getChainColor(chainId: string): string {
+export function getChainColor(chainId: string | null | undefined): string {
+  if (chainId == null || chainId === '') {
+    return 'hsl(210, 25%, 55%)'
+  }
   const chain = SUPPORTED_CHAINS.find(c => c.id === chainId)
   if (chain) return chain.color
   let h = 0
@@ -292,8 +297,8 @@ export function filterPools(
     if (filters.search) {
       const searchLower = filters.search.toLowerCase()
       const matchesSearch =
-        pool.symbol.toLowerCase().includes(searchLower) ||
-        pool.project.toLowerCase().includes(searchLower)
+        (pool.symbol ?? '').toLowerCase().includes(searchLower) ||
+        (pool.project ?? '').toLowerCase().includes(searchLower)
       if (!matchesSearch) return false
     }
 

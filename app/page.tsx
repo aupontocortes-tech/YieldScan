@@ -42,7 +42,7 @@ export default function DashboardPage() {
     const avgApy = validApys.length > 0
       ? validApys.reduce((acc, p) => acc + p.apy, 0) / validApys.length
       : 0
-    const maxApy = Math.max(...validApys.map(p => p.apy))
+    const maxApy = validApys.length > 0 ? Math.max(...validApys.map((p) => p.apy)) : 0
     const uniqueProtocols = new Set(pools.map(p => p.project))
 
     return {

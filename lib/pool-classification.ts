@@ -75,7 +75,7 @@ export function getChainCategory(chain: string): 'safe' | 'opportunity' {
 }
 
 export function isPrimaryDexProject(project: string): boolean {
-  const p = project.toLowerCase()
+  const p = (project ?? '').toLowerCase()
   return PRIMARY_DEX_KEYWORDS.some((k) => p.includes(k))
 }
 
@@ -92,7 +92,7 @@ export function inferPoolTypes(pool: Pool): PoolTypeFilter[] {
   else types.add('volatile')
 
   const meta = (pool.poolMeta ?? '').toLowerCase()
-  const proj = pool.project.toLowerCase()
+  const proj = (pool.project ?? '').toLowerCase()
   if (
     meta.includes('%') ||
     proj.includes('univ3') ||

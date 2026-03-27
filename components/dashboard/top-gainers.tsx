@@ -164,7 +164,7 @@ export function TopGainers() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <ChainBadge chainId={pool.chain} />
+                        <ChainBadge chain={pool.chain} />
                       </TableCell>
                       <TableCell className="text-right font-mono text-success">
                         {formatPercent(pool.apy)}

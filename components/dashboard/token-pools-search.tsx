@@ -41,7 +41,7 @@ export function TokenPoolsSearch() {
     
     const tokenLower = activeToken.toLowerCase()
     const filtered = pools.filter(pool => {
-      const symbolLower = pool.symbol.toLowerCase()
+      const symbolLower = (pool.symbol ?? '').toLowerCase()
       // Match token in pool symbol (e.g., "ETH-USDC" contains "ETH")
       return symbolLower.includes(tokenLower) && 
              pool.apy > 0 && 
@@ -187,7 +187,7 @@ export function TokenPoolsSearch() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <ChainBadge chainId={pool.chain} />
+                          <ChainBadge chain={pool.chain} />
                         </TableCell>
                         <TableCell className="text-right font-mono text-success">
                           {formatPercent(pool.apy)}
