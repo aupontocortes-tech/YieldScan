@@ -142,7 +142,8 @@ export const DEFAULT_FILTERS: PoolFilters = {
   search: '',
   chains: [],
   protocols: [],
-  chainCategory: 'focus',
+  /** Sem rede escolhida: mostra todas as chains; o usuário restringe ao marcar rede/DEX. */
+  chainCategory: 'all',
   aprPreset: 'all',
   riskLevel: 'all',
   volumePreset: 'all',
