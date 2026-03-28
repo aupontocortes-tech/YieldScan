@@ -15,7 +15,9 @@ export async function GET(req: NextRequest) {
       pageSize: 100,
       perRequestMs: 9000,
     })
-    return NextResponse.json({ data: pools })
+    const res = NextResponse.json({ data: pools })
+    res.headers.set('X-Meteora-Count', String(pools.length))
+    return res
   } catch {
     return NextResponse.json({ data: [] })
   }

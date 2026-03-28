@@ -40,6 +40,26 @@ function clientTimeoutSignal(ms: number): AbortSignal {
   return c.signal
 }
 
+/** Pools ingeridas da API DLMM da Meteora (não têm campos de série tipo DefiLlama). */
+export function isMeteoraDlmmPool(pool: Pick<Pool, 'pool' | 'project'>): boolean {
+  return pool.project === 'meteora-dlmm' || pool.pool.startsWith('meteora-dlmm-')
+}
+
+const POOLS_MERGE_CAP = 9200
+
+/** Meteora vs slug DefiLlama (`meteora`, `meteora-dlmm`, etc.): filtro por DEX deve aceitar ambos. */
+function protocolMatchesSelection(pool: Pool, selected: Set<string>): boolean {
+  if (selected.size === 0) return true
+  if (selected.has(pool.project)) return true
+  const proj = pool.project.toLowerCase()
+  const poolIsMeteora = proj.includes('meteora')
+  if (!poolIsMeteora) return false
+  for (const s of selected) {
+    if (s.toLowerCase().includes('meteora')) return true
+  }
+  return false
+}
+
 /**
  * DefiLlama (/api/pools) + Meteora (/api/meteora-pools) em paralelo — evita timeout do servidor
  * e trava “carregando para sempre” no celular.
@@ -221,9 +241,11 @@ export function poolDisplayApr(pool: Pool, period: PoolAprPeriod): number {
 }
 
 export function poolHasAprDataForPeriod(pool: Pool, period: PoolAprPeriod): boolean {
+  if (period === 'current') return true
+  if (isMeteoraDlmmPool(pool)) {
+    return true
+  }
   switch (period) {
-    case 'current':
-      return true
     case '1d':
       return pool.apyPct1D != null
     case '7d':
@@ -312,7 +334,7 @@ export function filterPools(
       if (!passesChainCategory(pool, filters.chainCategory)) return false
     }
 
-    if (selectedProtocols && !selectedProtocols.has(pool.project)) return false
+    if (selectedProtocols && !protocolMatchesSelection(pool, selectedProtocols)) return false
 
     if (filters.primaryDexOnly && !isPrimaryDexProject(pool.project)) return false
 
