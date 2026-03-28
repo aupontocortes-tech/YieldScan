@@ -306,6 +306,35 @@ export function sortPools(
   })
 }
 
+/**
+ * Busca por um token (ex.: `btc`) ou par com barra (ex.: `BTC/USDT`, `wbtc-usdt`).
+ * Compara símbolo da pool sem exigir o caractere `/` literal no nome.
+ */
+export function poolMatchesSearchQuery(pool: Pool, rawSearch: string): boolean {
+  const q = rawSearch.trim()
+  if (!q) return true
+
+  const sym = (pool.symbol ?? '').toLowerCase()
+  const proj = (pool.project ?? '').toLowerCase()
+
+  const parts = q
+    .split(/[/\\|／]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+
+  if (parts.length >= 2) {
+    const symCompact = sym.replace(/[^a-z0-9]/g, '')
+    return parts.every((tok) => {
+      const compact = tok.replace(/[^a-z0-9]/g, '')
+      if (!compact) return true
+      return symCompact.includes(compact) || sym.includes(tok) || proj.includes(tok)
+    })
+  }
+
+  const ql = q.toLowerCase()
+  return sym.includes(ql) || proj.includes(ql)
+}
+
 // Filter pools
 export function filterPools(
   pools: Pool[],
@@ -318,11 +347,7 @@ export function filterPools(
     if (period !== 'current' && !poolHasAprDataForPeriod(pool, period)) return false
 
     if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      const matchesSearch =
-        (pool.symbol ?? '').toLowerCase().includes(searchLower) ||
-        (pool.project ?? '').toLowerCase().includes(searchLower)
-      if (!matchesSearch) return false
+      if (!poolMatchesSearchQuery(pool, filters.search)) return false
     }
 
     const poolChain = canonicalLlamaChain(pool.chain)

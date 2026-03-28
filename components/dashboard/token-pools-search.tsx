@@ -22,7 +22,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ChainBadge } from '@/components/chain-badge'
-import { fetchPools, formatCurrency, formatPercent, sortPools } from '@/lib/api'
+import { fetchPools, formatCurrency, formatPercent, poolMatchesSearchQuery, sortPools } from '@/lib/api'
 import { Search, Coins, ExternalLink, TrendingUp, AlertCircle } from 'lucide-react'
 
 const POPULAR_TOKENS = ['ETH', 'USDC', 'USDT', 'BTC', 'WBTC', 'DAI', 'SOL', 'MATIC', 'ARB', 'OP']
@@ -38,15 +38,14 @@ export function TokenPoolsSearch() {
 
   const filteredPools = useMemo(() => {
     if (!pools || !activeToken) return []
-    
-    const tokenLower = activeToken.toLowerCase()
-    const filtered = pools.filter(pool => {
-      const symbolLower = (pool.symbol ?? '').toLowerCase()
-      // Match token in pool symbol (e.g., "ETH-USDC" contains "ETH")
-      return symbolLower.includes(tokenLower) && 
-             pool.apy > 0 && 
-             pool.apy < 10000 && 
-             pool.tvlUsd > 50000
+
+    const filtered = pools.filter((pool) => {
+      return (
+        poolMatchesSearchQuery(pool, activeToken) &&
+        pool.apy > 0 &&
+        pool.apy < 10000 &&
+        pool.tvlUsd > 50000
+      )
     })
     
     return sortPools(filtered, 'apr', 'desc').slice(0, 15)
@@ -54,7 +53,7 @@ export function TokenPoolsSearch() {
 
   const handleSearch = () => {
     if (searchValue.trim()) {
-      setActiveToken(searchValue.trim().toUpperCase())
+      setActiveToken(searchValue.trim())
     }
   }
 

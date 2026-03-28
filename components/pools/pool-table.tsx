@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import {
   Table,
   TableBody,
@@ -70,8 +70,15 @@ export function PoolTable({
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
 
-  const paginatedPools = pools.slice(page * pageSize, (page + 1) * pageSize)
-  const totalPages = Math.ceil(pools.length / pageSize)
+  const totalPages = pools.length === 0 ? 0 : Math.ceil(pools.length / pageSize)
+  const maxPage = Math.max(0, totalPages - 1)
+
+  useEffect(() => {
+    setPage((p) => (p > maxPage ? maxPage : p))
+  }, [pools.length, pageSize, maxPage])
+
+  const clampedPage = Math.min(page, maxPage)
+  const paginatedPools = pools.slice(clampedPage * pageSize, (clampedPage + 1) * pageSize)
 
   const handleSort = (column: PoolFilters['sortBy']) => {
     onSortChange(column)
@@ -399,7 +406,9 @@ export function PoolTable({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            Mostrando {page * pageSize + 1}-{Math.min((page + 1) * pageSize, pools.length)} de {pools.length}
+            {pools.length === 0
+              ? 'Nenhum pool nesta lista'
+              : `Mostrando ${clampedPage * pageSize + 1}-${Math.min((clampedPage + 1) * pageSize, pools.length)} de ${pools.length}`}
           </span>
           <select
             value={pageSize}
@@ -418,19 +427,19 @@ export function PoolTable({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={clampedPage === 0}
           >
             Anterior
           </Button>
           <span className="text-sm text-muted-foreground">
-            Pagina {page + 1} de {totalPages || 1}
+            Pagina {clampedPage + 1} de {totalPages || 1}
           </span>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1 || totalPages === 0}
+            onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
+            disabled={clampedPage >= maxPage || totalPages === 0}
           >
             Proxima
           </Button>
