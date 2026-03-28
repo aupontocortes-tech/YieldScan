@@ -140,6 +140,7 @@ export function PoolFiltersComponent({
     (filters.smartHighApr ? 1 : 0) +
     (filters.smartHighTvl ? 1 : 0) +
     (filters.smartLowRisk ? 1 : 0) +
+    (filters.safeAprProfile ? 1 : 0) +
     (filters.search.trim() ? 1 : 0)
 
   const hasSheetExtras =
@@ -148,7 +149,18 @@ export function PoolFiltersComponent({
     filters.tvlMin !== DEFAULT_FILTERS.tvlMin ||
     filters.smartHighApr ||
     filters.smartHighTvl ||
-    filters.smartLowRisk
+    filters.smartLowRisk ||
+    filters.safeAprProfile
+
+  const toggleSafeAprProfile = () => {
+    const next = !filters.safeAprProfile
+    onFiltersChange({
+      ...filters,
+      safeAprProfile: next,
+      quickPreset: 'none',
+      ...(next ? { sortBy: 'apr' as const, sortDirection: 'desc' as const } : {}),
+    })
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -163,6 +175,19 @@ export function PoolFiltersComponent({
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={filters.safeAprProfile ? 'default' : 'outline'}
+            className={cn(
+              'h-9 shrink-0 border-gold/40 bg-card text-xs',
+              filters.safeAprProfile && 'bg-gold text-background hover:bg-gold/90'
+            )}
+            title="Redes blue-chip, TVL ≥ 100K, volume 24h ≥ 50K; remove APR extremo em stable. Dados continuam da DeFi Llama."
+            onClick={toggleSafeAprProfile}
+          >
+            Melhor APR · perfil seguro
+          </Button>
           <Select
             value={filters.sortBy}
             onValueChange={(value) => updateFilter('sortBy', value as PoolFilters['sortBy'])}
@@ -341,6 +366,23 @@ export function PoolFiltersComponent({
                       />
                       <span className="text-sm text-foreground">Baixo risco (blue chips / estável)</span>
                     </label>
+                    <label className="flex cursor-pointer items-center gap-2.5">
+                      <Checkbox
+                        checked={filters.safeAprProfile}
+                        onCheckedChange={(v) => {
+                          const on = v === true
+                          onFiltersChange({
+                            ...filters,
+                            safeAprProfile: on,
+                            quickPreset: 'none',
+                            ...(on ? { sortBy: 'apr', sortDirection: 'desc' } : {}),
+                          })
+                        }}
+                      />
+                      <span className="text-sm text-foreground">
+                        Melhor APR · perfil seguro (TVL/volume mínimos, redes principais)
+                      </span>
+                    </label>
                   </div>
                 </div>
 
@@ -382,9 +424,15 @@ export function PoolFiltersComponent({
         </div>
       </div>
 
-      {(filters.chains.length > 0 || filters.protocols.length > 0) && (
+      {(filters.chains.length > 0 || filters.protocols.length > 0 || filters.safeAprProfile) && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground">Ativos:</span>
+          {filters.safeAprProfile && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              APR · perfil seguro
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('safeAprProfile', false)} />
+            </Badge>
+          )}
           {filters.chains.map((chain) => (
             <Badge key={chain} variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               {chain}

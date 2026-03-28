@@ -116,6 +116,11 @@ export interface PoolFilters {
   smartHighApr: boolean
   smartHighTvl: boolean
   smartLowRisk: boolean
+  /**
+   * Redes “seguras”, TVL/volume mínimos e cortes de outlier; não adiciona pools novas —
+   * só refina a lista já carregada para achar APR alto com menos lixo.
+   */
+  safeAprProfile: boolean
 }
 
 export type PoolAprPeriod = PoolFilters['period']
@@ -166,6 +171,7 @@ export const DEFAULT_FILTERS: PoolFilters = {
   smartHighApr: false,
   smartHighTvl: false,
   smartLowRisk: false,
+  safeAprProfile: false,
 }
 
 // Stats type

@@ -83,8 +83,9 @@ export default function PoolsPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">Explorador de Pools</h1>
           <p className="mt-1 text-muted-foreground">
-            {filteredAndSortedPools.length.toLocaleString()} pools na lista (DefiLlama + Meteora DLMM). TVL mínimo
-            nos filtros recarrega no servidor.
+            {filteredAndSortedPools.length.toLocaleString()} pools na lista (DefiLlama + Meteora DLMM). APR vem da
+            DeFi Llama; no app da Uniswap o valor pode diferir (cálculo por posição e faixa de preço). TVL mínimo nos
+            filtros recarrega no servidor.
           </p>
           {isFetching && !isLoading && (
             <p className="mt-2 text-xs text-gold">Atualizando lista…</p>
@@ -115,7 +116,8 @@ export default function PoolsPage() {
             </TabsList>
           </Tabs>
           <p className="text-xs text-muted-foreground">
-            {period === 'current' && 'APR total atual da pool (DefiLlama).'}
+            {period === 'current' &&
+              'APR total atual (DefiLlama). Uniswap: comparar com o link da pool — lá é estimativa da sua posição.'}
             {period === '1d' && 'Pools com dados de variacao 24h; coluna APR = taxa atual.'}
             {period === '7d' && 'APR de componente base media ~7 dias (apyBase7d), quando existir.'}
             {period === '30d' && 'APR medio dos ultimos 30 dias (apyMean30d), quando existir.'}

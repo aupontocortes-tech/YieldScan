@@ -14,6 +14,7 @@ import {
   isPrimaryDexProject,
   matchesVolumePreset,
   passesChainCategory,
+  passesSafeAprProfile,
 } from './pool-classification'
 import { canonicalLlamaChain, normalizePoolChains } from './llama-chain'
 
@@ -387,6 +388,8 @@ export function filterPools(
     if (filters.exposure !== 'all' && pool.exposure !== filters.exposure) return false
 
     if (filters.stablecoinOnly && !pool.stablecoin) return false
+
+    if (filters.safeAprProfile && !passesSafeAprProfile(pool, displayApr)) return false
 
     return true
   })

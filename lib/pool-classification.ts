@@ -118,6 +118,22 @@ export function inferPoolTypes(pool: Pool): PoolTypeFilter[] {
 }
 
 /** Risco heurístico: stable + rede segura + APR moderado = baixo; resto sobe com IL e APR. */
+/**
+ * Filtro “APR alto sem loucura”: só redes blue-chip, liquidez e volume reais,
+ * corta outliers (APR gigante em stable, etc.). Independente do app Uniswap —
+ * continua baseado nos dados DefiLlama já carregados.
+ */
+export function passesSafeAprProfile(pool: Pool, displayApr: number): boolean {
+  if (displayApr <= 0 || !Number.isFinite(displayApr)) return false
+  if (getChainCategory(pool.chain) !== 'safe') return false
+  if (pool.tvlUsd < 100_000) return false
+  const vol = pool.volumeUsd1d ?? 0
+  if (vol < 50_000) return false
+  if (displayApr > 280) return false
+  if (pool.stablecoin && displayApr > 50) return false
+  return true
+}
+
 export function computePoolRiskLevel(pool: Pool, displayApr: number): 'low' | 'medium' | 'high' {
   const cat = getChainCategory(pool.chain)
   if (pool.stablecoin && cat === 'safe' && displayApr <= 25 && pool.ilRisk === 'no') return 'low'
