@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Pool } from '@/lib/types'
+import { normalizePoolChains } from '@/lib/llama-chain'
 import { selectLlamaPools } from '@/lib/llama-pools-select'
 
 export const maxDuration = 25
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
     }
 
     const body = (await llamaRes.json()) as { data?: Pool[] }
-    const raw = body.data ?? []
+    const raw = normalizePoolChains(body.data ?? [])
     const llama = selectLlamaPools(raw, minTvl, cap)
 
     return NextResponse.json({ data: llama })

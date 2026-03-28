@@ -8,6 +8,7 @@ const CHAIN_MAP: Record<string, string> = {
   Optimism: 'optimism',
   Polygon: 'polygon',
   BSC: 'bsc',
+  opBNB: 'opbnb',
   Avalanche: 'avalanche',
   Fantom: 'fantom',
   Hyperliquid: 'hyperliquid',

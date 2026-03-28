@@ -15,6 +15,7 @@ import {
   matchesVolumePreset,
   passesChainCategory,
 } from './pool-classification'
+import { canonicalLlamaChain, normalizePoolChains } from './llama-chain'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
@@ -80,7 +81,7 @@ export async function fetchPools(minTvlUsd: number = 10_000): Promise<Pool[]> {
     }
   }
 
-  return pools
+  return normalizePoolChains(pools)
 }
 
 // Fetch pool chart data (só DefiLlama; pools Meteora não têm série aqui)
@@ -302,9 +303,14 @@ export function filterPools(
       if (!matchesSearch) return false
     }
 
-    if (!passesChainCategory(pool, filters.chainCategory)) return false
-
-    if (filters.chains.length > 0 && !filters.chains.includes(pool.chain)) return false
+    const poolChain = canonicalLlamaChain(pool.chain)
+    const explicitNetworks = filters.chains.length > 0
+    if (explicitNetworks) {
+      const selected = new Set(filters.chains.map((c) => canonicalLlamaChain(c)))
+      if (!selected.has(poolChain)) return false
+    } else {
+      if (!passesChainCategory(pool, filters.chainCategory)) return false
+    }
 
     if (selectedProtocols && !selectedProtocols.has(pool.project)) return false
 

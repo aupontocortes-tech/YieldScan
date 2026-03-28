@@ -7,6 +7,7 @@ import type {
   QuickPreset,
   VolumePreset,
 } from './types'
+import { canonicalLlamaChain } from './llama-chain'
 
 /** Redes muito líquidas / “blue chip” (filtro Mais seguro). */
 export const SAFE_CHAINS = new Set([
@@ -67,11 +68,11 @@ export const PRIMARY_DEX_KEYWORDS = [
 ] as const
 
 export function isPreferredChain(chain: string): boolean {
-  return PREFERRED_CHAINS.has(chain)
+  return PREFERRED_CHAINS.has(canonicalLlamaChain(chain))
 }
 
 export function getChainCategory(chain: string): 'safe' | 'opportunity' {
-  return SAFE_CHAINS.has(chain) ? 'safe' : 'opportunity'
+  return SAFE_CHAINS.has(canonicalLlamaChain(chain)) ? 'safe' : 'opportunity'
 }
 
 export function isPrimaryDexProject(project: string): boolean {
@@ -151,9 +152,10 @@ export function shouldExtremeAprWarning(displayApr: number): boolean {
 }
 
 export function passesChainCategory(pool: Pool, category: ChainCategoryFilter): boolean {
+  const chain = canonicalLlamaChain(pool.chain)
   if (category === 'all') return true
-  if (category === 'focus') return PREFERRED_CHAINS.has(pool.chain)
-  const c = getChainCategory(pool.chain)
+  if (category === 'focus') return PREFERRED_CHAINS.has(chain)
+  const c = getChainCategory(chain)
   return category === 'safe' ? c === 'safe' : c === 'opportunity'
 }
 
