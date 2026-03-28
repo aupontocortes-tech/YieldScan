@@ -33,11 +33,6 @@ export default function PoolsPage() {
 
   const novelChains = useNovelChains(chainOptions)
 
-  const protocolOptions = useMemo(() => {
-    if (!pools?.length) return []
-    return [...new Set(pools.map((p) => p.project))].sort((a, b) => a.localeCompare(b))
-  }, [pools])
-
   const filteredAndSortedPools = useMemo(() => {
     if (!pools) return []
 
@@ -114,7 +109,7 @@ export default function PoolsPage() {
             filters={filters}
             onFiltersChange={setFilters}
             chainOptions={chainOptions}
-            protocolOptions={protocolOptions}
+            pools={pools ?? []}
           />
         </div>
 
