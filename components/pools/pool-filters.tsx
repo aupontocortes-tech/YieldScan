@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Sheet,
   SheetContent,
@@ -13,15 +14,32 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { DEFAULT_FILTERS, type Pool, type PoolFilters } from '@/lib/types'
-import { isPrimaryDexProject } from '@/lib/pool-classification'
-import { canonicalLlamaChain } from '@/lib/llama-chain'
+import {
+  DEFAULT_FILTERS,
+  type Pool,
+  type PoolAprPeriod,
+  type PoolFilters,
+} from '@/lib/types'
+import { poolDisplayApr } from '@/lib/api'
+import { aggregateProtocols } from '@/lib/pool-smart-rank'
+import {
+  poolMatchesSelectedChains,
+  primaryChainsPresentInData,
+  secondaryChainsInData,
+} from '@/lib/curated-markets'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,7 +47,6 @@ const TVL_PRESETS: { label: string; value: number }[] = [
   { label: '+10K', value: 10_000 },
   { label: '+100K', value: 100_000 },
   { label: '+1M', value: 1_000_000 },
-  { label: '+10M', value: 10_000_000 },
 ]
 
 function formatDexLabel(slug: string): string {
@@ -39,18 +56,15 @@ function formatDexLabel(slug: string): string {
     .trim()
 }
 
-function poolMatchesSelectedChains(pool: Pool, selectedChains: string[]): boolean {
-  if (selectedChains.length === 0) return true
-  const pc = canonicalLlamaChain(pool.chain)
-  return selectedChains.some((c) => canonicalLlamaChain(c) === pc)
-}
+const chipClass =
+  'cursor-pointer border px-2 py-1 text-xs font-medium transition-colors rounded-md'
 
 interface PoolFiltersProps {
   filters: PoolFilters
   onFiltersChange: (filters: PoolFilters) => void
   chainOptions: string[]
-  /** Lista completa de pools (para listar só DEXs das redes escolhidas). */
   pools: Pool[]
+  period: PoolAprPeriod
 }
 
 export function PoolFiltersComponent({
@@ -58,33 +72,39 @@ export function PoolFiltersComponent({
   onFiltersChange,
   chainOptions,
   pools,
+  period,
 }: PoolFiltersProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [moreChainsOpen, setMoreChainsOpen] = useState(false)
+  const [expandDexList, setExpandDexList] = useState(false)
+
+  const aprOf = useCallback((p: Pool) => poolDisplayApr(p, period), [period])
 
   const updateFilter = <K extends keyof PoolFilters>(key: K, value: PoolFilters[K]) => {
     onFiltersChange({ ...filters, [key]: value, quickPreset: 'none' })
   }
 
-  const projectsOnSelectedChains = useMemo(() => {
-    if (!pools.length) return []
-    const subset = pools.filter((p) => poolMatchesSelectedChains(p, filters.chains))
-    return [...new Set(subset.map((p) => p.project))]
-  }, [pools, filters.chains])
+  const primaryChains = useMemo(() => primaryChainsPresentInData(chainOptions), [chainOptions])
+  const extraChains = useMemo(() => secondaryChainsInData(chainOptions), [chainOptions])
 
-  const sortedProtocols = useMemo(() => {
-    return [...projectsOnSelectedChains].sort((a, b) => {
-      const pa = isPrimaryDexProject(a)
-      const pb = isPrimaryDexProject(b)
-      if (pa !== pb) return pa ? -1 : 1
-      return a.localeCompare(b)
-    })
-  }, [projectsOnSelectedChains])
+  const curatedAggs = useMemo(
+    () => aggregateProtocols(pools, filters.chains, { curatedOnly: true, aprOf }),
+    [pools, filters.chains, aprOf]
+  )
+
+  const visibleCurated = useMemo(() => curatedAggs.slice(0, 8), [curatedAggs])
+
+  const moreProtocolAggs = useMemo(() => {
+    if (!expandDexList) return []
+    const hide = new Set(visibleCurated.map((a) => a.project))
+    return aggregateProtocols(pools, filters.chains, { curatedOnly: false, aprOf }).filter(
+      (a) => !hide.has(a.project)
+    )
+  }, [expandDexList, pools, filters.chains, aprOf, visibleCurated])
 
   const pruneProtocols = (nextChains: string[]) => {
     const allowed = new Set(
-      pools
-        .filter((p) => poolMatchesSelectedChains(p, nextChains))
-        .map((p) => p.project)
+      pools.filter((p) => poolMatchesSelectedChains(p, nextChains)).map((p) => p.project)
     )
     return filters.protocols.filter((pr) => allowed.has(pr))
   }
@@ -109,43 +129,45 @@ export function PoolFiltersComponent({
   }
 
   const clearFilters = () => {
+    setExpandDexList(false)
     onFiltersChange({ ...DEFAULT_FILTERS, search: filters.search })
   }
 
-  const chainsSorted = useMemo(
-    () => [...chainOptions].sort((a, b) => a.localeCompare(b)),
-    [chainOptions]
-  )
+  const activeTotal =
+    filters.chains.length +
+    filters.protocols.length +
+    (filters.tvlMin !== DEFAULT_FILTERS.tvlMin ? 1 : 0) +
+    (filters.smartHighApr ? 1 : 0) +
+    (filters.smartHighTvl ? 1 : 0) +
+    (filters.smartLowRisk ? 1 : 0) +
+    (filters.search.trim() ? 1 : 0)
 
-  const hasExtraFilters =
+  const hasSheetExtras =
     filters.chains.length > 0 ||
     filters.protocols.length > 0 ||
-    filters.tvlMin !== DEFAULT_FILTERS.tvlMin
-
-  const activeFiltersCount = [
-    filters.chains.length > 0,
-    filters.protocols.length > 0,
-    filters.tvlMin !== DEFAULT_FILTERS.tvlMin,
-  ].filter(Boolean).length
+    filters.tvlMin !== DEFAULT_FILTERS.tvlMin ||
+    filters.smartHighApr ||
+    filters.smartHighTvl ||
+    filters.smartLowRisk
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar token ou nome do protocolo…"
+            placeholder="Buscar token ou protocolo…"
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value, quickPreset: 'none' })}
-            className="border-border bg-card pl-9"
+            className="h-9 border-border bg-card pl-9 text-sm"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select
             value={filters.sortBy}
             onValueChange={(value) => updateFilter('sortBy', value as PoolFilters['sortBy'])}
           >
-            <SelectTrigger className="w-full border-border bg-card sm:w-[160px]">
+            <SelectTrigger className="h-9 w-full border-border bg-card sm:w-[150px]">
               <SelectValue placeholder="Ordenar" />
             </SelectTrigger>
             <SelectContent>
@@ -158,100 +180,184 @@ export function PoolFiltersComponent({
 
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
-              <Button type="button" variant="outline" className="gap-2 border-gold/40 bg-card">
+              <Button type="button" variant="outline" size="sm" className="gap-1.5 border-gold/40 bg-card">
                 <SlidersHorizontal className="h-4 w-4" />
                 Filtros
-                {activeFiltersCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 bg-gold text-background">
-                    {activeFiltersCount}
-                  </Badge>
+                {activeTotal > 0 && (
+                  <Badge className="bg-gold px-1.5 text-[10px] text-background">{activeTotal}</Badge>
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
-              <SheetHeader>
+            <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-md">
+              <SheetHeader className="pb-2">
                 <SheetTitle className="text-foreground">Rede e DEX</SheetTitle>
               </SheetHeader>
 
-              <div className="mt-6 flex flex-1 flex-col gap-6 pb-6">
-                <div className="rounded-xl border border-border bg-card/80 p-3">
-                  <Label className="text-sm font-medium text-foreground">Rede</Label>
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Nenhuma selecionada = todas. Ao escolher redes, a lista de DEX abaixo mostra só as corretoras
-                    que têm pool nessas redes.
+              <div className="flex flex-1 flex-col gap-5 pb-6">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">Redes principais</Label>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    Máx. duas linhas. Nenhuma = todas. Use &quot;Mais redes&quot; para o restante.
                   </p>
-                  <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
-                    {chainsSorted.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">Carregando redes…</span>
+                  <div className="mt-2.5 flex max-h-[4.5rem] flex-wrap gap-1.5 overflow-hidden">
+                    {primaryChains.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Carregando…</span>
                     ) : (
-                      chainsSorted.map((chain) => (
-                        <Badge
+                      primaryChains.map((chain) => (
+                        <button
                           key={chain}
-                          variant="outline"
+                          type="button"
                           className={cn(
-                            'cursor-pointer transition-colors',
+                            chipClass,
                             filters.chains.includes(chain)
                               ? 'border-gold bg-gold/15 text-gold'
-                              : 'border-border hover:border-gold/50'
+                              : 'border-border bg-card text-foreground hover:border-gold/50'
                           )}
                           onClick={() => toggleChain(chain)}
                         >
                           {chain}
-                        </Badge>
+                        </button>
                       ))
                     )}
                   </div>
+                  {extraChains.length > 0 && (
+                    <Dialog open={moreChainsOpen} onOpenChange={setMoreChainsOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="ghost" size="sm" className="mt-2 h-8 px-2 text-xs text-gold">
+                          Mais redes
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-h-[min(80vh,28rem)] overflow-y-auto sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Outras redes</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex flex-wrap gap-1.5">
+                          {extraChains.map((chain) => (
+                            <button
+                              key={chain}
+                              type="button"
+                              className={cn(
+                                chipClass,
+                                filters.chains.includes(chain)
+                                  ? 'border-gold bg-gold/15 text-gold'
+                                  : 'border-border bg-card hover:border-gold/40'
+                              )}
+                              onClick={() => toggleChain(chain)}
+                            >
+                              {chain}
+                            </button>
+                          ))}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </div>
 
-                <div className="rounded-xl border border-border bg-card/80 p-3">
-                  <Label className="text-sm font-medium text-foreground">DEX / protocolo</Label>
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    {filters.chains.length === 0
-                      ? 'Mostrando todos os protocolos da lista. Selecione uma ou mais redes acima para encurtar esta lista.'
-                      : `Só protocolos com pool em: ${filters.chains.join(', ')}.`}
+                <div className="border-t border-border pt-4">
+                  <Label className="text-sm font-medium text-foreground">DEX em destaque</Label>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Principais por TVL, volume e APR médio nas redes selecionadas (ou em todas).
                   </p>
-                  <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto pr-1">
-                    {sortedProtocols.length === 0 ? (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {visibleCurated.length === 0 ? (
                       <span className="text-xs text-muted-foreground">
-                        {filters.chains.length > 0
-                          ? 'Nenhum protocolo nesta combinação de redes.'
-                          : 'Carregando…'}
+                        {pools.length === 0 ? 'Carregando…' : 'Nenhuma DEX curada neste recorte.'}
                       </span>
                     ) : (
-                      sortedProtocols.map((project) => (
-                        <Badge
-                          key={project}
-                          variant="outline"
-                          title={project}
+                      visibleCurated.map((agg) => (
+                        <button
+                          key={agg.project}
+                          type="button"
+                          title={agg.project}
                           className={cn(
-                            'max-w-[min(100%,14rem)] cursor-pointer break-words text-left',
-                            isPrimaryDexProject(project) && 'border-gold/40',
-                            filters.protocols.includes(project)
+                            chipClass,
+                            'max-w-[11rem] truncate text-left',
+                            filters.protocols.includes(agg.project)
                               ? 'border-gold bg-gold/15 text-gold'
-                              : 'border-border hover:border-gold/40'
+                              : 'border-border bg-card hover:border-gold/40'
                           )}
-                          onClick={() => toggleProtocol(project)}
+                          onClick={() => toggleProtocol(agg.project)}
                         >
-                          {formatDexLabel(project)}
-                        </Badge>
+                          {formatDexLabel(agg.project)}
+                        </button>
                       ))
                     )}
                   </div>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="mt-1 h-auto p-0 text-xs text-gold"
+                    onClick={() => setExpandDexList((e) => !e)}
+                  >
+                    {expandDexList ? 'Ver menos protocolos' : 'Ver mais protocolos'}
+                  </Button>
+                  {expandDexList && moreProtocolAggs.length > 0 && (
+                    <div className="mt-2 max-h-48 flex flex-wrap gap-1.5 overflow-y-auto rounded-md border border-border/60 bg-background/50 p-2">
+                      {moreProtocolAggs.map((agg) => (
+                        <button
+                          key={agg.project}
+                          type="button"
+                          title={agg.project}
+                          className={cn(
+                            chipClass,
+                            'max-w-[10rem] truncate text-left',
+                            filters.protocols.includes(agg.project)
+                              ? 'border-gold bg-gold/15 text-gold'
+                              : 'border-border bg-card hover:border-gold/35'
+                          )}
+                          onClick={() => toggleProtocol(agg.project)}
+                        >
+                          {formatDexLabel(agg.project)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="rounded-xl border border-border bg-card/80 p-3">
-                  <Label className="text-sm font-medium text-foreground">TVL mínimo na pool</Label>
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Recarrega a lista no servidor (menos ruído com valor mais alto).
+                <div className="border-t border-border pt-4">
+                  <Label className="text-sm font-medium text-foreground">Filtro rápido (rentabilidade)</Label>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Ativos: reordenam a tabela e destacam linhas com melhor score composto.
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="mt-3 space-y-3">
+                    <label className="flex cursor-pointer items-center gap-2.5">
+                      <Checkbox
+                        checked={filters.smartHighApr}
+                        onCheckedChange={(v) => updateFilter('smartHighApr', v === true)}
+                      />
+                      <span className="text-sm text-foreground">Alta rentabilidade (APR alto)</span>
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2.5">
+                      <Checkbox
+                        checked={filters.smartHighTvl}
+                        onCheckedChange={(v) => updateFilter('smartHighTvl', v === true)}
+                      />
+                      <span className="text-sm text-foreground">Alta liquidez (TVL alto)</span>
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2.5">
+                      <Checkbox
+                        checked={filters.smartLowRisk}
+                        onCheckedChange={(v) => updateFilter('smartLowRisk', v === true)}
+                      />
+                      <span className="text-sm text-foreground">Baixo risco (blue chips / estável)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-4">
+                  <Label className="text-sm font-medium text-foreground">TVL mínimo</Label>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Recarrega dados no servidor.</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {TVL_PRESETS.map((p) => (
                       <Button
                         key={p.value}
                         type="button"
                         size="sm"
                         variant={filters.tvlMin === p.value ? 'default' : 'outline'}
-                        className={cn(filters.tvlMin === p.value && 'bg-gold text-background hover:bg-gold/90')}
+                        className={cn(
+                          'h-8 text-xs',
+                          filters.tvlMin === p.value && 'bg-gold text-background hover:bg-gold/90'
+                        )}
                         onClick={() => updateFilter('tvlMin', p.value)}
                       >
                         {p.label}
@@ -260,11 +366,16 @@ export function PoolFiltersComponent({
                   </div>
                 </div>
 
-                {hasExtraFilters && (
-                  <Button type="button" variant="ghost" className="text-muted-foreground" onClick={clearFilters}>
-                    Limpar redes, DEX e TVL
-                  </Button>
-                )}
+                <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  {activeTotal > 0 && (
+                    <p className="text-xs font-medium text-gold">{activeTotal} filtros ativos</p>
+                  )}
+                  {hasSheetExtras && (
+                    <Button type="button" variant="outline" size="sm" className="border-gold/40" onClick={clearFilters}>
+                      Limpar filtros
+                    </Button>
+                  )}
+                </div>
               </div>
             </SheetContent>
           </Sheet>
@@ -272,20 +383,16 @@ export function PoolFiltersComponent({
       </div>
 
       {(filters.chains.length > 0 || filters.protocols.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Ativos:</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">Ativos:</span>
           {filters.chains.map((chain) => (
-            <Badge key={chain} variant="secondary" className="gap-1 bg-secondary">
+            <Badge key={chain} variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               {chain}
               <X className="h-3 w-3 cursor-pointer" onClick={() => toggleChain(chain)} />
             </Badge>
           ))}
           {filters.protocols.map((protocol) => (
-            <Badge
-              key={protocol}
-              variant="secondary"
-              className="max-w-[220px] gap-1 break-all bg-secondary"
-            >
+            <Badge key={protocol} variant="secondary" className="max-w-[200px] gap-1 break-all px-2 py-0.5 text-xs">
               {formatDexLabel(protocol)}
               <X className="h-3 w-3 shrink-0 cursor-pointer" onClick={() => toggleProtocol(protocol)} />
             </Badge>

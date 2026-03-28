@@ -112,6 +112,10 @@ export interface PoolFilters {
   sortBy: 'apr' | 'apy1d' | 'apy7d' | 'apy30d' | 'tvl' | 'volume' | 'change7d'
   sortDirection: 'asc' | 'desc'
   period: 'current' | '1d' | '7d' | '30d'
+  /** Ordenação / destaque por rentabilidade, liquidez e risco (página de pools). */
+  smartHighApr: boolean
+  smartHighTvl: boolean
+  smartLowRisk: boolean
 }
 
 export type PoolAprPeriod = PoolFilters['period']
@@ -159,6 +163,9 @@ export const DEFAULT_FILTERS: PoolFilters = {
   sortBy: 'apr',
   sortDirection: 'desc',
   period: 'current',
+  smartHighApr: false,
+  smartHighTvl: false,
+  smartLowRisk: false,
 }
 
 // Stats type

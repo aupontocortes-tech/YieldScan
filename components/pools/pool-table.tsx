@@ -49,6 +49,8 @@ interface PoolTableProps {
   period: PoolAprPeriod
   /** Redes novas vs. visitas anteriores (localStorage). */
   novelChains?: Set<string>
+  /** Destaque visual quando filtros inteligentes estão ativos. */
+  smartHighlightIds?: Set<string>
   onSortChange: (sortBy: PoolFilters['sortBy']) => void
 }
 
@@ -60,6 +62,7 @@ export function PoolTable({
   filters,
   period,
   novelChains = new Set(),
+  smartHighlightIds,
   onSortChange,
 }: PoolTableProps) {
   const [expandedPool, setExpandedPool] = useState<string | null>(null)
@@ -191,7 +194,8 @@ export function PoolTable({
                     className={cn(
                       'table-row-animate cursor-pointer border-border transition-colors',
                       isExpanded ? 'bg-secondary/50' : 'hover:bg-secondary/30',
-                      primaryDex && 'ring-1 ring-inset ring-gold/35'
+                      primaryDex && 'ring-1 ring-inset ring-gold/35',
+                      smartHighlightIds?.has(pool.pool) && 'bg-gold/[0.07] ring-1 ring-inset ring-gold/30'
                     )}
                     style={{ animationDelay: `${index * 30}ms` }}
                     onClick={() => setExpandedPool(isExpanded ? null : pool.pool)}
