@@ -10,6 +10,7 @@ import {
 import {
   aprPresetBounds,
   computePoolRiskLevel,
+  getChainCategory,
   inferPoolTypes,
   isPrimaryDexProject,
   matchesVolumePreset,
@@ -359,6 +360,8 @@ export function filterPools(
     } else {
       if (!passesChainCategory(pool, filters.chainCategory)) return false
     }
+    // Com chips de rede selecionados, o ramo acima ignora chainCategory; força blue chip quando ativo.
+    if (filters.chainCategory === 'safe' && getChainCategory(pool.chain) !== 'safe') return false
 
     if (selectedProtocols && !protocolMatchesSelection(pool, selectedProtocols)) return false
 

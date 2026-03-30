@@ -41,6 +41,7 @@ import {
   secondaryChainsInData,
 } from '@/lib/curated-markets'
 import { SAFE_CHAINS } from '@/lib/pool-classification'
+import { canonicalLlamaChain } from '@/lib/llama-chain'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -148,10 +149,21 @@ export function PoolFiltersComponent({
   const blueChipsOnly = filters.chainCategory === 'safe'
 
   const toggleBlueChipsOnly = () => {
+    if (blueChipsOnly) {
+      onFiltersChange({
+        ...filters,
+        quickPreset: 'none',
+        chainCategory: 'all',
+      })
+      return
+    }
+    const chainsBlueOnly = filters.chains.filter((c) => SAFE_CHAINS.has(canonicalLlamaChain(c)))
     onFiltersChange({
       ...filters,
+      chains: chainsBlueOnly,
+      protocols: pruneProtocols(chainsBlueOnly),
       quickPreset: 'none',
-      chainCategory: blueChipsOnly ? 'all' : 'safe',
+      chainCategory: 'safe',
     })
   }
 
@@ -452,10 +464,23 @@ export function PoolFiltersComponent({
                       checked={filters.chainCategory === 'safe'}
                       onCheckedChange={(v) => {
                         const on = v === true
+                        if (!on) {
+                          onFiltersChange({
+                            ...filters,
+                            quickPreset: 'none',
+                            chainCategory: 'all',
+                          })
+                          return
+                        }
+                        const chainsBlueOnly = filters.chains.filter((c) =>
+                          SAFE_CHAINS.has(canonicalLlamaChain(c))
+                        )
                         onFiltersChange({
                           ...filters,
+                          chains: chainsBlueOnly,
+                          protocols: pruneProtocols(chainsBlueOnly),
                           quickPreset: 'none',
-                          chainCategory: on ? 'safe' : 'all',
+                          chainCategory: 'safe',
                         })
                       }}
                     />
