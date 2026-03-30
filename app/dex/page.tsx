@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { Header } from '@/components/header'
 import { DEX_PLATFORMS } from '@/lib/dex'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,9 +12,8 @@ export const metadata = {
 
 export default function DexPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col bg-background">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <div className="mb-10 max-w-2xl">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Corretoras descentralizadas

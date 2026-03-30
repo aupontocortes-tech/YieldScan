@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Header } from '@/components/header'
 import { PoolFiltersComponent } from '@/components/pools/pool-filters'
 import { PoolOpportunitiesNow } from '@/components/pools/pool-opportunities-now'
 import { PoolTable } from '@/components/pools/pool-table'
@@ -77,12 +76,11 @@ export default function PoolsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Explorador de Pools</h1>
-          <p className="mt-1 text-muted-foreground">
+    <div className="flex flex-1 flex-col bg-background">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="rounded-xl border border-border/80 bg-card/45 p-5 shadow-[0_0_0_1px_rgba(232,197,71,0.06)] backdrop-blur-sm sm:p-6">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Explorador de Pools</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
             {filteredAndSortedPools.length.toLocaleString()} pools na lista (DefiLlama + Meteora DLMM). APR vem da
             DeFi Llama; no app da Uniswap o valor pode diferir (cálculo por posição e faixa de preço). TVL mínimo nos
             filtros recarrega no servidor.
@@ -93,12 +91,12 @@ export default function PoolsPage() {
         </div>
 
         {isError && (
-          <div className="mb-6">
+          <div>
             <DataLoadError onRetry={() => void refetch()} />
           </div>
         )}
 
-        <div className="mb-6 space-y-2">
+        <div className="space-y-2 rounded-xl border border-border/70 bg-card/30 p-4 backdrop-blur-sm sm:p-5">
           <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
             <TabsList className="border border-gold/30 bg-card">
               <TabsTrigger value="current" className="data-[state=active]:bg-gold data-[state=active]:text-background">
@@ -124,9 +122,13 @@ export default function PoolsPage() {
           </p>
         </div>
 
-        {pools && pools.length > 0 && <PoolOpportunitiesNow pools={pools} period={period} />}
+        {pools && pools.length > 0 && (
+          <section className="rounded-xl border border-border/70 bg-card/25 p-1 sm:p-2">
+            <PoolOpportunitiesNow pools={pools} period={period} />
+          </section>
+        )}
 
-        <div className="mb-6">
+        <section className="rounded-xl border border-border/70 bg-card/25 p-3 sm:p-4">
           <PoolFiltersComponent
             filters={filters}
             onFiltersChange={setFilters}
@@ -134,7 +136,7 @@ export default function PoolsPage() {
             pools={pools ?? []}
             period={period}
           />
-        </div>
+        </section>
 
         <PoolTable
           pools={filteredAndSortedPools}

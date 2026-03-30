@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import { AppShell } from '@/components/app-shell'
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -22,7 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <AppShell>{children}</AppShell>
       <PwaInstallPrompt />
     </QueryClientProvider>
   )

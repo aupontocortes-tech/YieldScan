@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Header } from '@/components/header'
 import { StatCard } from '@/components/stat-card'
 import { TopPoolsTable } from '@/components/dashboard/top-pools-table'
 import { TvlChart } from '@/components/dashboard/tvl-chart'
@@ -77,9 +76,8 @@ export default function DashboardPage() {
   const statsLoading = !hasLoadError && isLoading
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="flex flex-1 flex-col bg-background">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         {hasLoadError && (
           <div className="mb-6">
             <DataLoadError
