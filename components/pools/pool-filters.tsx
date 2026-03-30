@@ -40,6 +40,7 @@ import {
   primaryChainsPresentInData,
   secondaryChainsInData,
 } from '@/lib/curated-markets'
+import { SAFE_CHAINS } from '@/lib/pool-classification'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -141,7 +142,18 @@ export function PoolFiltersComponent({
     (filters.smartHighTvl ? 1 : 0) +
     (filters.smartLowRisk ? 1 : 0) +
     (filters.safeAprProfile ? 1 : 0) +
+    (filters.chainCategory === 'safe' ? 1 : 0) +
     (filters.search.trim() ? 1 : 0)
+
+  const blueChipsOnly = filters.chainCategory === 'safe'
+
+  const toggleBlueChipsOnly = () => {
+    onFiltersChange({
+      ...filters,
+      quickPreset: 'none',
+      chainCategory: blueChipsOnly ? 'all' : 'safe',
+    })
+  }
 
   const toggleSafeAprProfile = () => {
     const next = !filters.safeAprProfile
@@ -180,7 +192,11 @@ export function PoolFiltersComponent({
             Redes
           </Label>
           <span className="text-[10px] text-muted-foreground">
-            Nenhuma selecionada = todas · role para ver mais
+            {blueChipsOnly ? (
+              <span className="text-success">Só redes blue chip · ainda podes afunilar por chip acima</span>
+            ) : (
+              <>Nenhuma selecionada = todas · role para ver mais</>
+            )}
           </span>
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
@@ -322,6 +338,22 @@ export function PoolFiltersComponent({
         <Button
           type="button"
           size="sm"
+          variant="outline"
+          title={`Redes blue chip: ${[...SAFE_CHAINS].sort().join(', ')}`}
+          className={cn(
+            'h-10 bg-card/80',
+            blueChipsOnly
+              ? 'border-success text-success hover:bg-success/10 hover:text-success'
+              : 'border-border/80 text-foreground hover:border-success/40'
+          )}
+          onClick={toggleBlueChipsOnly}
+        >
+          Só blue chips
+        </Button>
+
+        <Button
+          type="button"
+          size="sm"
           variant={filters.safeAprProfile ? 'default' : 'outline'}
           className={cn(
             'h-10 border-gold/40 bg-card/80',
@@ -415,6 +447,22 @@ export function PoolFiltersComponent({
                     />
                     <span className="text-sm text-foreground">Perfil seguro (TVL / volume / redes)</span>
                   </label>
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <Checkbox
+                      checked={filters.chainCategory === 'safe'}
+                      onCheckedChange={(v) => {
+                        const on = v === true
+                        onFiltersChange({
+                          ...filters,
+                          quickPreset: 'none',
+                          chainCategory: on ? 'safe' : 'all',
+                        })
+                      }}
+                    />
+                    <span className="text-sm text-foreground">
+                      Só redes blue chip (ETH, Arbitrum, Base, Solana…)
+                    </span>
+                  </label>
                 </div>
               </div>
 
@@ -437,6 +485,7 @@ export function PoolFiltersComponent({
       {(filters.chains.length > 0 ||
         filters.protocols.length > 0 ||
         filters.safeAprProfile ||
+        filters.chainCategory === 'safe' ||
         filters.smartHighApr ||
         filters.smartHighTvl ||
         filters.smartLowRisk ||
@@ -447,6 +496,18 @@ export function PoolFiltersComponent({
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               TVL ≥ {filters.tvlMin >= 1e6 ? `${filters.tvlMin / 1e6}M` : `${filters.tvlMin / 1e3}K`}
               <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('tvlMin', DEFAULT_FILTERS.tvlMin)} />
+            </Badge>
+          )}
+          {filters.chainCategory === 'safe' && (
+            <Badge
+              variant="secondary"
+              className="gap-1 border-success/35 bg-success/10 px-2 py-0.5 text-xs text-success"
+            >
+              Blue chips
+              <X
+                className="h-3 w-3 cursor-pointer"
+                onClick={() => updateFilter('chainCategory', 'all')}
+              />
             </Badge>
           )}
           {filters.safeAprProfile && (
