@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import type { Pool, PoolAprPeriod } from '@/lib/types'
 import { formatCurrency, formatPercent, poolDisplayApr } from '@/lib/api'
 import { pickTopOpportunityPools } from '@/lib/pool-smart-rank'
+import { cn } from '@/lib/utils'
 
 export function PoolOpportunitiesNow({
   pools,
@@ -17,40 +18,50 @@ export function PoolOpportunitiesNow({
   if (top.length === 0) return null
 
   return (
-    <section className="mb-6 rounded-xl border border-gold/30 bg-card/40 p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-lg" aria-hidden>
-          🔥
-        </span>
-        <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
-          Melhores oportunidades agora
-        </h2>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg" aria-hidden>
+              🔥
+            </span>
+            <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+              Melhores oportunidades agora
+            </h2>
+          </div>
+          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
+            Recorte por APR, volume e TVL na amostra atual — indicador técnico, não é aconselhamento financeiro.
+          </p>
+        </div>
       </div>
-      <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
-        Combinação de APR, volume 24h e TVL na amostra atual. Indicador técnico — não é aconselhamento
-        financeiro.
-      </p>
-      <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
-        {top.map((pool) => {
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
+        {top.map((pool, i) => {
           const apr = poolDisplayApr(pool, period)
           return (
             <article
               key={pool.pool}
-              className="snap-start rounded-lg border border-gold/20 bg-background/90 px-3 py-2.5 shadow-sm min-w-[min(100%,11rem)] max-w-[13rem] shrink-0"
+              className={cn(
+                'flex min-h-[7.5rem] flex-col rounded-xl border bg-gradient-to-b from-card/90 to-background/80 px-3.5 py-3',
+                i === 0
+                  ? 'border-gold/50 shadow-[0_0_0_1px_rgba(232,197,71,0.12)]'
+                  : 'border-border/70'
+              )}
             >
-              <p className="truncate text-xs font-semibold text-foreground" title={pool.symbol}>
+              <p className="truncate text-sm font-semibold text-foreground" title={pool.symbol}>
                 {pool.symbol}
               </p>
-              <p className="truncate text-[10px] text-muted-foreground" title={pool.project}>
+              <p className="truncate text-[11px] text-muted-foreground" title={pool.project}>
                 {pool.project}
               </p>
-              <p className="mt-1.5 text-[10px] text-muted-foreground">{pool.chain}</p>
-              <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] tabular-nums">
-                <span className="text-gold">{formatPercent(apr)}</span>
-                <span className="text-muted-foreground">{formatCurrency(pool.tvlUsd)}</span>
+              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {pool.chain}
+              </p>
+              <div className="mt-auto flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 pt-2">
+                <span className="text-base font-bold tabular-nums text-gold sm:text-lg">{formatPercent(apr)}</span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">{formatCurrency(pool.tvlUsd)}</span>
               </div>
               {pool.volumeUsd1d != null && pool.volumeUsd1d > 0 && (
-                <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
+                <p className="mt-1 text-[10px] tabular-nums text-muted-foreground">
                   Vol. {formatCurrency(pool.volumeUsd1d)}
                 </p>
               )}
@@ -58,6 +69,6 @@ export function PoolOpportunitiesNow({
           )
         })}
       </div>
-    </section>
+    </div>
   )
 }

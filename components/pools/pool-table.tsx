@@ -105,10 +105,10 @@ export function PoolTable({
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-card overflow-x-auto">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50 shadow-inner">
         <Table>
           <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
+            <TableRow className="border-border/60 hover:bg-transparent bg-muted/25">
               <TableHead>Par</TableHead>
               <TableHead>Taxa · gráfico</TableHead>
               <TableHead>Rede</TableHead>
@@ -137,7 +137,7 @@ export function PoolTable({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-0">
       <Dialog open={selectedPool !== null} onOpenChange={(open) => !open && setSelectedPool(null)}>
         <DialogContent
           showCloseButton
@@ -167,10 +167,10 @@ export function PoolTable({
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-lg border border-border bg-card overflow-x-auto">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50 shadow-inner">
         <Table>
           <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
+            <TableRow className="border-border/60 hover:bg-transparent bg-muted/30">
               <TableHead className="min-w-[200px] text-muted-foreground">Par</TableHead>
               <TableHead className="min-w-[140px] text-muted-foreground">Taxa · gráfico</TableHead>
               <TableHead className="min-w-[100px] text-muted-foreground">Rede</TableHead>
@@ -199,10 +199,11 @@ export function PoolTable({
                 <Fragment key={pool.pool}>
                   <TableRow
                     className={cn(
-                      'table-row-animate cursor-pointer border-border transition-colors',
-                      isExpanded ? 'bg-secondary/50' : 'hover:bg-secondary/30',
-                      primaryDex && 'ring-1 ring-inset ring-gold/35',
-                      smartHighlightIds?.has(pool.pool) && 'bg-gold/[0.07] ring-1 ring-inset ring-gold/30'
+                      'table-row-animate cursor-pointer border-border/50 transition-colors',
+                      index % 2 === 0 ? 'bg-transparent' : 'bg-muted/[0.04]',
+                      isExpanded ? 'bg-secondary/45' : 'hover:bg-secondary/25',
+                      primaryDex && 'ring-1 ring-inset ring-gold/25',
+                      smartHighlightIds?.has(pool.pool) && 'bg-gold/[0.08] ring-1 ring-inset ring-gold/28'
                     )}
                     style={{ animationDelay: `${index * 30}ms` }}
                     onClick={() => setExpandedPool(isExpanded ? null : pool.pool)}
@@ -401,48 +402,49 @@ export function PoolTable({
             })}
           </TableBody>
         </Table>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {pools.length === 0
-              ? 'Nenhum pool nesta lista'
-              : `Mostrando ${clampedPage * pageSize + 1}-${Math.min((clampedPage + 1) * pageSize, pools.length)} de ${pools.length}`}
-          </span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value))
-              setPage(0)
-            }}
-            className="rounded-md border border-border bg-card px-2 py-1 text-sm"
-          >
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={clampedPage === 0}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Pagina {clampedPage + 1} de {totalPages || 1}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
-            disabled={clampedPage >= maxPage || totalPages === 0}
-          >
-            Proxima
-          </Button>
+        <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/[0.12] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {pools.length === 0
+                ? 'Nenhum pool nesta lista'
+                : `Mostrando ${clampedPage * pageSize + 1}-${Math.min((clampedPage + 1) * pageSize, pools.length)} de ${pools.length}`}
+            </span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value))
+                setPage(0)
+              }}
+              className="rounded-lg border border-border/80 bg-background/80 px-2 py-1.5 text-sm"
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-border/80"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={clampedPage === 0}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Pagina {clampedPage + 1} de {totalPages || 1}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-border/80"
+              onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
+              disabled={clampedPage >= maxPage || totalPages === 0}
+            >
+              Proxima
+            </Button>
+          </div>
         </div>
       </div>
     </div>

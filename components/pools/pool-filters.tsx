@@ -57,7 +57,7 @@ function formatDexLabel(slug: string): string {
 }
 
 const chipClass =
-  'cursor-pointer border px-2 py-1 text-xs font-medium transition-colors rounded-md'
+  'shrink-0 cursor-pointer whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors'
 
 interface PoolFiltersProps {
   filters: PoolFilters
@@ -143,15 +143,6 @@ export function PoolFiltersComponent({
     (filters.safeAprProfile ? 1 : 0) +
     (filters.search.trim() ? 1 : 0)
 
-  const hasSheetExtras =
-    filters.chains.length > 0 ||
-    filters.protocols.length > 0 ||
-    filters.tvlMin !== DEFAULT_FILTERS.tvlMin ||
-    filters.smartHighApr ||
-    filters.smartHighTvl ||
-    filters.smartLowRisk ||
-    filters.safeAprProfile
-
   const toggleSafeAprProfile = () => {
     const next = !filters.safeAprProfile
     onFiltersChange({
@@ -163,274 +154,323 @@ export function PoolFiltersComponent({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <div className="flex flex-col gap-5">
+      {/* Busca — destaque tipo “lab” */}
+      <div
+        className={cn(
+          'rounded-xl border-2 border-gold/45 bg-background/60 p-0.5 transition-shadow',
+          'focus-within:border-gold/80 focus-within:shadow-[0_0_0_3px_rgba(232,197,71,0.18)]'
+        )}
+      >
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gold/80" />
           <Input
-            placeholder="Buscar token ou protocolo…"
+            placeholder="Buscar par, token ou protocolo (ex.: btc, eth/usdt)…"
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value, quickPreset: 'none' })}
-            className="h-9 border-border bg-card pl-9 text-sm"
+            className="h-11 border-0 bg-transparent pl-11 pr-3 text-base shadow-none placeholder:text-muted-foreground/80 focus-visible:ring-0"
           />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={filters.safeAprProfile ? 'default' : 'outline'}
-            className={cn(
-              'h-9 shrink-0 border-gold/40 bg-card text-xs',
-              filters.safeAprProfile && 'bg-gold text-background hover:bg-gold/90'
-            )}
-            title="Redes blue-chip, TVL ≥ 100K, volume 24h ≥ 50K; remove APR extremo em stable. Dados continuam da DeFi Llama."
-            onClick={toggleSafeAprProfile}
-          >
-            Melhor APR · perfil seguro
-          </Button>
-          <Select
-            value={filters.sortBy}
-            onValueChange={(value) => updateFilter('sortBy', value as PoolFilters['sortBy'])}
-          >
-            <SelectTrigger className="h-9 w-full border-border bg-card sm:w-[150px]">
-              <SelectValue placeholder="Ordenar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="apr">APR</SelectItem>
-              <SelectItem value="tvl">TVL</SelectItem>
-              <SelectItem value="volume">Volume 24h</SelectItem>
-              <SelectItem value="change7d">Var. 7d</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5 border-gold/40 bg-card">
-                <SlidersHorizontal className="h-4 w-4" />
-                Filtros
-                {activeTotal > 0 && (
-                  <Badge className="bg-gold px-1.5 text-[10px] text-background">{activeTotal}</Badge>
-                )}
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-md">
-              <SheetHeader className="pb-2">
-                <SheetTitle className="text-foreground">Rede e DEX</SheetTitle>
-              </SheetHeader>
-
-              <div className="flex flex-1 flex-col gap-5 pb-6">
-                <div>
-                  <Label className="text-sm font-medium text-foreground">Redes principais</Label>
-                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                    Máx. duas linhas. Nenhuma = todas. Use &quot;Mais redes&quot; para o restante.
-                  </p>
-                  <div className="mt-2.5 flex max-h-[4.5rem] flex-wrap gap-1.5 overflow-hidden">
-                    {primaryChains.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">Carregando…</span>
-                    ) : (
-                      primaryChains.map((chain) => (
-                        <button
-                          key={chain}
-                          type="button"
-                          className={cn(
-                            chipClass,
-                            filters.chains.includes(chain)
-                              ? 'border-gold bg-gold/15 text-gold'
-                              : 'border-border bg-card text-foreground hover:border-gold/50'
-                          )}
-                          onClick={() => toggleChain(chain)}
-                        >
-                          {chain}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                  {extraChains.length > 0 && (
-                    <Dialog open={moreChainsOpen} onOpenChange={setMoreChainsOpen}>
-                      <DialogTrigger asChild>
-                        <Button type="button" variant="ghost" size="sm" className="mt-2 h-8 px-2 text-xs text-gold">
-                          Mais redes
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-h-[min(80vh,28rem)] overflow-y-auto sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Outras redes</DialogTitle>
-                        </DialogHeader>
-                        <div className="flex flex-wrap gap-1.5">
-                          {extraChains.map((chain) => (
-                            <button
-                              key={chain}
-                              type="button"
-                              className={cn(
-                                chipClass,
-                                filters.chains.includes(chain)
-                                  ? 'border-gold bg-gold/15 text-gold'
-                                  : 'border-border bg-card hover:border-gold/40'
-                              )}
-                              onClick={() => toggleChain(chain)}
-                            >
-                              {chain}
-                            </button>
-                          ))}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-
-                <div className="border-t border-border pt-4">
-                  <Label className="text-sm font-medium text-foreground">DEX em destaque</Label>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Principais por TVL, volume e APR médio nas redes selecionadas (ou em todas).
-                  </p>
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {visibleCurated.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">
-                        {pools.length === 0 ? 'Carregando…' : 'Nenhuma DEX curada neste recorte.'}
-                      </span>
-                    ) : (
-                      visibleCurated.map((agg) => (
-                        <button
-                          key={agg.project}
-                          type="button"
-                          title={agg.project}
-                          className={cn(
-                            chipClass,
-                            'max-w-[11rem] truncate text-left',
-                            filters.protocols.includes(agg.project)
-                              ? 'border-gold bg-gold/15 text-gold'
-                              : 'border-border bg-card hover:border-gold/40'
-                          )}
-                          onClick={() => toggleProtocol(agg.project)}
-                        >
-                          {formatDexLabel(agg.project)}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="mt-1 h-auto p-0 text-xs text-gold"
-                    onClick={() => setExpandDexList((e) => !e)}
-                  >
-                    {expandDexList ? 'Ver menos protocolos' : 'Ver mais protocolos'}
-                  </Button>
-                  {expandDexList && moreProtocolAggs.length > 0 && (
-                    <div className="mt-2 max-h-48 flex flex-wrap gap-1.5 overflow-y-auto rounded-md border border-border/60 bg-background/50 p-2">
-                      {moreProtocolAggs.map((agg) => (
-                        <button
-                          key={agg.project}
-                          type="button"
-                          title={agg.project}
-                          className={cn(
-                            chipClass,
-                            'max-w-[10rem] truncate text-left',
-                            filters.protocols.includes(agg.project)
-                              ? 'border-gold bg-gold/15 text-gold'
-                              : 'border-border bg-card hover:border-gold/35'
-                          )}
-                          onClick={() => toggleProtocol(agg.project)}
-                        >
-                          {formatDexLabel(agg.project)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-border pt-4">
-                  <Label className="text-sm font-medium text-foreground">Filtro rápido (rentabilidade)</Label>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Ativos: reordenam a tabela e destacam linhas com melhor score composto.
-                  </p>
-                  <div className="mt-3 space-y-3">
-                    <label className="flex cursor-pointer items-center gap-2.5">
-                      <Checkbox
-                        checked={filters.smartHighApr}
-                        onCheckedChange={(v) => updateFilter('smartHighApr', v === true)}
-                      />
-                      <span className="text-sm text-foreground">Alta rentabilidade (APR alto)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2.5">
-                      <Checkbox
-                        checked={filters.smartHighTvl}
-                        onCheckedChange={(v) => updateFilter('smartHighTvl', v === true)}
-                      />
-                      <span className="text-sm text-foreground">Alta liquidez (TVL alto)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2.5">
-                      <Checkbox
-                        checked={filters.smartLowRisk}
-                        onCheckedChange={(v) => updateFilter('smartLowRisk', v === true)}
-                      />
-                      <span className="text-sm text-foreground">Baixo risco (blue chips / estável)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2.5">
-                      <Checkbox
-                        checked={filters.safeAprProfile}
-                        onCheckedChange={(v) => {
-                          const on = v === true
-                          onFiltersChange({
-                            ...filters,
-                            safeAprProfile: on,
-                            quickPreset: 'none',
-                            ...(on ? { sortBy: 'apr', sortDirection: 'desc' } : {}),
-                          })
-                        }}
-                      />
-                      <span className="text-sm text-foreground">
-                        Melhor APR · perfil seguro (TVL/volume mínimos, redes principais)
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="border-t border-border pt-4">
-                  <Label className="text-sm font-medium text-foreground">TVL mínimo</Label>
-                  <p className="mt-1 text-[11px] text-muted-foreground">Recarrega dados no servidor.</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {TVL_PRESETS.map((p) => (
-                      <Button
-                        key={p.value}
-                        type="button"
-                        size="sm"
-                        variant={filters.tvlMin === p.value ? 'default' : 'outline'}
-                        className={cn(
-                          'h-8 text-xs',
-                          filters.tvlMin === p.value && 'bg-gold text-background hover:bg-gold/90'
-                        )}
-                        onClick={() => updateFilter('tvlMin', p.value)}
-                      >
-                        {p.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  {activeTotal > 0 && (
-                    <p className="text-xs font-medium text-gold">{activeTotal} filtros ativos</p>
-                  )}
-                  {hasSheetExtras && (
-                    <Button type="button" variant="outline" size="sm" className="border-gold/40" onClick={clearFilters}>
-                      Limpar filtros
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
         </div>
       </div>
 
-      {(filters.chains.length > 0 || filters.protocols.length > 0 || filters.safeAprProfile) && (
+      {/* Redes — faixa horizontal */}
+      <div className="space-y-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Redes
+          </Label>
+          <span className="text-[10px] text-muted-foreground">
+            Nenhuma selecionada = todas · role para ver mais
+          </span>
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
+          {primaryChains.length === 0 ? (
+            <span className="text-xs text-muted-foreground">Carregando…</span>
+          ) : (
+            primaryChains.map((chain) => (
+              <button
+                key={chain}
+                type="button"
+                className={cn(
+                  chipClass,
+                  filters.chains.includes(chain)
+                    ? 'border-gold/70 bg-gold/15 text-gold'
+                    : 'border-border/80 bg-card/80 text-foreground hover:border-gold/40'
+                )}
+                onClick={() => toggleChain(chain)}
+              >
+                {chain}
+              </button>
+            ))
+          )}
+          {extraChains.length > 0 && (
+            <Dialog open={moreChainsOpen} onOpenChange={setMoreChainsOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(chipClass, 'border-dashed border-gold/50 text-gold hover:bg-gold/10')}
+                >
+                  + Mais redes
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[min(80vh,28rem)] overflow-y-auto sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Outras redes</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-wrap gap-1.5">
+                  {extraChains.map((chain) => (
+                    <button
+                      key={chain}
+                      type="button"
+                      className={cn(
+                        chipClass,
+                        filters.chains.includes(chain)
+                          ? 'border-gold/70 bg-gold/15 text-gold'
+                          : 'border-border bg-card hover:border-gold/40'
+                      )}
+                      onClick={() => toggleChain(chain)}
+                    >
+                      {chain}
+                    </button>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </div>
+
+      {/* DEX / protocolos */}
+      <div className="space-y-2">
+        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          DEX / protocolo
+        </Label>
+        <div className="flex flex-wrap gap-1.5 sm:flex-nowrap sm:overflow-x-auto sm:pb-1">
+          {visibleCurated.length === 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {pools.length === 0 ? 'Carregando…' : 'Nenhuma DEX curada neste recorte.'}
+            </span>
+          ) : (
+            visibleCurated.map((agg) => (
+              <button
+                key={agg.project}
+                type="button"
+                title={agg.project}
+                className={cn(
+                  chipClass,
+                  'max-w-[11rem] truncate sm:max-w-none',
+                  filters.protocols.includes(agg.project)
+                    ? 'border-gold/70 bg-gold/15 text-gold'
+                    : 'border-border/80 bg-card/80 hover:border-gold/40'
+                )}
+                onClick={() => toggleProtocol(agg.project)}
+              >
+                {formatDexLabel(agg.project)}
+              </button>
+            ))
+          )}
+        </div>
+        <button
+          type="button"
+          className="text-xs font-medium text-gold hover:underline"
+          onClick={() => setExpandDexList((e) => !e)}
+        >
+          {expandDexList ? 'Ver menos protocolos' : 'Ver mais protocolos'}
+        </button>
+        {expandDexList && moreProtocolAggs.length > 0 && (
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-border/70 bg-background/50 p-2">
+            <div className="flex flex-wrap gap-1.5">
+              {moreProtocolAggs.map((agg) => (
+                <button
+                  key={agg.project}
+                  type="button"
+                  title={agg.project}
+                  className={cn(
+                    chipClass,
+                    'max-w-[10rem] truncate text-left',
+                    filters.protocols.includes(agg.project)
+                      ? 'border-gold/70 bg-gold/15 text-gold'
+                      : 'border-border bg-card hover:border-gold/35'
+                  )}
+                  onClick={() => toggleProtocol(agg.project)}
+                >
+                  {formatDexLabel(agg.project)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Barra de ferramentas */}
+      <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
+        <Select
+          value={filters.sortBy}
+          onValueChange={(value) => updateFilter('sortBy', value as PoolFilters['sortBy'])}
+        >
+          <SelectTrigger className="h-10 w-full border-border/80 bg-card/80 sm:w-[160px]">
+            <SelectValue placeholder="Ordenar por" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="apr">APR</SelectItem>
+            <SelectItem value="tvl">TVL</SelectItem>
+            <SelectItem value="volume">Volume 24h</SelectItem>
+            <SelectItem value="change7d">Var. 7d</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          type="button"
+          size="sm"
+          variant={filters.safeAprProfile ? 'default' : 'outline'}
+          className={cn(
+            'h-10 border-gold/40 bg-card/80',
+            filters.safeAprProfile && 'bg-gold text-background hover:bg-gold/90'
+          )}
+          onClick={toggleSafeAprProfile}
+        >
+          Melhor APR · seguro
+        </Button>
+
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-muted-foreground">Ativos:</span>
+          <span className="w-full text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:w-auto sm:mr-1">
+            TVL mín.
+          </span>
+          {TVL_PRESETS.map((p) => (
+            <Button
+              key={p.value}
+              type="button"
+              size="sm"
+              variant={filters.tvlMin === p.value ? 'default' : 'outline'}
+              className={cn(
+                'h-9 rounded-lg text-xs',
+                filters.tvlMin === p.value && 'bg-gold text-background hover:bg-gold/90'
+              )}
+              onClick={() => updateFilter('tvlMin', p.value)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 gap-2 border-gold/35 bg-card/80"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Mais filtros
+              {activeTotal > 0 && (
+                <Badge className="bg-gold px-1.5 text-[10px] text-background">{activeTotal}</Badge>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-md">
+            <SheetHeader className="pb-2">
+              <SheetTitle className="text-foreground">Filtros avançados</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-1 flex-col gap-5 pb-6">
+              <div>
+                <Label className="text-sm font-medium text-foreground">Ordenação inteligente</Label>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Pesa APR, TVL e risco para destacar linhas na tabela.
+                </p>
+                <div className="mt-3 space-y-3">
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <Checkbox
+                      checked={filters.smartHighApr}
+                      onCheckedChange={(v) => updateFilter('smartHighApr', v === true)}
+                    />
+                    <span className="text-sm text-foreground">Alta rentabilidade (APR alto)</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <Checkbox
+                      checked={filters.smartHighTvl}
+                      onCheckedChange={(v) => updateFilter('smartHighTvl', v === true)}
+                    />
+                    <span className="text-sm text-foreground">Alta liquidez (TVL alto)</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <Checkbox
+                      checked={filters.smartLowRisk}
+                      onCheckedChange={(v) => updateFilter('smartLowRisk', v === true)}
+                    />
+                    <span className="text-sm text-foreground">Baixo risco (blue chips)</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <Checkbox
+                      checked={filters.safeAprProfile}
+                      onCheckedChange={(v) => {
+                        const on = v === true
+                        onFiltersChange({
+                          ...filters,
+                          safeAprProfile: on,
+                          quickPreset: 'none',
+                          ...(on ? { sortBy: 'apr', sortDirection: 'desc' } : {}),
+                        })
+                      }}
+                    />
+                    <span className="text-sm text-foreground">Perfil seguro (TVL / volume / redes)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                {activeTotal > 0 && (
+                  <p className="text-xs font-medium text-gold">
+                    {activeTotal} filtro(s) ativo(s)
+                  </p>
+                )}
+                <Button type="button" variant="outline" size="sm" className="border-gold/40" onClick={clearFilters}>
+                  Limpar tudo
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Chips ativos */}
+      {(filters.chains.length > 0 ||
+        filters.protocols.length > 0 ||
+        filters.safeAprProfile ||
+        filters.smartHighApr ||
+        filters.smartHighTvl ||
+        filters.smartLowRisk ||
+        filters.tvlMin !== DEFAULT_FILTERS.tvlMin) && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border/60 bg-background/40 px-2 py-2">
+          <span className="text-[11px] font-medium text-muted-foreground">Ativos:</span>
+          {filters.tvlMin !== DEFAULT_FILTERS.tvlMin && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              TVL ≥ {filters.tvlMin >= 1e6 ? `${filters.tvlMin / 1e6}M` : `${filters.tvlMin / 1e3}K`}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('tvlMin', DEFAULT_FILTERS.tvlMin)} />
+            </Badge>
+          )}
           {filters.safeAprProfile && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               APR · perfil seguro
               <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('safeAprProfile', false)} />
+            </Badge>
+          )}
+          {filters.smartHighApr && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              Smart: APR alto
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('smartHighApr', false)} />
+            </Badge>
+          )}
+          {filters.smartHighTvl && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              Smart: TVL alto
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('smartHighTvl', false)} />
+            </Badge>
+          )}
+          {filters.smartLowRisk && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              Smart: baixo risco
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('smartLowRisk', false)} />
             </Badge>
           )}
           {filters.chains.map((chain) => (
@@ -440,7 +480,11 @@ export function PoolFiltersComponent({
             </Badge>
           ))}
           {filters.protocols.map((protocol) => (
-            <Badge key={protocol} variant="secondary" className="max-w-[200px] gap-1 break-all px-2 py-0.5 text-xs">
+            <Badge
+              key={protocol}
+              variant="secondary"
+              className="max-w-[200px] gap-1 break-all px-2 py-0.5 text-xs"
+            >
               {formatDexLabel(protocol)}
               <X className="h-3 w-3 shrink-0 cursor-pointer" onClick={() => toggleProtocol(protocol)} />
             </Badge>

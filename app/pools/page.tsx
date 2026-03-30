@@ -77,58 +77,65 @@ export default function PoolsPage() {
 
   return (
     <div className="flex flex-1 flex-col bg-background">
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <div className="rounded-xl border border-border/80 bg-card/45 p-5 shadow-[0_0_0_1px_rgba(232,197,71,0.06)] backdrop-blur-sm sm:p-6">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Explorador de Pools</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            {filteredAndSortedPools.length.toLocaleString()} pools na lista (DefiLlama + Meteora DLMM). APR vem da
-            DeFi Llama; no app da Uniswap o valor pode diferir (cálculo por posição e faixa de preço). TVL mínimo nos
-            filtros recarrega no servidor.
-          </p>
-          {isFetching && !isLoading && (
-            <p className="mt-2 text-xs text-gold">Atualizando lista…</p>
-          )}
-        </div>
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <article className="flex flex-col gap-8 rounded-2xl border border-gold/20 bg-card/35 p-4 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-md sm:p-6 lg:p-8">
+          <header className="flex flex-col gap-4 border-b border-border/50 pb-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Explorador de Pools</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {filteredAndSortedPools.length.toLocaleString()} pools
+                </span>{' '}
+                no recorte atual (DefiLlama + Meteora DLMM). APR agregado pode diferir do app de cada DEX.
+              </p>
+              {isFetching && !isLoading && (
+                <p className="mt-2 text-xs font-medium text-gold">Atualizando lista…</p>
+              )}
+            </div>
+            <div className="shrink-0">
+              <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+                <TabsList className="grid w-full grid-cols-2 border border-gold/25 bg-background/60 p-1 sm:flex sm:w-auto sm:grid-cols-none">
+                  <TabsTrigger
+                    value="current"
+                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
+                  >
+                    APR atual
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="1d"
+                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
+                  >
+                    24h
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="7d"
+                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
+                  >
+                    7 dias
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="30d"
+                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
+                  >
+                    30 dias
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </header>
 
-        {isError && (
-          <div>
-            <DataLoadError onRetry={() => void refetch()} />
-          </div>
-        )}
-
-        <div className="space-y-2 rounded-xl border border-border/70 bg-card/30 p-4 backdrop-blur-sm sm:p-5">
-          <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
-            <TabsList className="border border-gold/30 bg-card">
-              <TabsTrigger value="current" className="data-[state=active]:bg-gold data-[state=active]:text-background">
-                APR atual
-              </TabsTrigger>
-              <TabsTrigger value="1d" className="data-[state=active]:bg-gold data-[state=active]:text-background">
-                24h
-              </TabsTrigger>
-              <TabsTrigger value="7d" className="data-[state=active]:bg-gold data-[state=active]:text-background">
-                7 dias
-              </TabsTrigger>
-              <TabsTrigger value="30d" className="data-[state=active]:bg-gold data-[state=active]:text-background">
-                30 dias
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <p className="text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border/50 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {period === 'current' &&
-              'APR total atual (DefiLlama). Uniswap: comparar com o link da pool — lá é estimativa da sua posição.'}
-            {period === '1d' && 'Pools com dados de variacao 24h; coluna APR = taxa atual.'}
-            {period === '7d' && 'APR de componente base media ~7 dias (apyBase7d), quando existir.'}
-            {period === '30d' && 'APR medio dos ultimos 30 dias (apyMean30d), quando existir.'}
-          </p>
-        </div>
+              'APR total atual (DefiLlama). Uniswap: use o link da pool — lá é estimativa da sua posição.'}
+            {period === '1d' && 'Pools com dados de variação 24h; coluna APR = taxa atual.'}
+            {period === '7d' && 'APR base médio ~7 dias (apyBase7d), quando existir.'}
+            {period === '30d' && 'APR médio ~30 dias (apyMean30d), quando existir.'}
+          </div>
 
-        {pools && pools.length > 0 && (
-          <section className="rounded-xl border border-border/70 bg-card/25 p-1 sm:p-2">
-            <PoolOpportunitiesNow pools={pools} period={period} />
-          </section>
-        )}
+          {isError && <DataLoadError onRetry={() => void refetch()} />}
 
-        <section className="rounded-xl border border-border/70 bg-card/25 p-3 sm:p-4">
+          {pools && pools.length > 0 && <PoolOpportunitiesNow pools={pools} period={period} />}
+
           <PoolFiltersComponent
             filters={filters}
             onFiltersChange={setFilters}
@@ -136,17 +143,17 @@ export default function PoolsPage() {
             pools={pools ?? []}
             period={period}
           />
-        </section>
 
-        <PoolTable
-          pools={filteredAndSortedPools}
-          isLoading={isLoading && !isError}
-          filters={filters}
-          period={period}
-          novelChains={novelChains}
-          smartHighlightIds={smartHighlightIds}
-          onSortChange={handleSortChange}
-        />
+          <PoolTable
+            pools={filteredAndSortedPools}
+            isLoading={isLoading && !isError}
+            filters={filters}
+            period={period}
+            novelChains={novelChains}
+            smartHighlightIds={smartHighlightIds}
+            onSortChange={handleSortChange}
+          />
+        </article>
       </main>
     </div>
   )
