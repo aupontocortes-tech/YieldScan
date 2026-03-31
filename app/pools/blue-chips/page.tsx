@@ -27,25 +27,17 @@ import type { Pool } from '@/lib/types'
 import {
   aplicarFiltroBlueChips,
   BLUE_CHIP_CHAINS,
-  BLUE_CHIP_DEX_KEYWORDS,
+  BLUE_CHIP_DEX_UI_SLUGS,
+  blueChipDexSlug,
   blueChipRisk,
   isHighSecurityBlueChipPool,
   isStableStablePair,
 } from '@/lib/blue-chip-pools'
 import { canonicalLlamaChain } from '@/lib/llama-chain'
 
-type NetworkFilter = 'all' | 'Ethereum' | 'Base' | 'Solana'
-type DexFilter = 'all' | 'uniswap' | 'aerodrome' | 'raydium' | 'orca'
+type NetworkFilter = 'all' | (typeof BLUE_CHIP_CHAINS)[number]
+type DexFilter = 'all' | (typeof BLUE_CHIP_DEX_UI_SLUGS)[number]
 type SortMode = 'apr' | 'liquidity' | 'risk'
-
-function dexOf(pool: Pool): DexFilter | 'other' {
-  const p = (pool.project ?? '').toLowerCase()
-  if (p.includes('uniswap')) return 'uniswap'
-  if (p.includes('aerodrome')) return 'aerodrome'
-  if (p.includes('raydium')) return 'raydium'
-  if (p.includes('orca')) return 'orca'
-  return 'other'
-}
 
 export default function BlueChipsPoolsPage() {
   const [network, setNetwork] = useState<NetworkFilter>('all')
@@ -62,12 +54,20 @@ export default function BlueChipsPoolsPage() {
     const filtered = pools.filter((pool) => {
       const chain = canonicalLlamaChain(pool.chain)
       if (network !== 'all' && chain !== network) return false
-      const d = dexOf(pool)
+      const d = blueChipDexSlug(pool)
       if (dex !== 'all' && d !== dex) return false
       return true
     })
 
+    const cmpSolana = (a: Pool, b: Pool) => {
+      const sa = canonicalLlamaChain(a.chain) === 'Solana' ? 1 : 0
+      const sb = canonicalLlamaChain(b.chain) === 'Solana' ? 1 : 0
+      return sb - sa
+    }
+
     const cmpStableRiskTvlApr = (a: Pool, b: Pool) => {
+      const sol = cmpSolana(a, b)
+      if (sol !== 0) return sol
       const sa = isStableStablePair(a) ? 1 : 0
       const sb = isStableStablePair(b) ? 1 : 0
       if (sa !== sb) return sb - sa
@@ -81,17 +81,23 @@ export default function BlueChipsPoolsPage() {
 
     return [...filtered].sort((a, b) => {
       if (sort === 'liquidity') {
+        const sol = cmpSolana(a, b)
+        if (sol !== 0) return sol
         const t = (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
         if (t !== 0) return t
         return (b.apy ?? 0) - (a.apy ?? 0)
       }
       if (sort === 'risk') {
+        const sol = cmpSolana(a, b)
+        if (sol !== 0) return sol
         const ra = blueChipRisk(a) === 'low' ? 0 : 1
         const rb = blueChipRisk(b) === 'low' ? 0 : 1
         if (ra !== rb) return ra - rb
         return cmpStableRiskTvlApr(a, b)
       }
       if (sort === 'apr') {
+        const sol = cmpSolana(a, b)
+        if (sol !== 0) return sol
         const ap = (b.apy ?? 0) - (a.apy ?? 0)
         if (ap !== 0) return ap
         return (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
@@ -112,7 +118,10 @@ export default function BlueChipsPoolsPage() {
               </Link>
               <h1 className="text-2xl font-bold text-foreground">Blue Chips Pools</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Pools com pelo menos 2 ativos fortes (crypto blue chips, stables e RWAs), nas redes Ethereum, Base e Solana.
+                Foco em <span className="font-medium text-foreground">Solana</span> (principal) e{' '}
+                <span className="font-medium text-foreground">Ethereum</span>: pares entre dólar (stables), Bitcoin,
+                Solana/ETH, ouro e ativos tipo mercado acionário (SPY, índices) ou commodities (petróleo/USO) quando
+                existirem on-chain. Só DEXs líderes por rede (Raydium, Orca, Meteora… / Uniswap, Curve…).
               </p>
             </div>
             {isFetching && !isLoading && <span className="text-xs text-gold">Atualizando…</span>}
@@ -132,8 +141,10 @@ export default function BlueChipsPoolsPage() {
               <SelectTrigger className="border-border/80 bg-card/80"><SelectValue placeholder="Filtrar DEX" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">DEX: todas</SelectItem>
-                {BLUE_CHIP_DEX_KEYWORDS.map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                {BLUE_CHIP_DEX_UI_SLUGS.map((d) => (
+                  <SelectItem key={d} value={d} className="capitalize">
+                    {d}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -225,7 +236,9 @@ export default function BlueChipsPoolsPage() {
           </div>
 
           <div className="text-xs text-muted-foreground">
-            Mostrando {rows.length.toLocaleString()} pool(s). Filtro: ≥2 blue chips, TVL ≥ $100K, sem memecoins, DEX/rede suportadas; ordenação inteligente por padrão.
+            Mostrando {rows.length.toLocaleString()} pool(s). Critério: ≥2 ativos da lista (dólar, BTC, SOL, ouro,
+            RWA/ETF, PENDLE/ONDO/UNI…), só Solana e Ethereum, DEX por rede, TVL ≥ ~$5K, sem memecoins; por defeito prioriza Solana e
+            maior liquidez.
           </div>
         </article>
       </main>

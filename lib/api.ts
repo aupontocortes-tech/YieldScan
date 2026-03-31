@@ -49,6 +49,31 @@ export function isMeteoraDlmmPool(pool: Pick<Pool, 'pool' | 'project'>): boolean
 
 const POOLS_MERGE_CAP = 9200
 
+/** Amostra menor para dashboard/widgets — menos JSON e parse no cliente. */
+export const DASHBOARD_POOLS_MIN_TVL = 25_000
+export const DASHBOARD_POOLS_CAP = 4_000
+
+export type FetchPoolsOptions = {
+  /** Limite após merge (custos de rede/CPU no cliente). */
+  cap?: number
+  /** Meteora é opcional: desligar acelera o primeiro carregamento. Default true. */
+  includeMeteora?: boolean
+}
+
+export const dashboardPoolsQueryKey = [
+  'pools',
+  'bundle',
+  DASHBOARD_POOLS_MIN_TVL,
+  DASHBOARD_POOLS_CAP,
+] as const
+
+export function fetchDashboardPools(): Promise<Pool[]> {
+  return fetchPools(DASHBOARD_POOLS_MIN_TVL, {
+    cap: DASHBOARD_POOLS_CAP,
+    includeMeteora: true,
+  })
+}
+
 /** Meteora vs slug DefiLlama (`meteora`, `meteora-dlmm`, etc.): filtro por DEX deve aceitar ambos. */
 function protocolMatchesSelection(pool: Pool, selected: Set<string>): boolean {
   if (selected.size === 0) return true
@@ -66,16 +91,25 @@ function protocolMatchesSelection(pool: Pool, selected: Set<string>): boolean {
  * DefiLlama (/api/pools) + Meteora (/api/meteora-pools) em paralelo — evita timeout do servidor
  * e trava “carregando para sempre” no celular.
  */
-export async function fetchPools(minTvlUsd: number = 10_000): Promise<Pool[]> {
+export async function fetchPools(
+  minTvlUsd: number = 10_000,
+  options?: FetchPoolsOptions
+): Promise<Pool[]> {
+  const includeMeteora = options?.includeMeteora !== false
+  const mergeCap = Math.min(options?.cap ?? POOLS_MERGE_CAP, POOLS_MERGE_CAP)
   const q = encodeURIComponent(String(minTvlUsd))
+  const capQ =
+    options?.cap != null
+      ? `&cap=${encodeURIComponent(String(Math.min(options.cap, 12_000)))}`
+      : ''
   const base = internalApiBase()
-  const llamaUrl = `${base}/api/pools?minTvl=${q}`
+  const llamaUrl = `${base}/api/pools?minTvl=${q}${capQ}`
   const metaUrl = `${base}/api/meteora-pools?minTvl=${q}`
   const signal = clientTimeoutSignal(90_000)
 
   const [llamaRes, metaRes] = await Promise.all([
     fetch(llamaUrl, { signal }),
-    fetch(metaUrl, { signal }).catch(() => null as Response | null),
+    includeMeteora ? fetch(metaUrl, { signal }).catch(() => null as Response | null) : Promise.resolve(null),
   ])
 
   if (!llamaRes.ok) {
@@ -85,7 +119,7 @@ export async function fetchPools(minTvlUsd: number = 10_000): Promise<Pool[]> {
   const llamaJson = (await llamaRes.json()) as { data?: Pool[] }
   let pools = llamaJson.data ?? []
 
-  if (metaRes?.ok) {
+  if (includeMeteora && metaRes?.ok) {
     try {
       const mj = (await metaRes.json()) as { data?: Pool[] }
       const meta = mj.data ?? []
@@ -96,12 +130,13 @@ export async function fetchPools(minTvlUsd: number = 10_000): Promise<Pool[]> {
           pools.push(p)
         }
       }
-      pools.sort((a, b) => b.tvlUsd - a.tvlUsd)
-      pools = pools.slice(0, 9200)
     } catch {
       /* Meteora opcional */
     }
   }
+
+  pools.sort((a, b) => b.tvlUsd - a.tvlUsd)
+  pools = pools.slice(0, mergeCap)
 
   return normalizePoolChains(pools)
 }

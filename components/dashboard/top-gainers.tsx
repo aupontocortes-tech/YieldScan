@@ -20,7 +20,13 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChainBadge } from '@/components/chain-badge'
-import { fetchPools, formatCurrency, formatPercent, getChangeIndicator } from '@/lib/api'
+import {
+  dashboardPoolsQueryKey,
+  fetchDashboardPools,
+  formatCurrency,
+  formatPercent,
+  getChangeIndicator,
+} from '@/lib/api'
 import { Pool } from '@/lib/types'
 import { TrendingUp, Flame, ExternalLink } from 'lucide-react'
 
@@ -71,8 +77,8 @@ export function TopGainers() {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('24h')
 
   const { data: pools, isLoading } = useQuery({
-    queryKey: ['pools', 10_000],
-    queryFn: () => fetchPools(10_000),
+    queryKey: dashboardPoolsQueryKey,
+    queryFn: fetchDashboardPools,
   })
 
   const topGainers = useMemo(() => {

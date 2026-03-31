@@ -1,10 +1,62 @@
 import type { Pool } from './types'
 import { canonicalLlamaChain } from './llama-chain'
 
-export const BLUE_CHIP_CHAINS = ['Ethereum', 'Base', 'Solana'] as const
-export const BLUE_CHIP_DEX_KEYWORDS = ['uniswap', 'aerodrome', 'raydium', 'orca'] as const
+/**
+ * Foco do utilizador: Solana como rede principal + Ethereum.
+ * Base retirada — concentra “corretoras” (DEX) líderes nessas duas chains.
+ */
+export const BLUE_CHIP_CHAINS = ['Solana', 'Ethereum'] as const
 
-/** Tickers “blue chip” + aliases comuns nos símbolos DefiLlama. */
+/** DEXs consideradas para pools Blue Chip em Solana (Raydium, Orca, Meteora…). */
+export const SOLANA_BLUE_CHIP_DEX_KEYWORDS = [
+  'raydium',
+  'orca',
+  'meteora',
+  'lifinity',
+  'phoenix',
+] as const
+
+/** DEXs AMM / liquidez “tier 1” em Ethereum. */
+export const ETHEREUM_BLUE_CHIP_DEX_KEYWORDS = [
+  'uniswap',
+  'curve',
+  'balancer',
+  'sushi',
+] as const
+
+/** Lista única para filtros na UI (slug → valor do select). */
+export const BLUE_CHIP_DEX_UI_SLUGS = [
+  ...SOLANA_BLUE_CHIP_DEX_KEYWORDS,
+  ...ETHEREUM_BLUE_CHIP_DEX_KEYWORDS,
+] as const
+
+/** @deprecated Use SOLANA_/ETHEREUM_ lists; mantido para imports antigos. */
+export const BLUE_CHIP_DEX_KEYWORDS = BLUE_CHIP_DEX_UI_SLUGS
+
+function isAllowedBlueChipDex(chain: string, project: string): boolean {
+  const p = (project ?? '').toLowerCase()
+  if (chain === 'Solana') {
+    return SOLANA_BLUE_CHIP_DEX_KEYWORDS.some((k) => p.includes(k))
+  }
+  if (chain === 'Ethereum') {
+    return ETHEREUM_BLUE_CHIP_DEX_KEYWORDS.some((k) => p.includes(k))
+  }
+  return false
+}
+
+/** Mapeia `project` DefiLlama para um slug do menu DEX (primeiro match). */
+export function blueChipDexSlug(pool: Pick<Pool, 'project'>): (typeof BLUE_CHIP_DEX_UI_SLUGS)[number] | 'other' {
+  const p = (pool.project ?? '').toLowerCase()
+  for (const k of BLUE_CHIP_DEX_UI_SLUGS) {
+    if (p.includes(k)) return k
+  }
+  return 'other'
+}
+
+/**
+ * Tickers “blue chip” (alinhado a apps tipo “Top Pools” + blue-chip):
+ * stables, BTC wraps, ETH/SOL, ouro, RWA/ETF, e large-caps DeFi frequentes em pools líquidas.
+ */
 const TOKEN_ALIAS: Record<string, string[]> = {
   BTC: ['BTC'],
   WBTC: ['WBTC'],
@@ -15,14 +67,26 @@ const TOKEN_ALIAS: Record<string, string[]> = {
   USDC: ['USDC', 'USDC.E', 'USDCE'],
   USDT: ['USDT'],
   DAI: ['DAI'],
+  PYUSD: ['PYUSD'],
+  USDS: ['USDS'],
+  EUROC: ['EUROC'],
+  EURC: ['EURC'],
   XAUT: ['XAUT', 'PAXG', 'XAU', 'GOLD'],
   SP500: ['SP500', 'S&P500', 'SPX'],
   SPY: ['SPY'],
+  VOO: ['VOO'],
+  QQQ: ['QQQ'],
   NVDA: ['NVDA'],
+  USO: ['USO'],
+  WTI: ['WTI'],
+  BRENT: ['BRENT'],
+  PENDLE: ['PENDLE'],
+  ONDO: ['ONDO'],
+  UNI: ['UNI'],
 }
 
 const BLUE_CHIP_TARGET_KEYS = Object.keys(TOKEN_ALIAS) as (keyof typeof TOKEN_ALIAS)[]
-const STABLES = new Set(['USDC', 'USDT', 'DAI'])
+const STABLES = new Set(['USDC', 'USDT', 'DAI', 'PYUSD', 'USDS', 'EUROC', 'EURC'])
 
 const MEME_BLACKLIST = new Set([
   'DOGE',
@@ -32,9 +96,16 @@ const MEME_BLACKLIST = new Set([
   'BONK',
   'WIF',
   'MEME',
+  'BOME',
+  'MEW',
+  'POPCAT',
 ])
 
-const MIN_BLUE_CHIP_TVL_USD = 100_000
+/**
+ * TVL mínimo baixo (tipo dashboards “Blue-chip” que ainda mostram pools ~5–10k).
+ * O explorador já vem com minTvl da query; isto só corta pó anómalo.
+ */
+const MIN_BLUE_CHIP_TVL_USD = 5_000
 
 function normalizeToken(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -69,12 +140,11 @@ export function poolBlueChipMatches(pool: Pool): string[] {
   return BLUE_CHIP_TARGET_KEYS.filter((key) => tokens.some((tok) => tokenMatchesBlueChipKey(tok, key)))
 }
 
-/** Pelo menos 2 ativos da lista blue chip (critério original). */
+/** Pelo menos 2 ativos da lista blue chip (ex.: USDC+SOL, BTC+ETH, SPY+USDC). */
 export function isBlueChipPool(pool: Pool): boolean {
   const chain = canonicalLlamaChain(pool.chain)
   if (!BLUE_CHIP_CHAINS.includes(chain as (typeof BLUE_CHIP_CHAINS)[number])) return false
-  const proj = (pool.project ?? '').toLowerCase()
-  if (!BLUE_CHIP_DEX_KEYWORDS.some((k) => proj.includes(k))) return false
+  if (!isAllowedBlueChipDex(chain, pool.project ?? '')) return false
   return poolBlueChipMatches(pool).length >= 2
 }
 
@@ -106,8 +176,18 @@ export function isHighSecurityBlueChipPool(pool: Pool): boolean {
   return pool.ilRisk === 'no' && blueChipRisk(pool) === 'low'
 }
 
-/** Ordenação “melhores primeiro”: pares estáveis, menor risco heurístico, TVL, APR. */
+/**
+ * Ordenação: Solana primeiro, depois maior TVL (valor de mercado / liquidez),
+ * pares estáveis, risco, APR.
+ */
 export function orderBestPools(a: Pool, b: Pool): number {
+  const solA = canonicalLlamaChain(a.chain) === 'Solana' ? 1 : 0
+  const solB = canonicalLlamaChain(b.chain) === 'Solana' ? 1 : 0
+  if (solA !== solB) return solB - solA
+
+  const tvl = (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
+  if (tvl !== 0) return tvl
+
   const stabA = isStableStablePair(a) ? 1 : 0
   const stabB = isStableStablePair(b) ? 1 : 0
   if (stabA !== stabB) return stabB - stabA
@@ -116,14 +196,12 @@ export function orderBestPools(a: Pool, b: Pool): number {
   const riskB = blueChipRisk(b) === 'low' ? 1 : 0
   if (riskA !== riskB) return riskB - riskA
 
-  const tvl = (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
-  if (tvl !== 0) return tvl
-
   return (b.apy ?? 0) - (a.apy ?? 0)
 }
 
 /**
- * Pipeline principal Blue Chips: ativos fortes + venue + liquidez mínima + sem memecoins + ordenação.
+ * Pipeline Blue Chips: ativos fortes + large-cap DeFi (tipo PENDLE/ONDO/UNI), só Solana + Ethereum,
+ * DEX por rede, TVL mínimo modesto (lista parecida a filtros “blue-chip” de outros apps), sem memecoins.
  */
 export function aplicarFiltroBlueChips(pools: Pool[]): Pool[] {
   return pools

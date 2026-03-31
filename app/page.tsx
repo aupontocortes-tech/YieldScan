@@ -1,16 +1,31 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StatCard } from '@/components/stat-card'
 import { TopPoolsTable } from '@/components/dashboard/top-pools-table'
-import { TvlChart } from '@/components/dashboard/tvl-chart'
-import { TopGainers } from '@/components/dashboard/top-gainers'
 import { TokenPoolsSearch } from '@/components/dashboard/token-pools-search'
-import { fetchPools, fetchAllChainsTvl, sortPools } from '@/lib/api'
+import {
+  DASHBOARD_POOLS_MIN_TVL,
+  dashboardPoolsQueryKey,
+  fetchAllChainsTvl,
+  fetchDashboardPools,
+  sortPools,
+} from '@/lib/api'
 import { formatCurrency, formatPercent } from '@/lib/api'
 import { Activity, TrendingUp, Layers, BarChart3 } from 'lucide-react'
 import { DataLoadError } from '@/components/data-load-error'
+
+const TopGainers = dynamic(
+  () => import('@/components/dashboard/top-gainers').then((m) => m.TopGainers),
+  { loading: () => <div className="mb-8 h-44 animate-pulse rounded-xl bg-muted/15" aria-hidden /> }
+)
+
+const TvlChart = dynamic(
+  () => import('@/components/dashboard/tvl-chart').then((m) => m.TvlChart),
+  { loading: () => <div className="mb-8 h-72 animate-pulse rounded-xl bg-muted/15" aria-hidden /> }
+)
 
 export default function DashboardPage() {
   const {
@@ -19,8 +34,8 @@ export default function DashboardPage() {
     isError: poolsError,
     refetch: refetchPools,
   } = useQuery({
-    queryKey: ['pools', 10_000],
-    queryFn: () => fetchPools(10_000),
+    queryKey: dashboardPoolsQueryKey,
+    queryFn: fetchDashboardPools,
   })
 
   const {
@@ -71,9 +86,7 @@ export default function DashboardPage() {
     ).slice(0, 5)
   }, [pools])
 
-  const isLoading = poolsLoading || tvlLoading
   const hasLoadError = poolsError || tvlError
-  const statsLoading = !hasLoadError && isLoading
 
   return (
     <div className="flex flex-1 flex-col bg-background">
@@ -101,31 +114,31 @@ export default function DashboardPage() {
             value={stats ? formatCurrency(stats.totalTvl) : '-'}
             icon={Layers}
             description="Valor total bloqueado"
-            isLoading={statsLoading}
+            isLoading={tvlLoading && !tvlError}
             valueClassName="text-foreground"
           />
           <StatCard
             title="Maior APR"
             value={stats ? formatPercent(stats.maxApy) : '-'}
             icon={TrendingUp}
-            description="Pool com maior APR"
-            isLoading={statsLoading}
+            description="Pool com maior APR (amostra)"
+            isLoading={poolsLoading && !poolsError}
             valueClassName="text-success"
           />
           <StatCard
             title="APR médio"
             value={stats ? formatPercent(stats.avgApy) : '-'}
             icon={Activity}
-            description="Media de todos os pools"
-            isLoading={statsLoading}
+            description="Média na amostra carregada"
+            isLoading={poolsLoading && !poolsError}
             valueClassName="text-cyan"
           />
           <StatCard
             title="Total de Pools"
             value={stats ? stats.totalPools.toLocaleString() : '-'}
             icon={BarChart3}
-            description={`${stats?.totalProtocols ?? '-'} protocolos`}
-            isLoading={statsLoading}
+            description={`${stats?.totalProtocols ?? '-'} protocolos · TVL mín. amostra ${(DASHBOARD_POOLS_MIN_TVL / 1000).toFixed(0)}k`}
+            isLoading={poolsLoading && !poolsError}
             valueClassName="text-foreground"
           />
         </div>

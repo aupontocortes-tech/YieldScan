@@ -22,7 +22,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ChainBadge } from '@/components/chain-badge'
-import { fetchPools, formatCurrency, formatPercent, poolMatchesSearchQuery, sortPools } from '@/lib/api'
+import {
+  dashboardPoolsQueryKey,
+  fetchDashboardPools,
+  formatCurrency,
+  formatPercent,
+  poolMatchesSearchQuery,
+  sortPools,
+} from '@/lib/api'
 import { Search, Coins, ExternalLink, TrendingUp, AlertCircle } from 'lucide-react'
 
 const POPULAR_TOKENS = ['ETH', 'USDC', 'USDT', 'BTC', 'WBTC', 'DAI', 'SOL', 'MATIC', 'ARB', 'OP']
@@ -32,8 +39,8 @@ export function TokenPoolsSearch() {
   const [activeToken, setActiveToken] = useState('')
 
   const { data: pools, isLoading } = useQuery({
-    queryKey: ['pools', 10_000],
-    queryFn: () => fetchPools(10_000),
+    queryKey: dashboardPoolsQueryKey,
+    queryFn: fetchDashboardPools,
   })
 
   const filteredPools = useMemo(() => {
