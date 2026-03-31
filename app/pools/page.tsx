@@ -1,11 +1,13 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { PoolFiltersComponent } from '@/components/pools/pool-filters'
 import { PoolOpportunitiesNow } from '@/components/pools/pool-opportunities-now'
 import { PoolTable } from '@/components/pools/pool-table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
 import { PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
 import { useNovelChains } from '@/hooks/use-novel-chains'
@@ -93,6 +95,11 @@ export default function PoolsPage() {
               )}
             </div>
             <div className="shrink-0">
+              <div className="mb-2 flex justify-end">
+                <Button asChild className="bg-gold text-background hover:bg-gold/90">
+                  <Link href="/pools/blue-chips">Blue Chips</Link>
+                </Button>
+              </div>
               <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
                 <TabsList className="grid w-full grid-cols-2 border border-gold/25 bg-background/60 p-1 sm:flex sm:w-auto sm:grid-cols-none">
                   <TabsTrigger
