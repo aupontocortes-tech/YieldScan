@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -26,11 +25,12 @@ import { DataLoadError } from '@/components/data-load-error'
 import { fetchPools, formatCurrency, formatPercent } from '@/lib/api'
 import type { Pool } from '@/lib/types'
 import {
+  aplicarFiltroBlueChips,
   BLUE_CHIP_CHAINS,
   BLUE_CHIP_DEX_KEYWORDS,
   blueChipRisk,
-  isBlueChipPool,
   isHighSecurityBlueChipPool,
+  isStableStablePair,
 } from '@/lib/blue-chip-pools'
 import { canonicalLlamaChain } from '@/lib/llama-chain'
 
@@ -47,15 +47,6 @@ function dexOf(pool: Pool): DexFilter | 'other' {
   return 'other'
 }
 
-function stablePair(pool: Pool): boolean {
-  const s = (pool.symbol ?? '').toUpperCase()
-  return (
-    (s.includes('USDC') && s.includes('USDT')) ||
-    (s.includes('DAI') && s.includes('USDC')) ||
-    (s.includes('DAI') && s.includes('USDT'))
-  )
-}
-
 export default function BlueChipsPoolsPage() {
   const [network, setNetwork] = useState<NetworkFilter>('all')
   const [dex, setDex] = useState<DexFilter>('all')
@@ -67,7 +58,7 @@ export default function BlueChipsPoolsPage() {
   })
 
   const rows = useMemo(() => {
-    const pools = (data ?? []).filter(isBlueChipPool)
+    const pools = aplicarFiltroBlueChips(data ?? [])
     const filtered = pools.filter((pool) => {
       const chain = canonicalLlamaChain(pool.chain)
       if (network !== 'all' && chain !== network) return false
@@ -76,15 +67,36 @@ export default function BlueChipsPoolsPage() {
       return true
     })
 
-    return filtered.sort((a, b) => {
-      if (sort === 'liquidity') return (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
+    const cmpStableRiskTvlApr = (a: Pool, b: Pool) => {
+      const sa = isStableStablePair(a) ? 1 : 0
+      const sb = isStableStablePair(b) ? 1 : 0
+      if (sa !== sb) return sb - sa
+      const ra = blueChipRisk(a) === 'low' ? 1 : 0
+      const rb = blueChipRisk(b) === 'low' ? 1 : 0
+      if (ra !== rb) return rb - ra
+      const tvl = (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
+      if (tvl !== 0) return tvl
+      return (b.apy ?? 0) - (a.apy ?? 0)
+    }
+
+    return [...filtered].sort((a, b) => {
+      if (sort === 'liquidity') {
+        const t = (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
+        if (t !== 0) return t
+        return (b.apy ?? 0) - (a.apy ?? 0)
+      }
       if (sort === 'risk') {
         const ra = blueChipRisk(a) === 'low' ? 0 : 1
         const rb = blueChipRisk(b) === 'low' ? 0 : 1
         if (ra !== rb) return ra - rb
+        return cmpStableRiskTvlApr(a, b)
+      }
+      if (sort === 'apr') {
+        const ap = (b.apy ?? 0) - (a.apy ?? 0)
+        if (ap !== 0) return ap
         return (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
       }
-      return (b.apy ?? 0) - (a.apy ?? 0)
+      return cmpStableRiskTvlApr(a, b)
     })
   }, [data, network, dex, sort])
 
@@ -178,7 +190,7 @@ export default function BlueChipsPoolsPage() {
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold">{pool.symbol}</span>
-                          {stablePair(pool) && (
+                          {isStableStablePair(pool) && (
                             <Badge variant="outline" className="border-success/60 text-success text-[10px]">
                               100% estável
                             </Badge>
@@ -213,7 +225,7 @@ export default function BlueChipsPoolsPage() {
           </div>
 
           <div className="text-xs text-muted-foreground">
-            Mostrando {rows.length.toLocaleString()} pool(s). Critério: pelo menos 2 ativos blue chip + redes/DEX suportadas.
+            Mostrando {rows.length.toLocaleString()} pool(s). Filtro: ≥2 blue chips, TVL ≥ $100K, sem memecoins, DEX/rede suportadas; ordenação inteligente por padrão.
           </div>
         </article>
       </main>
