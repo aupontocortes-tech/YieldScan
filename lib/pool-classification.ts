@@ -189,6 +189,7 @@ export function applyQuickPreset(preset: QuickPreset): Partial<PoolFilters> {
     exposure: 'all' as const,
     stablecoinOnly: false,
     primaryDexOnly: false,
+    curatedBlueChipsOnly: false,
   }
 
   switch (preset) {

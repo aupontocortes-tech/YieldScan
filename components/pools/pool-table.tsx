@@ -12,12 +12,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { ChainBadge } from '@/components/chain-badge'
 import { PoolApyChart } from './pool-apy-chart'
 import { Pool, PoolAprPeriod, PoolFilters } from '@/lib/types'
@@ -25,6 +19,7 @@ import {
   formatCurrency,
   formatPercent,
   getAprColorClass,
+  getChainColor,
   poolDisplayApr,
 } from '@/lib/api'
 import {
@@ -36,6 +31,7 @@ import {
   isPrimaryDexProject,
   shouldExtremeAprWarning,
 } from '@/lib/pool-classification'
+import { resolvePoolOrDexUrl } from '@/lib/dex'
 import { getDexScreenerUrl } from '@/lib/dexscreener'
 import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
 import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
@@ -66,7 +62,6 @@ export function PoolTable({
   onSortChange,
 }: PoolTableProps) {
   const [expandedPool, setExpandedPool] = useState<string | null>(null)
-  const [selectedPool, setSelectedPool] = useState<Pool | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
 
@@ -97,11 +92,6 @@ export function PoolTable({
       <ArrowUpDown className="h-3 w-3 shrink-0" />
     </button>
   )
-
-  const openDexScreener = (pool: Pool, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelectedPool(pool)
-  }
 
   if (isLoading) {
     return (
@@ -138,35 +128,6 @@ export function PoolTable({
 
   return (
     <div className="space-y-0">
-      <Dialog open={selectedPool !== null} onOpenChange={(open) => !open && setSelectedPool(null)}>
-        <DialogContent
-          showCloseButton
-          className="max-h-[90vh] max-w-4xl w-full gap-0 overflow-hidden border-gold/30 bg-card p-0 sm:max-w-4xl"
-        >
-          <DialogHeader className="border-b border-border/60 p-4 pb-3">
-            <DialogTitle className="font-mono text-base text-gold">
-              {selectedPool?.symbol} — {selectedPool?.project} — {selectedPool?.chain}
-            </DialogTitle>
-            {selectedPool && (
-              <Button variant="link" className="h-auto p-0 text-xs text-gold" asChild>
-                <a href={getDexScreenerUrl(selectedPool)} target="_blank" rel="noopener noreferrer">
-                  Abrir DEXScreener em nova aba
-                  <ExternalLink className="ml-1 inline h-3 w-3" />
-                </a>
-              </Button>
-            )}
-          </DialogHeader>
-          {selectedPool && (
-            <iframe
-              title="DEXScreener"
-              src={getDexScreenerUrl(selectedPool)}
-              className="h-[min(560px,70vh)] w-full border-0"
-              allow="clipboard-write"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
       <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50 shadow-inner">
         <Table>
           <TableHeader>
@@ -194,6 +155,8 @@ export function PoolTable({
               const metaHint = getPoolMetaHint(pool)
               const primaryDex = isPrimaryDexProject(pool.project)
               const chainSafe = getChainCategory(pool.chain) === 'safe'
+              const chainColor = getChainColor(pool.chain)
+              const dexHref = resolvePoolOrDexUrl(pool)
 
               return (
                 <Fragment key={pool.pool}>
@@ -228,15 +191,32 @@ export function PoolTable({
                               </Badge>
                             )}
                           </div>
-                          <p
-                            className={cn(
-                              'truncate text-xs',
-                              primaryDex ? 'text-gold/90' : 'text-muted-foreground'
-                            )}
-                            title={pool.project}
-                          >
-                            {pool.project}
-                          </p>
+                          {dexHref ? (
+                            <a
+                              href={dexHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Abrir na corretora (${pool.chain}) — nova aba`}
+                              className={cn(
+                                'block truncate text-xs font-medium underline-offset-2 hover:underline',
+                                primaryDex && 'font-semibold'
+                              )}
+                              style={{ color: chainColor }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {pool.project}
+                            </a>
+                          ) : (
+                            <p
+                              className={cn(
+                                'truncate text-xs',
+                                primaryDex ? 'text-gold/90' : 'text-muted-foreground'
+                              )}
+                              title={pool.project}
+                            >
+                              {pool.project}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -268,8 +248,11 @@ export function PoolTable({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 shrink-0 text-gold hover:bg-gold/10 hover:text-gold"
-                          title="DEXScreener"
-                          onClick={(e) => openDexScreener(pool, e)}
+                          title="Gráfico / DEXScreener (nova aba)"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(getDexScreenerUrl(pool), '_blank', 'noopener,noreferrer')
+                          }}
                         >
                           <LineChart className="h-4 w-4" />
                         </Button>

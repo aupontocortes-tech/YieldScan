@@ -7,36 +7,16 @@ import { PoolFiltersComponent } from '@/components/pools/pool-filters'
 import { PoolOpportunitiesNow } from '@/components/pools/pool-opportunities-now'
 import { PoolTable } from '@/components/pools/pool-table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
-import { aplicarFiltroBlueChips, BLUE_CHIP_CHAINS } from '@/lib/blue-chip-pools'
-import { canonicalLlamaChain } from '@/lib/llama-chain'
+import { aplicarFiltroBlueChips, sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
 import { PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
 import { useNovelChains } from '@/hooks/use-novel-chains'
 import { DataLoadError } from '@/components/data-load-error'
 import { sortPoolsWithSmartPriority, topPoolIdsBySmartScore } from '@/lib/pool-smart-rank'
-import { cn } from '@/lib/utils'
-
-const BLUE_CHIP_CHAIN_SET = new Set<string>(BLUE_CHIP_CHAINS)
-
-/** Redes / categoria de UI que escondem 100% das pools Blue Chip (Solana + Ethereum). */
-function sanitizeFiltersForBlueChipsMode(f: PoolFilters): PoolFilters {
-  let u = { ...f }
-  if (f.chainCategory === 'opportunity') {
-    u = { ...u, chainCategory: 'all', quickPreset: 'none' }
-  }
-  if (f.chains.length > 0) {
-    const narrowed = f.chains.filter((c) => BLUE_CHIP_CHAIN_SET.has(canonicalLlamaChain(c)))
-    u = { ...u, chains: narrowed.length === 0 ? [] : narrowed }
-  }
-  return u
-}
 
 export default function PoolsPage() {
   const [filters, setFilters] = useState<PoolFilters>(DEFAULT_FILTERS)
   const [period, setPeriod] = useState<'current' | '1d' | '7d' | '30d'>('current')
-  /** Filtro curado Blue Chips aplicado à lista desta página (o botão dourado). */
-  const [blueChipsExplorerOn, setBlueChipsExplorerOn] = useState(false)
 
   const {
     data: pools,
@@ -51,18 +31,15 @@ export default function PoolsPage() {
 
   const poolsForExplorer = useMemo(() => {
     if (!pools?.length) return []
-    if (!blueChipsExplorerOn) return pools
+    if (!filters.curatedBlueChipsOnly) return pools
     return aplicarFiltroBlueChips(pools)
-  }, [pools, blueChipsExplorerOn])
+  }, [pools, filters.curatedBlueChipsOnly])
 
-  /**
-   * Modo Blue Chips: só Solana e Ethereum; outras redes selecionadas esvaziam a lista.
-   * O filtro de UI “só redes oportunidade” exclui essas redes → a lista curada sumia por completo.
-   */
+  /** Com lista curada ativa, evita combinações de filtro que esvaziam a tabela. */
   const filtersEffective = useMemo((): PoolFilters => {
-    if (!blueChipsExplorerOn) return filters
-    return sanitizeFiltersForBlueChipsMode(filters)
-  }, [filters, blueChipsExplorerOn])
+    if (!filters.curatedBlueChipsOnly) return filters
+    return sanitizeFiltersForCuratedBlueChips(filters)
+  }, [filters])
 
   const chainOptions = useMemo(() => {
     if (!poolsForExplorer.length) return []
@@ -125,39 +102,37 @@ export default function PoolsPage() {
                 </span>{' '}
                 no recorte atual (DefiLlama + Meteora DLMM). APR agregado pode diferir do app de cada DEX.
               </p>
-              {blueChipsExplorerOn && pools && pools.length > 0 && (
+              {filters.curatedBlueChipsOnly && pools && pools.length > 0 && (
                 <p className="mt-2 text-sm font-medium text-success">
-                  {poolsForExplorer.length.toLocaleString()} pools com critério Blue Chip neste carregamento
+                  {poolsForExplorer.length.toLocaleString()} pools na lista curada «Só blue chips» neste carregamento
                   {poolsForExplorer.length < pools.length && (
                     <span className="font-normal text-muted-foreground">
                       {' '}
                       (de {pools.length.toLocaleString()} no total)
                     </span>
                   )}
-                  .
+                  . Liga/desliga pelo botão na barra de filtros (ao lado de APR).
                 </p>
               )}
-              {blueChipsExplorerOn && (
+              {filters.curatedBlueChipsOnly && (
                 <p className="mt-3 max-w-2xl rounded-lg border border-success/35 bg-success/10 px-3 py-2 text-xs leading-relaxed text-foreground">
-                  <span className="font-semibold text-success">Blue Chips ligado:</span> prioridade{' '}
-                  <span className="font-medium">Solana</span>, também Ethereum: pares entre dólar (stables), BTC, SOL,
-                  ouro e RWA/ETF (ex. SPY) ou petróleo (USO) quando existirem; DEXs Raydium · Orca · Meteora… e
-                  Uniswap · Curve · Balancer · Sushi; TVL mín. ~$5k neste modo; sem memecoins. Ajustamos filtros de rede se estavam
-                  em «oportunidade»
-                  ou só em chains onde não há Blue Chip (ex.: só Arbitrum), para a lista não ficar vazia.{' '}
+                  <span className="font-semibold text-success">Só blue chips ativo:</span> prioridade{' '}
+                  <span className="font-medium">Solana</span> e Ethereum; pares fortes (stables, BTC, SOL, ouro, RWA…)
+                  DEXs: Raydium · Orca · Meteora (Solana) e Uniswap (Ethereum); TVL mín. $100k; sem memecoins de baixa
+                  qualidade.{' '}
                   <Link href="/pools/blue-chips" className="font-medium text-gold underline-offset-2 hover:underline">
-                    Abrir vista só em tabela
+                    Vista em tabela dedicada
                   </Link>
                   .
                 </p>
               )}
-              {blueChipsExplorerOn &&
+              {filters.curatedBlueChipsOnly &&
                 poolsForExplorer.length > 0 &&
                 filteredPools.length === 0 &&
                 !isLoading && (
                   <p className="mt-2 max-w-2xl rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-xs text-foreground">
-                    Há pools Blue Chip, mas os filtros atuais (busca, rede, APR, protocolo, etc.) excluem todas.
-                    Tenta limpar chips de rede/DEX ou a busca.
+                    Há pools na lista curada, mas os filtros atuais (busca, rede, APR, protocolo, etc.) excluem todas.
+                    Tenta limpar chips em «Ativos» ou a busca.
                   </p>
                 )}
               {isFetching && !isLoading && (
@@ -165,35 +140,6 @@ export default function PoolsPage() {
               )}
             </div>
             <div className="shrink-0">
-              <div className="mb-2 flex flex-col items-stretch gap-1.5 sm:items-end">
-                <Button
-                  type="button"
-                  aria-pressed={blueChipsExplorerOn}
-                  onClick={() => {
-                    setBlueChipsExplorerOn((prev) => {
-                      const next = !prev
-                      if (!prev && next) {
-                        setFilters((f) => sanitizeFiltersForBlueChipsMode(f))
-                      }
-                      return next
-                    })
-                  }}
-                  className={cn(
-                    'w-full sm:w-auto',
-                    blueChipsExplorerOn
-                      ? 'border-2 border-success bg-gold/90 text-background shadow-[0_0_0_1px_rgba(34,197,94,0.4)] hover:bg-gold'
-                      : 'bg-gold text-background hover:bg-gold/90'
-                  )}
-                >
-                  {blueChipsExplorerOn ? 'Blue Chips · ativo' : 'Blue Chips'}
-                </Button>
-                <span className="text-center text-[10px] text-muted-foreground sm:text-right">
-                  Liga o filtro curado nesta página.{' '}
-                  <Link href="/pools/blue-chips" className="text-gold/90 underline-offset-2 hover:underline">
-                    Página dedicada
-                  </Link>
-                </span>
-              </div>
               <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
                 <TabsList className="grid w-full grid-cols-2 border border-gold/25 bg-background/60 p-1 sm:flex sm:w-auto sm:grid-cols-none">
                   <TabsTrigger

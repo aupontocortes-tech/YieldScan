@@ -1,3 +1,5 @@
+import type { Pool } from './types'
+
 /** Corretoras / infra de negociação descentralizada — links oficiais e contexto (PT-BR). */
 export interface DexPlatform {
   id: string
@@ -117,3 +119,31 @@ export const DEX_PLATFORMS: DexPlatform[] = [
     poolFilterHint: 'velodrome',
   },
 ]
+
+/** Slug em `pool.project` (DefiLlama) → site oficial quando não há `pool.url`. */
+const DEX_FALLBACK_HREFS: { hint: string; href: string }[] = [
+  { hint: 'balancer', href: 'https://app.balancer.fi' },
+  { hint: 'sushi', href: 'https://www.sushi.com' },
+  { hint: 'pancakeswap', href: 'https://pancakeswap.finance' },
+  { hint: 'camelot', href: 'https://app.camelot.exchange' },
+  { hint: 'trader-joe', href: 'https://traderjoexyz.com' },
+  { hint: 'quickswap', href: 'https://quickswap.exchange' },
+  { hint: 'kamino', href: 'https://app.kamino.finance' },
+]
+
+/**
+ * Link direto para a pool na corretora (`pool.url` DefiLlama) ou, em último caso, página oficial da DEX.
+ */
+export function resolvePoolOrDexUrl(pool: Pick<Pool, 'url' | 'project'>): string | null {
+  const raw = pool.url?.trim()
+  if (raw && /^https?:\/\//i.test(raw)) return raw
+  const proj = (pool.project ?? '').toLowerCase()
+  for (const d of DEX_PLATFORMS) {
+    const hint = d.poolFilterHint
+    if (hint && proj.includes(hint)) return d.href
+  }
+  for (const { hint, href } of DEX_FALLBACK_HREFS) {
+    if (proj.includes(hint)) return href
+  }
+  return null
+}

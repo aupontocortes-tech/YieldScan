@@ -121,7 +121,7 @@ export default function BlueChipsPoolsPage() {
                 Foco em <span className="font-medium text-foreground">Solana</span> (principal) e{' '}
                 <span className="font-medium text-foreground">Ethereum</span>: pares entre dólar (stables), Bitcoin,
                 Solana/ETH, ouro e ativos tipo mercado acionário (SPY, índices) ou commodities (petróleo/USO) quando
-                existirem on-chain. Só DEXs líderes por rede (Raydium, Orca, Meteora… / Uniswap, Curve…).
+                existirem on-chain. DEXs permitidas: Solana — Raydium, Orca, Meteora; Ethereum — Uniswap.
               </p>
             </div>
             {isFetching && !isLoading && <span className="text-xs text-gold">Atualizando…</span>}
@@ -237,8 +237,8 @@ export default function BlueChipsPoolsPage() {
 
           <div className="text-xs text-muted-foreground">
             Mostrando {rows.length.toLocaleString()} pool(s). Critério: ≥2 ativos da lista (dólar, BTC, SOL, ouro,
-            RWA/ETF, PENDLE/ONDO/UNI…), só Solana e Ethereum, DEX por rede, TVL ≥ ~$5K, sem memecoins; por defeito prioriza Solana e
-            maior liquidez.
+            RWA/ETF, PENDLE/ONDO/UNI…), só Solana e Ethereum, DEX por rede, TVL ≥ $100K, sem memecoins; ordenação: maior
+            liquidez (TVL) primeiro, pares estável–estável, menor risco, APR e Solana como desempate.
           </div>
         </article>
       </main>

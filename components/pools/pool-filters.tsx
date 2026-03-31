@@ -42,6 +42,7 @@ import {
 } from '@/lib/curated-markets'
 import { SAFE_CHAINS } from '@/lib/pool-classification'
 import { canonicalLlamaChain } from '@/lib/llama-chain'
+import { sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -144,26 +145,25 @@ export function PoolFiltersComponent({
     (filters.smartLowRisk ? 1 : 0) +
     (filters.safeAprProfile ? 1 : 0) +
     (filters.chainCategory === 'safe' ? 1 : 0) +
+    (filters.curatedBlueChipsOnly ? 1 : 0) +
     (filters.search.trim() ? 1 : 0)
 
-  const blueChipsOnly = filters.chainCategory === 'safe'
+  const blueChipsOnly = filters.curatedBlueChipsOnly
 
   const toggleBlueChipsOnly = () => {
     if (blueChipsOnly) {
       onFiltersChange({
         ...filters,
         quickPreset: 'none',
-        chainCategory: 'all',
+        curatedBlueChipsOnly: false,
       })
       return
     }
-    const chainsBlueOnly = filters.chains.filter((c) => SAFE_CHAINS.has(canonicalLlamaChain(c)))
+    const next = sanitizeFiltersForCuratedBlueChips(filters)
     onFiltersChange({
-      ...filters,
-      chains: chainsBlueOnly,
-      protocols: pruneProtocols(chainsBlueOnly),
+      ...next,
       quickPreset: 'none',
-      chainCategory: 'safe',
+      curatedBlueChipsOnly: true,
     })
   }
 
@@ -205,7 +205,7 @@ export function PoolFiltersComponent({
           </Label>
           <span className="text-[10px] text-muted-foreground">
             {blueChipsOnly ? (
-              <span className="text-success">Só redes blue chip · ainda podes afunilar por chip acima</span>
+              <span className="text-success">Lista curada blue chip (Solana/Ethereum) · chips de rede/DEX acima</span>
             ) : (
               <>Nenhuma selecionada = todas · role para ver mais</>
             )}
@@ -351,7 +351,7 @@ export function PoolFiltersComponent({
           type="button"
           size="sm"
           variant="outline"
-          title={`Redes blue chip: ${[...SAFE_CHAINS].sort().join(', ')}`}
+          title="Pares fortes só em Raydium, Orca, Meteora (Solana) e Uniswap (Ethereum)"
           className={cn(
             'h-10 bg-card/80',
             blueChipsOnly
@@ -485,7 +485,7 @@ export function PoolFiltersComponent({
                       }}
                     />
                     <span className="text-sm text-foreground">
-                      Só redes blue chip (ETH, Arbitrum, Base, Solana…)
+                      Só redes estabelecidas (ETH, Arbitrum, Base, Solana…)
                     </span>
                   </label>
                 </div>
@@ -511,6 +511,7 @@ export function PoolFiltersComponent({
         filters.protocols.length > 0 ||
         filters.safeAprProfile ||
         filters.chainCategory === 'safe' ||
+        filters.curatedBlueChipsOnly ||
         filters.smartHighApr ||
         filters.smartHighTvl ||
         filters.smartLowRisk ||
@@ -520,49 +521,108 @@ export function PoolFiltersComponent({
           {filters.tvlMin !== DEFAULT_FILTERS.tvlMin && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               TVL ≥ {filters.tvlMin >= 1e6 ? `${filters.tvlMin / 1e6}M` : `${filters.tvlMin / 1e3}K`}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('tvlMin', DEFAULT_FILTERS.tvlMin)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remover filtro de TVL mínimo"
+                onClick={() => updateFilter('tvlMin', DEFAULT_FILTERS.tvlMin)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
-          {filters.chainCategory === 'safe' && (
+          {filters.curatedBlueChipsOnly && (
             <Badge
               variant="secondary"
               className="gap-1 border-success/35 bg-success/10 px-2 py-0.5 text-xs text-success"
             >
-              Blue chips
-              <X
-                className="h-3 w-3 cursor-pointer"
+              Só blue chips
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-success/80 hover:bg-background/60 hover:text-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Desligar lista curada blue chip"
+                onClick={() => updateFilter('curatedBlueChipsOnly', false)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.chainCategory === 'safe' && (
+            <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              Redes estabelecidas
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remover filtro só redes estabelecidas"
                 onClick={() => updateFilter('chainCategory', 'all')}
-              />
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.safeAprProfile && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               APR · perfil seguro
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('safeAprProfile', false)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remover perfil seguro de APR"
+                onClick={() => updateFilter('safeAprProfile', false)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.smartHighApr && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               Smart: APR alto
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('smartHighApr', false)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remover destaque smart APR alto"
+                onClick={() => updateFilter('smartHighApr', false)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.smartHighTvl && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               Smart: TVL alto
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('smartHighTvl', false)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remover destaque smart TVL alto"
+                onClick={() => updateFilter('smartHighTvl', false)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.smartLowRisk && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               Smart: baixo risco
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilter('smartLowRisk', false)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remover destaque smart baixo risco"
+                onClick={() => updateFilter('smartLowRisk', false)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           )}
           {filters.chains.map((chain) => (
             <Badge key={chain} variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
               {chain}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => toggleChain(chain)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Remover rede ${chain}`}
+                onClick={() => toggleChain(chain)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           ))}
           {filters.protocols.map((protocol) => (
@@ -572,7 +632,14 @@ export function PoolFiltersComponent({
               className="max-w-[200px] gap-1 break-all px-2 py-0.5 text-xs"
             >
               {formatDexLabel(protocol)}
-              <X className="h-3 w-3 shrink-0 cursor-pointer" onClick={() => toggleProtocol(protocol)} />
+              <button
+                type="button"
+                className="-m-0.5 inline-flex shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Remover DEX ${formatDexLabel(protocol)}`}
+                onClick={() => toggleProtocol(protocol)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </Badge>
           ))}
         </div>

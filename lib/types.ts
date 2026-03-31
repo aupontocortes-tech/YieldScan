@@ -121,6 +121,10 @@ export interface PoolFilters {
    * só refina a lista já carregada para achar APR alto com menos lixo.
    */
   safeAprProfile: boolean
+  /**
+   * Lista curada “Só blue chips” (pares fortes + DEXs por rede em Solana/Ethereum) — mesmo critério do botão da barra.
+   */
+  curatedBlueChipsOnly: boolean
 }
 
 export type PoolAprPeriod = PoolFilters['period']
@@ -172,6 +176,7 @@ export const DEFAULT_FILTERS: PoolFilters = {
   smartHighTvl: false,
   smartLowRisk: false,
   safeAprProfile: false,
+  curatedBlueChipsOnly: false,
 }
 
 // Stats type
