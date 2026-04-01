@@ -185,6 +185,30 @@ function classificarImpacto(full: string): InsightNoticia['impacto'] {
   return 'NEUTRO'
 }
 
+/**
+ * Análise de texto livre (ex.: tweets) com as mesmas regras de categoria/impacto das notícias.
+ * `relevanteParaFeed`: cripto, macro, geopolítica ou mercado em geral.
+ */
+export function analisarTextoMercado(textoBruto: string): {
+  normalizado: string
+  categoria: InsightNoticia['categoria']
+  impacto: InsightNoticia['impacto']
+  relevanteParaFeed: boolean
+} {
+  const full = normalizarTextoMatch(textoBruto)
+  const cry = RE_CRYPTO.test(full)
+  const geo = RE_GEO.test(full)
+  const macro = RE_MACRO.test(full)
+  const mercadoGeral =
+    /\b(economy|economic|economia|mercado|finance|financas|financeiro|stock|stocks|bolsa|nasdaq|sp500|s&p|dollar|dólar|euro|yen|oil|petróleo|gold|ouro|treasury|yield|tariff|trade|banco|bank|ipo|earnings)\b/i.test(
+      full
+    )
+  const relevanteParaFeed = cry || geo || macro || mercadoGeral
+  const categoria = classificarCategoria(full, null)
+  const impacto = classificarImpacto(full)
+  return { normalizado: full, categoria, impacto, relevanteParaFeed }
+}
+
 function ativosAfetados(full: string, categoria: InsightNoticia['categoria']): InsightNoticia['ativos'] {
   const out = new Set<InsightNoticia['ativos'][number]>()
   if (RE_BTC.test(full)) out.add('BTC')

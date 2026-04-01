@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Bitcoin, ExternalLink, Globe, Newspaper, RefreshCw, TrendingUp } from 'lucide-react'
 import type React from 'react'
+import type { ItemFeedMercado } from '@/lib/market-feed'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
+import type { TweetMercadoItem } from '@/lib/twitter-feed'
 import { cn } from '@/lib/utils'
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -14,6 +16,13 @@ interface NewsPayload {
   erro?: string
   totalResults?: number
   noticias: NoticiaProcessada[]
+  tweets?: TweetMercadoItem[]
+  feed?: ItemFeedMercado[]
+  twitter?: {
+    ativo: boolean
+    handlesSeguidos: string[]
+    aviso: string | null
+  }
   insights: InsightNoticia[]
 }
 
@@ -21,7 +30,6 @@ interface NewsPayload {
 async function fetchNoticias(): Promise<NewsPayload> {
   const res = await fetch('/api/news', { cache: 'no-store' })
   const json = (await res.json()) as NewsPayload
-  // Lança erro para que React Query tente de novo automaticamente
   if (!res.ok) throw new Error(json.erro ?? 'Erro ao carregar notícias.')
   return json
 }
@@ -53,6 +61,16 @@ function formatarData(pub: string | null): string {
   } catch {
     return ''
   }
+}
+
+function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/).filter(Boolean)
+  if (p.length >= 2) return (p[0][0] + p[p.length - 1][0]).toUpperCase()
+  return nome.slice(0, 2).toUpperCase()
+}
+
+function categoriaDoItem(item: ItemFeedMercado): InsightNoticia['categoria'] {
+  return item.tipo === 'noticia' ? item.dados.categoria : item.dados.categoria
 }
 
 /* ── Design maps ─────────────────────────────────────────────────────────── */
@@ -92,7 +110,7 @@ const LABEL_CAT: Record<InsightNoticia['categoria'], string> = {
   MACRO: 'Macro',
 }
 
-/* ── Skeleton ────────────────────────────────────────────────────────────── */
+/* ── Skeletons ────────────────────────────────────────────────────────────── */
 function NewsCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/50">
@@ -106,6 +124,21 @@ function NewsCardSkeleton() {
         <div className="flex justify-between pt-2">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-3 w-12" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TweetCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-950/40 to-card/80 p-4">
+      <div className="flex gap-3">
+        <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-5/6" />
         </div>
       </div>
     </div>
@@ -131,17 +164,11 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
         hasLink ? 'cursor-pointer' : 'cursor-default'
       )}
     >
-      {/* ── Image / gradient header ── */}
       <div className="relative h-44 w-full overflow-hidden shrink-0">
-        {/* Gradient always visible as base */}
         <div className={cn('absolute inset-0 bg-gradient-to-br', GRADIENTE_CAT[n.categoria])} />
-        {/* Category icon when no image */}
         {!hasImg && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            {ICONE_CAT[n.categoria]}
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center">{ICONE_CAT[n.categoria]}</div>
         )}
-        {/* Image fades in on top of gradient once loaded */}
         {hasImg && (
           <img
             src={n.imagemUrl!}
@@ -156,8 +183,6 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
           />
         )}
         <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-card/95 to-transparent" />
-
-        {/* Category badge */}
         <div className="absolute bottom-3 left-3">
           <span
             className={cn(
@@ -168,26 +193,16 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
             {LABEL_CAT[n.categoria]}
           </span>
         </div>
-
-        {/* Impact pill */}
         <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border/40 bg-background/75 px-2.5 py-1 backdrop-blur-sm">
           <span className={cn('h-1.5 w-1.5 rounded-full', COR_IMPACTO[n.impacto])} />
-          <span className="text-[10px] font-medium text-foreground/90">
-            {LABEL_IMPACTO[n.impacto]}
-          </span>
+          <span className="text-[10px] font-medium text-foreground/90">{LABEL_IMPACTO[n.impacto]}</span>
         </div>
       </div>
-
-      {/* ── Content ── */}
       <div className="flex flex-1 flex-col gap-2.5 p-4">
         <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors group-hover:text-yellow-400">
           {n.titulo}
         </h3>
-        <p className="line-clamp-3 flex-1 text-xs leading-relaxed text-muted-foreground">
-          {n.resumo}
-        </p>
-
-        {/* Assets */}
+        <p className="line-clamp-3 flex-1 text-xs leading-relaxed text-muted-foreground">{n.resumo}</p>
         {n.ativos.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {n.ativos.map((a) => (
@@ -200,8 +215,6 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
             ))}
           </div>
         )}
-
-        {/* Footer */}
         <div className="flex items-end justify-between border-t border-border/30 pt-3 mt-auto">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[11px] font-medium text-muted-foreground">{n.fonte}</p>
@@ -218,7 +231,88 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
   )
 }
 
-/* ── Main component ──────────────────────────────────────────────────────── */
+/* ── TweetCard (X) ────────────────────────────────────────────────────────── */
+function TweetCard({ t }: { t: TweetMercadoItem }) {
+  const cat = t.categoria
+  return (
+    <a
+      href={t.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        'group relative flex flex-col overflow-hidden rounded-2xl border bg-card/70 backdrop-blur-sm',
+        'border-sky-500/25 shadow-[inset_0_1px_0_0_rgba(56,189,248,0.12)]',
+        'transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-400/45',
+        'hover:shadow-[0_12px_40px_-12px_rgba(14,165,233,0.25)]'
+      )}
+    >
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-y-3 left-0 w-1 rounded-full bg-gradient-to-b',
+          cat === 'CRIPTO' && 'from-cyan-400 to-blue-600',
+          cat === 'GEOPOLÍTICA' && 'from-amber-400 to-orange-600',
+          cat === 'MACRO' && 'from-yellow-400 to-amber-600'
+        )}
+      />
+      <div className="relative flex flex-1 flex-col gap-3 p-4 pl-5">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-xs font-bold',
+              'border-sky-500/35 bg-gradient-to-br from-sky-500/20 to-slate-900/80 text-sky-200'
+            )}
+          >
+            {iniciais(t.autorNome)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate text-sm font-semibold text-foreground">{t.autorNome}</span>
+              <span className="text-muted-foreground/80 text-xs">@{t.autorHandle}</span>
+              <span
+                className="ml-auto rounded bg-sky-500/15 px-1.5 py-px text-[10px] font-bold tracking-tight text-sky-300 ring-1 ring-sky-500/30"
+                aria-hidden
+              >
+                𝕏
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-foreground/95 whitespace-pre-wrap">{t.texto}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+              BADGE_CAT[cat]
+            )}
+          >
+            {LABEL_CAT[cat]}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/30 px-2 py-0.5 text-[10px]">
+            <span className={cn('h-1.5 w-1.5 rounded-full', COR_IMPACTO[t.impacto])} />
+            {LABEL_IMPACTO[t.impacto]}
+          </span>
+          {t.ativos.map((a) => (
+            <span
+              key={a}
+              className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/80"
+            >
+              {a}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center justify-between border-t border-border/30 pt-2">
+          <span className="text-[10px] text-muted-foreground/70">Post no X · {formatarData(t.dataPublicacao)}</span>
+          <span className="flex items-center gap-1 text-[10px] font-medium text-sky-400/90 group-hover:text-sky-300">
+            Abrir
+            <ExternalLink className="h-3 w-3" />
+          </span>
+        </div>
+      </div>
+    </a>
+  )
+}
+
+/* ── Main ─────────────────────────────────────────────────────────────────── */
 export function DashbuddyNews() {
   const [filtro, setFiltro] = useState<Filtro>('todos')
 
@@ -227,33 +321,42 @@ export function DashbuddyNews() {
     queryFn: fetchNoticias,
     retry: 2,
     retryDelay: 2_000,
-    staleTime: 0,          // Sempre considera os dados desactualizados → sempre refetch ao montar
-    gcTime: 0,             // Limpa a cache quando sai da página
+    staleTime: 0,
+    gcTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   })
 
-  // Garante que se houver dados em cache com erro, refaz o pedido imediatamente
   useEffect(() => {
     if (isError || (data && (data as NewsPayload & { erro?: string }).erro)) {
       void refetch()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const noticias = data?.noticias ?? []
-  // Com fetchNoticias a lançar erro em respostas não-OK, data?.erro nunca será definido
-  // em respostas com sucesso — mas mantemos a detecção como fallback
+  const feed = useMemo((): ItemFeedMercado[] => {
+    if (data?.feed && data.feed.length > 0) return data.feed
+    const n = data?.noticias ?? []
+    return n.map((item) => ({
+      tipo: 'noticia' as const,
+      id: `n-${item.articleId ?? item.link}`,
+      ordenadoEm: item.dataPublicacao ?? '',
+      dados: item,
+    }))
+  }, [data])
+
   const isConfigError = isError && Boolean(error?.message?.includes('NEWSDATA_API_KEY'))
   const apiErro = isError && !isConfigError ? (error?.message ?? 'Erro ao carregar notícias.') : null
 
-  const noticiasFiltradas = useMemo(() => {
-    if (filtro === 'todos') return noticias
-    return noticias.filter((n) => n.categoria === filtro)
-  }, [noticias, filtro])
+  const feedFiltrado = useMemo(() => {
+    if (filtro === 'todos') return feed
+    return feed.filter((item) => categoriaDoItem(item) === filtro)
+  }, [feed, filtro])
+
+  const twitterAtivo = data?.twitter?.ativo === true
+  const handles = data?.twitter?.handlesSeguidos ?? []
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
@@ -261,7 +364,7 @@ export function DashbuddyNews() {
             <h2 className="text-2xl font-bold tracking-tight">Notícias do Mercado</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            NewsData.io · em português · classificação automática
+            Feed único · NewsData.io + posts filtrados do X · classificação automática
           </p>
         </div>
         <Button
@@ -276,14 +379,47 @@ export function DashbuddyNews() {
         </Button>
       </div>
 
-      {/* ── Filter chips ── */}
+      {!isConfigError && !isError && data && !twitterAtivo && (
+        <div className="rounded-2xl border border-sky-500/25 bg-gradient-to-r from-sky-950/50 via-card/80 to-indigo-950/40 p-5 shadow-[inset_0_1px_0_0_rgba(56,189,248,0.15)]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-sky-200">Integração com o X (Twitter)</p>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-xl">
+                Para misturar tweets de Trump, Walter Bloomberg (estilo), Watcher.Guru e Arthur Reis no mesmo feed,
+                adiciona <code className="rounded bg-muted px-1 py-0.5 text-foreground">TWITTER_BEARER_TOKEN</code>{' '}
+                na Vercel (ou <code className="rounded bg-muted px-1">.env.local</code>) com um Bearer Token da API v2
+                do X Developer Portal, e faz redeploy.
+              </p>
+            </div>
+          </div>
+          {handles.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 w-full sm:w-auto">
+                Contas previstas no feed:
+              </span>
+              {handles.map((h) => (
+                <span
+                  key={h}
+                  className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-medium text-sky-200"
+                >
+                  @{h}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-muted-foreground/80 border-t border-border/30 pt-3">
+            <strong className="text-foreground/90">Mais contas:</strong> usa{' '}
+            <code className="rounded bg-muted px-1">TWITTER_EXTRA_USERNAMES=conta1,conta2</code> ou substitui tudo com{' '}
+            <code className="rounded bg-muted px-1">TWITTER_USERNAMES=a,b,c</code> (sem @, separado por vírgula).
+          </p>
+        </div>
+      )}
+
       {!isConfigError && !isError && (
         <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
           {FILTROS.map((f) => {
             const count =
-              f.value === 'todos'
-                ? noticias.length
-                : noticias.filter((n) => n.categoria === f.value).length
+              f.value === 'todos' ? feed.length : feed.filter((it) => categoriaDoItem(it) === f.value).length
             return (
               <button
                 key={f.value}
@@ -301,9 +437,7 @@ export function DashbuddyNews() {
                   <span
                     className={cn(
                       'rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
-                      filtro === f.value
-                        ? 'bg-black/20 text-black'
-                        : 'bg-muted/60 text-muted-foreground'
+                      filtro === f.value ? 'bg-black/20 text-black' : 'bg-muted/60 text-muted-foreground'
                     )}
                   >
                     {count}
@@ -315,21 +449,18 @@ export function DashbuddyNews() {
         </div>
       )}
 
-      {/* ── Config error ── */}
       {isConfigError && (
         <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-center">
           <p className="font-semibold text-yellow-400">Chave API não configurada</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Adiciona{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-foreground">NEWSDATA_API_KEY=tua_chave</code>{' '}
-            no ficheiro{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-foreground">.env.local</code> e
+            <code className="rounded bg-muted px-1 py-0.5 text-foreground">NEWSDATA_API_KEY=tua_chave</code> no
+            ficheiro <code className="rounded bg-muted px-1 py-0.5 text-foreground">.env.local</code> (ou na Vercel) e
             reinicia o servidor.
           </p>
         </div>
       )}
 
-      {/* ── API error ── */}
       {(isError || apiErro) && !isConfigError && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center">
           <p className="font-semibold text-red-400">Não foi possível carregar as notícias</p>
@@ -343,21 +474,22 @@ export function DashbuddyNews() {
         </div>
       )}
 
-      {/* ── Skeletons ── */}
       {isLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <NewsCardSkeleton key={i} />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <NewsCardSkeleton key={`n-${i}`} />
+          ))}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <TweetCardSkeleton key={`t-${i}`} />
           ))}
         </div>
       )}
 
-      {/* ── Empty ── */}
-      {!isLoading && !isError && !apiErro && !isConfigError && noticiasFiltradas.length === 0 && (
+      {!isLoading && !isError && !apiErro && !isConfigError && feedFiltrado.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border/40 bg-card/30 py-20 text-center">
           <Newspaper className="h-10 w-10 opacity-20" />
           <div>
-            <p className="font-medium">Nenhuma notícia encontrada</p>
+            <p className="font-medium">Nenhum item neste filtro</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {filtro !== 'todos'
                 ? 'Tenta outro filtro ou actualiza.'
@@ -371,12 +503,15 @@ export function DashbuddyNews() {
         </div>
       )}
 
-      {/* ── News grid ── */}
-      {!isLoading && noticiasFiltradas.length > 0 && (
+      {!isLoading && feedFiltrado.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {noticiasFiltradas.map((n, i) => (
-            <NewsCard key={n.articleId ?? `${n.link}-${i}`} n={n} />
-          ))}
+          {feedFiltrado.map((item) =>
+            item.tipo === 'noticia' ? (
+              <NewsCard key={item.id} n={item.dados} />
+            ) : (
+              <TweetCard key={item.id} t={item.dados} />
+            )
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { mergeFeedMercado } from '@/lib/market-feed'
 import { paraJsonInsights, pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
 import type { NoticiaProcessada } from '@/lib/newsdata'
+import { buscarTweetsMercado, resolverHandlesTwitter } from '@/lib/twitter-feed'
 import { traduzirParaPortugues } from '@/lib/translate'
 
 export const dynamic = 'force-dynamic'
@@ -69,7 +71,14 @@ async function traduzirNoticias(
 export async function GET(req: NextRequest) {
   if (!permitir(clientId(req))) {
     return NextResponse.json(
-      { erro: 'Muitas tentativas. Aguarda um minuto e tenta de novo.', noticias: [], insights: [] },
+      {
+        erro: 'Muitas tentativas. Aguarda um minuto e tenta de novo.',
+        noticias: [],
+        tweets: [],
+        feed: [],
+        twitter: { ativo: false, handlesSeguidos: [], aviso: null },
+        insights: [],
+      },
       { status: 429 }
     )
   }
@@ -81,6 +90,9 @@ export async function GET(req: NextRequest) {
         {
           erro: 'NEWSDATA_API_KEY não configurada. Define a chave em .env.local na raiz do projeto.',
           noticias: [],
+          tweets: [],
+          feed: [],
+          twitter: { ativo: false, handlesSeguidos: resolverHandlesTwitter(), aviso: 'sem_token' },
           insights: [],
         },
         { status: 503 }
@@ -91,7 +103,14 @@ export async function GET(req: NextRequest) {
 
     if (erroApi === 'sem_artigos') {
       return NextResponse.json(
-        { erro: 'Não foi possível obter notícias. Verifica a chave API ou o plano na NewsData.', noticias: [], insights: [] },
+        {
+          erro: 'Não foi possível obter notícias. Verifica a chave API ou o plano na NewsData.',
+          noticias: [],
+          tweets: [],
+          feed: [],
+          twitter: { ativo: false, handlesSeguidos: [], aviso: null },
+          insights: [],
+        },
         { status: 502 }
       )
     }
@@ -99,17 +118,38 @@ export async function GET(req: NextRequest) {
     const processadas = processarNoticias(results)
 
     /* Traduz artigos que não estejam em PT (com timeout de segurança de 18s) */
-    const traduzidas = await Promise.race([
-      traduzirNoticias(processadas),
-      new Promise<NoticiaProcessada[]>((resolve) =>
-        setTimeout(() => resolve(processadas), 18_000)
-      ),
+    const twToken = process.env.TWITTER_BEARER_TOKEN?.trim() ?? ''
+
+    const [traduzidas, twitterRes] = await Promise.all([
+      Promise.race([
+        traduzirNoticias(processadas),
+        new Promise<NoticiaProcessada[]>((resolve) =>
+          setTimeout(() => resolve(processadas), 18_000)
+        ),
+      ]),
+      twToken
+        ? buscarTweetsMercado(twToken)
+        : Promise.resolve({
+            tweets: [],
+            handlesSeguidos: resolverHandlesTwitter(),
+            ativo: false,
+            aviso: 'sem_token' as const,
+          }),
     ])
+
+    const feed = mergeFeedMercado(traduzidas, twitterRes.tweets)
 
     return NextResponse.json(
       {
         totalResults: traduzidas.length,
         noticias: traduzidas,
+        tweets: twitterRes.tweets,
+        feed,
+        twitter: {
+          ativo: twitterRes.ativo,
+          handlesSeguidos: twitterRes.handlesSeguidos,
+          aviso: twitterRes.aviso ?? null,
+        },
         insights: paraJsonInsights(traduzidas),
       },
       {
@@ -123,7 +163,14 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     if (process.env.NODE_ENV === 'development') console.error('[api/news]', e)
     return NextResponse.json(
-      { erro: 'Erro interno ao processar notícias.', noticias: [], insights: [] },
+      {
+        erro: 'Erro interno ao processar notícias.',
+        noticias: [],
+        tweets: [],
+        feed: [],
+        twitter: { ativo: false, handlesSeguidos: [], aviso: null },
+        insights: [],
+      },
       { status: 500 }
     )
   }
