@@ -27,10 +27,15 @@ import {
   fetchDashboardPools,
   formatCurrency,
   formatPercent,
+  getAprColorClass,
   poolMatchesSearchQuery,
   sortPools,
 } from '@/lib/api'
-import { Search, Coins, ExternalLink, TrendingUp, AlertCircle } from 'lucide-react'
+import { resolvePoolOrDexUrl } from '@/lib/dex'
+import { getDexScreenerUrl } from '@/lib/dexscreener'
+import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
+import { Search, Coins, ExternalLink, LineChart, TrendingUp, AlertCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const POPULAR_TOKENS = ['ETH', 'USDC', 'USDT', 'BTC', 'WBTC', 'DAI', 'SOL', 'MATIC', 'ARB', 'OP']
 
@@ -139,16 +144,17 @@ export function TokenPoolsSearch() {
               )}
             </div>
             
-            <div className="rounded-md border border-border/50">
+            <div className="overflow-x-auto rounded-md border border-border/50">
               <Table>
                 <TableHeader>
                   <TableRow className="border-border/50 hover:bg-transparent">
                     <TableHead className="w-12 text-muted-foreground">#</TableHead>
-                    <TableHead className="text-muted-foreground">Pool</TableHead>
-                    <TableHead className="text-muted-foreground">Chain</TableHead>
-                    <TableHead className="text-right text-muted-foreground">APR</TableHead>
-                    <TableHead className="text-right text-muted-foreground">TVL</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    <TableHead className="min-w-[120px] text-muted-foreground">Pool</TableHead>
+                    <TableHead className="min-w-[88px] text-muted-foreground">Taxa</TableHead>
+                    <TableHead className="min-w-[100px] text-muted-foreground">Chain</TableHead>
+                    <TableHead className="min-w-[92px] text-right text-muted-foreground whitespace-nowrap">APR</TableHead>
+                    <TableHead className="min-w-[88px] text-right text-muted-foreground whitespace-nowrap">TVL</TableHead>
+                    <TableHead className="w-[88px] text-muted-foreground">Links</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -157,15 +163,16 @@ export function TokenPoolsSearch() {
                       <TableRow key={i} className="border-border/50">
                         <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                         <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                        <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                        <TableCell><Skeleton className="h-8 w-20" /></TableCell>
                       </TableRow>
                     ))
                   ) : filteredPools.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24">
+                      <TableCell colSpan={7} className="h-24">
                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                           <AlertCircle className="h-5 w-5" />
                           <span className="text-sm">Nenhuma pool encontrada para {activeToken}</span>
@@ -174,51 +181,93 @@ export function TokenPoolsSearch() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredPools.map((pool, index) => (
-                      <TableRow 
-                        key={pool.pool} 
-                        className="border-border/50 transition-colors hover:bg-muted/50"
-                      >
-                        <TableCell className="font-medium text-muted-foreground">
-                          {index === 0 ? (
-                            <TrendingUp className="h-4 w-4 text-success" />
-                          ) : (
-                            index + 1
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium text-foreground">{pool.symbol}</div>
-                            <div className="text-xs text-muted-foreground">{pool.project}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <ChainBadge chain={pool.chain} />
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-success">
-                          {formatPercent(pool.apy)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">
-                          {formatCurrency(pool.tvlUsd)}
-                        </TableCell>
-                        <TableCell>
-                          {pool.url ? (
-                            <a 
-                              href={pool.url} 
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-muted-foreground transition-colors hover:text-cyan"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          ) : (
-                            <span className="text-muted-foreground/50">
-                              <ExternalLink className="h-4 w-4" />
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    filteredPools.map((pool, index) => {
+                      const feeLabel = getPoolSwapFeeLabel(pool)
+                      const metaHint = getPoolMetaHint(pool)
+                      const dexHref = resolvePoolOrDexUrl(pool)
+                      return (
+                        <TableRow 
+                          key={pool.pool} 
+                          className="border-border/50 transition-colors hover:bg-muted/50"
+                        >
+                          <TableCell className="font-medium text-muted-foreground">
+                            {index === 0 ? (
+                              <TrendingUp className="h-4 w-4 text-success" />
+                            ) : (
+                              index + 1
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium text-foreground">{pool.symbol}</div>
+                              <div className="text-xs text-muted-foreground">{pool.project}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {feeLabel ? (
+                              <Badge
+                                variant="secondary"
+                                className="border border-border bg-secondary/80 px-2 font-mono text-xs font-semibold"
+                                title={pool.poolMeta ?? feeLabel}
+                              >
+                                {feeLabel}
+                              </Badge>
+                            ) : metaHint ? (
+                              <span className="text-xs text-muted-foreground" title={pool.poolMeta ?? ''}>
+                                {metaHint}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <ChainBadge chain={pool.chain} />
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              'text-right font-mono font-semibold tabular-nums',
+                              getAprColorClass(pool.apy)
+                            )}
+                          >
+                            <span className="inline-block min-w-[4.5rem]">{formatPercent(pool.apy)}</span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                            <span className="inline-block min-w-[4.25rem]">{formatCurrency(pool.tvlUsd)}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-0.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 text-cyan hover:bg-cyan/15 hover:text-cyan"
+                                title="Gráfico DEXScreener (nova aba)"
+                                onClick={() =>
+                                  window.open(getDexScreenerUrl(pool), '_blank', 'noopener,noreferrer')
+                                }
+                              >
+                                <LineChart className="h-4 w-4" />
+                              </Button>
+                              {dexHref ? (
+                                <a
+                                  href={dexHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Abrir esta pool na corretora (nova aba)"
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-cyan"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              ) : (
+                                <span className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground/40">
+                                  <ExternalLink className="h-4 w-4" />
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>

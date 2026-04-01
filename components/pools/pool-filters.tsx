@@ -68,6 +68,7 @@ interface PoolFiltersProps {
   chainOptions: string[]
   pools: Pool[]
   period: PoolAprPeriod
+  onAprPeriodChange: (period: PoolAprPeriod) => void
 }
 
 export function PoolFiltersComponent({
@@ -76,6 +77,7 @@ export function PoolFiltersComponent({
   chainOptions,
   pools,
   period,
+  onAprPeriodChange,
 }: PoolFiltersProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [moreChainsOpen, setMoreChainsOpen] = useState(false)
@@ -382,11 +384,42 @@ export function PoolFiltersComponent({
           Melhor APR · seguro
         </Button>
 
+        <Select value={period} onValueChange={(v) => onAprPeriodChange(v as PoolAprPeriod)}>
+          <SelectTrigger className="h-10 w-full border-gold/25 bg-card/80 sm:w-[200px] sm:shrink-0">
+            <SelectValue placeholder="Período do APR" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="5m">APR 5 minutos</SelectItem>
+            <SelectItem value="10m">APR 10 minutos</SelectItem>
+            <SelectItem value="1h">APR 1 hora</SelectItem>
+            <SelectItem value="1d">APR 24 horas</SelectItem>
+            <SelectItem value="7d">APR 7 dias</SelectItem>
+            <SelectItem value="30d">APR 30 dias</SelectItem>
+            <SelectItem value="current">APR atual</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {TVL_PRESETS[0] && (
+          <Button
+            key={TVL_PRESETS[0].value}
+            type="button"
+            size="sm"
+            variant={filters.tvlMin === TVL_PRESETS[0].value ? 'default' : 'outline'}
+            className={cn(
+              'h-9 rounded-lg text-xs sm:h-10',
+              filters.tvlMin === TVL_PRESETS[0].value && 'bg-gold text-background hover:bg-gold/90'
+            )}
+            onClick={() => updateFilter('tvlMin', TVL_PRESETS[0].value)}
+          >
+            {TVL_PRESETS[0].label}
+          </Button>
+        )}
+
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="w-full text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:w-auto sm:mr-1">
             TVL mín.
           </span>
-          {TVL_PRESETS.map((p) => (
+          {TVL_PRESETS.slice(1).map((p) => (
             <Button
               key={p.value}
               type="button"

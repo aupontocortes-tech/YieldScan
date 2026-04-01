@@ -6,13 +6,6 @@ import { useQuery } from '@tanstack/react-query'
 import { PoolFiltersComponent } from '@/components/pools/pool-filters'
 import { PoolOpportunitiesNow } from '@/components/pools/pool-opportunities-now'
 import { PoolTable } from '@/components/pools/pool-table'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
 import { aplicarFiltroBlueChips, sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
 import { PoolAprPeriod, PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
@@ -109,9 +102,11 @@ export default function PoolsPage() {
     <div className="flex flex-1 flex-col bg-background">
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
         <article className="flex flex-col gap-8 rounded-2xl border border-gold/20 bg-card/35 p-4 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-md sm:p-6 lg:p-8">
-          <header className="flex flex-col gap-4 border-b border-border/50 pb-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
+          <header className="flex flex-col gap-4 border-b border-border/50 pb-6">
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Explorador de Pools</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                Explorador de Pools
+              </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 <span className="font-medium text-foreground">
                   {filteredAndSortedPools.length.toLocaleString()} pools
@@ -127,7 +122,7 @@ export default function PoolsPage() {
                       (de {pools.length.toLocaleString()} no total)
                     </span>
                   )}
-                  . Liga/desliga pelo botão na barra de filtros (ao lado de APR).
+                  . Liga/desliga pelo botão «Só blue chips» na barra de filtros.
                 </p>
               )}
               {filters.curatedBlueChipsOnly && (
@@ -155,22 +150,6 @@ export default function PoolsPage() {
                 <p className="mt-2 text-xs font-medium text-gold">Atualizando lista…</p>
               )}
             </div>
-            <div className="shrink-0">
-              <Select value={period} onValueChange={(v) => setPeriod(v as PoolAprPeriod)}>
-                <SelectTrigger className="w-[210px] border-gold/25 bg-background/60">
-                  <SelectValue placeholder="Período do APR" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5m">APR 5 minutos</SelectItem>
-                  <SelectItem value="10m">APR 10 minutos</SelectItem>
-                  <SelectItem value="1h">APR 1 hora</SelectItem>
-                  <SelectItem value="1d">APR 24 horas</SelectItem>
-                  <SelectItem value="7d">APR 7 dias</SelectItem>
-                  <SelectItem value="30d">APR 30 dias</SelectItem>
-                  <SelectItem value="current">APR atual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </header>
 
           <div className="rounded-lg border border-border/50 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
@@ -196,6 +175,7 @@ export default function PoolsPage() {
             chainOptions={chainOptions}
             pools={poolsForExplorer}
             period={period}
+            onAprPeriodChange={setPeriod}
           />
 
           <PoolTable
