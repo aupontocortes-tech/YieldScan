@@ -211,7 +211,10 @@ export function PoolFiltersComponent({
             )}
           </span>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
+        <div
+          data-no-swipe-nav
+          className="flex gap-1.5 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]"
+        >
           {primaryChains.length === 0 ? (
             <span className="text-xs text-muted-foreground">Carregando…</span>
           ) : (
@@ -273,7 +276,10 @@ export function PoolFiltersComponent({
         <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           DEX / protocolo
         </Label>
-        <div className="flex flex-wrap gap-1.5 sm:flex-nowrap sm:overflow-x-auto sm:pb-1">
+        <div
+          data-no-swipe-nav
+          className="flex flex-wrap gap-1.5 sm:flex-nowrap sm:overflow-x-auto sm:pb-1"
+        >
           {visibleCurated.length === 0 ? (
             <span className="text-xs text-muted-foreground">
               {pools.length === 0 ? 'Carregando…' : 'Nenhuma DEX curada neste recorte.'}

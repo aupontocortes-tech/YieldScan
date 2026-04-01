@@ -28,6 +28,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
+import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
 const MAIN_NAV = [
   { name: 'Dashboard', href: '/', icon: Activity },
@@ -51,6 +52,7 @@ function pageTitle(pathname: string): string {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const title = pageTitle(pathname)
+  const swipeNav = useSwipeMainNavHandlers()
 
   return (
     <SidebarProvider>
@@ -144,7 +146,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="truncate text-sm font-semibold text-foreground">{title}</span>
           </div>
         </header>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          onTouchStart={swipeNav.onTouchStart}
+          onTouchEnd={swipeNav.onTouchEnd}
+        >
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )
