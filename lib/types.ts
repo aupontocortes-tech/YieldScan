@@ -111,7 +111,7 @@ export interface PoolFilters {
   stablecoinOnly: boolean
   sortBy: 'apr' | 'apy1d' | 'apy7d' | 'apy30d' | 'tvl' | 'volume' | 'change7d'
   sortDirection: 'asc' | 'desc'
-  period: 'current' | '1d' | '7d' | '30d'
+  period: 'current' | '5m' | '10m' | '1h' | '1d' | '7d' | '30d'
   /** Ordenação / destaque por rentabilidade, liquidez e risco (página de pools). */
   smartHighApr: boolean
   smartHighTvl: boolean

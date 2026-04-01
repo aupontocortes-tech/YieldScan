@@ -6,17 +6,33 @@ import { useQuery } from '@tanstack/react-query'
 import { PoolFiltersComponent } from '@/components/pools/pool-filters'
 import { PoolOpportunitiesNow } from '@/components/pools/pool-opportunities-now'
 import { PoolTable } from '@/components/pools/pool-table'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
 import { aplicarFiltroBlueChips, sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
-import { PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
+import { PoolAprPeriod, PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
 import { useNovelChains } from '@/hooks/use-novel-chains'
 import { DataLoadError } from '@/components/data-load-error'
 import { sortPoolsWithSmartPriority, topPoolIdsBySmartScore } from '@/lib/pool-smart-rank'
 
 export default function PoolsPage() {
   const [filters, setFilters] = useState<PoolFilters>(DEFAULT_FILTERS)
-  const [period, setPeriod] = useState<'current' | '1d' | '7d' | '30d'>('current')
+  const [period, setPeriod] = useState<PoolAprPeriod>('current')
+
+  const aprPeriodLabel: Record<PoolAprPeriod, string> = {
+    current: 'APR',
+    '5m': 'APR 5 minutos',
+    '10m': 'APR 10 minutos',
+    '1h': 'APR 1 hora',
+    '1d': 'APR 24 horas',
+    '7d': 'APR 7 dias',
+    '30d': 'APR 30 dias',
+  }
 
   const {
     data: pools,
@@ -140,38 +156,27 @@ export default function PoolsPage() {
               )}
             </div>
             <div className="shrink-0">
-              <Tabs value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
-                <TabsList className="grid w-full grid-cols-2 border border-gold/25 bg-background/60 p-1 sm:flex sm:w-auto sm:grid-cols-none">
-                  <TabsTrigger
-                    value="current"
-                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
-                  >
-                    APR atual
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="1d"
-                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
-                  >
-                    24h
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="7d"
-                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
-                  >
-                    7 dias
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="30d"
-                    className="text-xs data-[state=active]:bg-gold data-[state=active]:text-background sm:text-sm"
-                  >
-                    30 dias
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <Select value={period} onValueChange={(v) => setPeriod(v as PoolAprPeriod)}>
+                <SelectTrigger className="w-[210px] border-gold/25 bg-background/60">
+                  <SelectValue placeholder="Período do APR" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5m">APR 5 minutos</SelectItem>
+                  <SelectItem value="10m">APR 10 minutos</SelectItem>
+                  <SelectItem value="1h">APR 1 hora</SelectItem>
+                  <SelectItem value="1d">APR 24 horas</SelectItem>
+                  <SelectItem value="7d">APR 7 dias</SelectItem>
+                  <SelectItem value="30d">APR 30 dias</SelectItem>
+                  <SelectItem value="current">APR atual</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </header>
 
           <div className="rounded-lg border border-border/50 bg-background/35 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">{aprPeriodLabel[period]}: </span>
+            {(period === '5m' || period === '10m' || period === '1h') &&
+              'no feed atual (DefiLlama) não há série nativa intraday por pool; exibindo APR atual para comparação rápida.'}
             {period === 'current' &&
               'APR total atual (DefiLlama). Uniswap: use o link da pool — lá é estimativa da sua posição.'}
             {period === '1d' && 'Pools com dados de variação 24h; coluna APR = taxa atual.'}

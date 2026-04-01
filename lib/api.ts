@@ -266,6 +266,9 @@ export function getChainConfig(chainId: string) {
 export function poolDisplayApr(pool: Pool, period: PoolAprPeriod): number {
   switch (period) {
     case 'current':
+    case '5m':
+    case '10m':
+    case '1h':
     case '1d':
       return pool.apy
     case '7d':
@@ -278,7 +281,7 @@ export function poolDisplayApr(pool: Pool, period: PoolAprPeriod): number {
 }
 
 export function poolHasAprDataForPeriod(pool: Pool, period: PoolAprPeriod): boolean {
-  if (period === 'current') return true
+  if (period === 'current' || period === '5m' || period === '10m' || period === '1h') return true
   if (isMeteoraDlmmPool(pool)) {
     return true
   }

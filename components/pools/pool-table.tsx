@@ -93,6 +93,25 @@ export function PoolTable({
     </button>
   )
 
+  const aprHeaderLabel = (() => {
+    switch (period) {
+      case '5m':
+        return 'APR 5m'
+      case '10m':
+        return 'APR 10m'
+      case '1h':
+        return 'APR 1h'
+      case '1d':
+        return 'APR 24h'
+      case '7d':
+        return 'APR 7d'
+      case '30d':
+        return 'APR 30d'
+      default:
+        return 'APR'
+    }
+  })()
+
   if (isLoading) {
     return (
       <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50 shadow-inner">
@@ -142,7 +161,7 @@ export function PoolTable({
                 <SortableHeader column="tvl">TVL</SortableHeader>
               </TableHead>
               <TableHead className="text-right text-muted-foreground">
-                <SortableHeader column="apr">APR</SortableHeader>
+                <SortableHeader column="apr">{aprHeaderLabel}</SortableHeader>
               </TableHead>
               <TableHead className="w-10 p-2 text-muted-foreground" />
             </TableRow>
