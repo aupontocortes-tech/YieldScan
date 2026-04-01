@@ -271,10 +271,13 @@ function notaGeopoliticaCrypto(categoria: InsightNoticia['categoria'], resumo: s
   return resumo + add
 }
 
-/**
- * Busca notícias na NewsData.io com as palavras-chave combinadas (OR).
- */
-async function fetchQuery(key: string, q: string): Promise<NewsDataArticle[]> {
+/** Uma página NewsData; `page` = token `nextPage` da resposta anterior. */
+async function fetchNewsDataSinglePage(
+  key: string,
+  q: string,
+  pageToken: string | undefined,
+  size: string
+): Promise<{ results: NewsDataArticle[]; nextPage?: string }> {
   const url = new URL(NEWSDATA_NEWS_URL)
   url.searchParams.set('apikey', key)
   url.searchParams.set('q', q)
@@ -284,7 +287,8 @@ async function fetchQuery(key: string, q: string): Promise<NewsDataArticle[]> {
   )
   url.searchParams.set('category', 'business,technology,top')
   url.searchParams.set('prioritydomain', 'top')
-  url.searchParams.set('size', '10')
+  url.searchParams.set('size', size)
+  if (pageToken) url.searchParams.set('page', pageToken)
 
   try {
     const controller = new AbortController()
@@ -297,14 +301,43 @@ async function fetchQuery(key: string, q: string): Promise<NewsDataArticle[]> {
         signal: controller.signal,
       })
       const data = (await res.json()) as NewsDataApiResponse
-      if (data.status !== 'success' || !Array.isArray(data.results)) return []
-      return data.results
+      if (data.status !== 'success' || !Array.isArray(data.results)) {
+        return { results: [] }
+      }
+      const nextPage =
+        'nextPage' in data && typeof data.nextPage === 'string' ? data.nextPage : undefined
+      return { results: data.results, nextPage }
     } finally {
       clearTimeout(timer)
     }
   } catch {
-    return []
+    return { results: [] }
   }
+}
+
+/**
+ * Várias páginas NewsData (cada resposta traz ~`size` artigos; funde até `maxArticles`).
+ * Sem isto, uma única página (~10 itens) deixa o filtro «Cripto» quase vazio.
+ */
+async function fetchQueryAccumulate(
+  key: string,
+  q: string,
+  opts?: { maxArticles?: number; maxPages?: number; size?: string }
+): Promise<NewsDataArticle[]> {
+  const maxArticles = opts?.maxArticles ?? 10
+  const maxPages = opts?.maxPages ?? 1
+  const size = opts?.size ?? '10'
+  const out: NewsDataArticle[] = []
+  let pageToken: string | undefined
+
+  for (let p = 0; p < maxPages && out.length < maxArticles; p++) {
+    const { results, nextPage } = await fetchNewsDataSinglePage(key, q, pageToken, size)
+    if (!results.length) break
+    out.push(...results)
+    pageToken = nextPage
+    if (!pageToken) break
+  }
+  return out.slice(0, maxArticles)
 }
 
 /**
@@ -318,8 +351,8 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
   const [newsdataGeral, newsdataCripto, cryptopanicResults] = await Promise.all([
-    fetchQuery(key, KEYWORDS_Q),
-    fetchQuery(key, KEYWORDS_CRYPTO),
+    fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 24, maxPages: 4, size: '10' }),
+    fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 40, maxPages: 6, size: '10' }),
     fetchCryptopanicAsNewsDataArticles(),
   ])
 
@@ -371,10 +404,14 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
   }
 }
 
-export function processarNoticias(
-  articles: NewsDataArticle[],
-  maxPorCategoria = 10
-): NoticiaProcessada[] {
+/** Máximo de cartões por categoria no feed (cripto pode ter muito mais que uma página da API). */
+const LIMITE_POR_CATEGORIA: Record<InsightNoticia['categoria'], number> = {
+  CRIPTO: 40,
+  GEOPOLÍTICA: 16,
+  MACRO: 16,
+}
+
+export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
   if (!Array.isArray(articles)) return []
 
   // Processa e filtra por relevância mínima
@@ -400,11 +437,12 @@ export function processarNoticias(
     return db - da
   })
 
-  // Limita por categoria para equilibrar o feed
+  // Limita por categoria (cripto com tecto mais alto)
   const contagem: Record<string, number> = {}
   return todas.filter((n) => {
+    const lim = LIMITE_POR_CATEGORIA[n.categoria] ?? 12
     contagem[n.categoria] = (contagem[n.categoria] ?? 0) + 1
-    return contagem[n.categoria] <= maxPorCategoria
+    return contagem[n.categoria] <= lim
   })
 }
 

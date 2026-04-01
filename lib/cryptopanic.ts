@@ -149,6 +149,38 @@ export async function fetchCryptopanicAsNewsDataArticles(): Promise<NewsDataArti
         const mapped = mapPost(r)
         if (mapped) out.push(mapped)
       }
+
+      /* Segunda página da API (campo `next`) — mais posts num único “feed” cripto. */
+      const nextRaw = str(rec.next)
+      const nextUrl = nextRaw.startsWith('http')
+        ? nextRaw
+        : nextRaw.startsWith('/')
+          ? `https://cryptopanic.com${nextRaw}`
+          : ''
+      if (nextUrl && out.length < 35) {
+        const res2 = await fetch(nextUrl, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'yieldscan-news/1',
+          },
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        const data2: unknown = await res2.json().catch(() => null)
+        const rec2 = asRecord(data2)
+        const results2 = rec2?.results
+        if (Array.isArray(results2)) {
+          for (const item of results2) {
+            const r = asRecord(item)
+            if (!r) continue
+            const mapped = mapPost(r)
+            if (mapped) out.push(mapped)
+            if (out.length >= 40) break
+          }
+        }
+      }
+
       return out
     } finally {
       clearTimeout(timer)
