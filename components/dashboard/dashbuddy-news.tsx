@@ -220,6 +220,7 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
         )}
         <div className="flex items-end justify-between border-t border-border/30 pt-3 mt-auto">
           <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-yellow-500/70">Artigo</p>
             <p className="truncate text-[11px] font-medium text-muted-foreground">{n.fonte}</p>
             {n.dataPublicacao && (
               <p className="text-[10px] text-muted-foreground/60">{formatarData(n.dataPublicacao)}</p>
@@ -371,7 +372,13 @@ export function DashbuddyNews() {
             <h2 className="text-2xl font-bold tracking-tight">Notícias do Mercado</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Feed único · NewsData.io + posts filtrados do X · classificação automática
+            Um só feed: <span className="text-foreground/85">artigos</span> (cripto, geopolítica, macro) +{' '}
+            <span className="text-foreground/85">posts do X</span> das tuas contas, ordenados do mais recente.
+          </p>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/75 max-w-2xl">
+            Os <strong className="text-muted-foreground">cartões com imagem</strong> são notícias de media. Os{' '}
+            <strong className="text-muted-foreground">cartões com barra azul e 𝕏</strong> são o texto publicado no X.
+            Filtros <em>Todos / Cripto / Geopolítica / Macro</em> aplicam-se aos dois tipos.
           </p>
         </div>
         <Button
@@ -412,9 +419,11 @@ export function DashbuddyNews() {
         <div className="rounded-2xl border border-sky-500/25 bg-gradient-to-r from-sky-950/50 via-card/80 to-indigo-950/40 p-5 shadow-[inset_0_1px_0_0_rgba(56,189,248,0.15)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-sky-200">Ligar o X ao aplicativo</p>
+              <p className="text-sm font-semibold text-sky-200">Opcional: mostrar posts do X no mesmo feed</p>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-xl">
-                Eu não consigo criar o token por ti: tens de ir a{' '}
+                As notícias escritas já funcionam com <code className="rounded bg-muted/80 px-1">NEWSDATA_API_KEY</code>.
+                Para juntar os tweets das contas que escolheste, falta só o token do X. Eu não consigo criá-lo por ti:
+                vai a{' '}
                 <a
                   href="https://developer.twitter.com/en/portal/dashboard"
                   target="_blank"
