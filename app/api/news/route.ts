@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { paraJsonInsights, pegarNoticias, processarNoticias } from '@/lib/newsdata'
+import { paraJsonInsights, pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
 import type { NoticiaProcessada } from '@/lib/newsdata'
 import { traduzirParaPortugues } from '@/lib/translate'
 
@@ -87,17 +87,15 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const data = await pegarNoticias(key)
+    const { results, erro: erroApi } = await pegarTodasNoticias(key)
 
-    if (data.status === 'error') {
-      if (process.env.NODE_ENV === 'development') console.error('[api/news] NewsData:', JSON.stringify(data.results))
+    if (erroApi === 'sem_artigos') {
       return NextResponse.json(
         { erro: 'Não foi possível obter notícias. Verifica a chave API ou o plano na NewsData.', noticias: [], insights: [] },
         { status: 502 }
       )
     }
 
-    const results = Array.isArray(data.results) ? data.results : []
     const processadas = processarNoticias(results)
 
     /* Traduz artigos que não estejam em PT (com timeout de segurança de 18s) */
@@ -109,7 +107,7 @@ export async function GET(req: NextRequest) {
     ])
 
     return NextResponse.json({
-      totalResults: data.totalResults ?? traduzidas.length,
+      totalResults: traduzidas.length,
       noticias: traduzidas,
       insights: paraJsonInsights(traduzidas),
     })

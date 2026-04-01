@@ -56,9 +56,24 @@ export type NewsDataApiResponse =
       results: { message?: string; code?: string }
     }
 
-/** NewsData limita query a 100 chars. Foco em cripto/mercados financeiros. */
-const KEYWORDS_Q =
-  'bitcoin OR ethereum OR cripto OR blockchain OR criptomoeda OR altcoin'
+/** NewsData limita query a 100 chars. */
+const KEYWORDS_CRIPTO = 'bitcoin OR ethereum OR cripto OR blockchain OR criptomoeda OR altcoin'
+const KEYWORDS_MACRO  = 'inflation OR geopolitics OR sanctions OR tariff OR recession OR treasury'
+/** Retrocompatibilidade — usado no antigo pegarNoticias. */
+const KEYWORDS_Q = KEYWORDS_CRIPTO
+
+/**
+ * Palavras-mínimo para que um artigo seja relevante para o feed.
+ * Artigos que não contenham NENHUMA serão descartados.
+ */
+const RELEVANCE_WORDS = new Set([
+  'bitcoin','ethereum','cripto','crypto','blockchain','altcoin','defi','nft','token',
+  'inflation','inflação','fed','federal reserve','interest rate','taxa de juros',
+  'war','guerra','sanction','sanção','geopolit','tariff','tarifa',
+  'gdp','pib','recession','recessão','economy','economia','stock market',
+  'mercado','bolsa','dollar','dólar','oil','petróleo','market','mercado',
+  'coinbase','binance','solana','xrp','bnb','stablecoin','satoshi',
+])
 
 /** Fontes tratadas como maior credibilidade editorial (heurística conservadora). */
 const FONTES_ALTA = new Set(
@@ -206,32 +221,80 @@ function notaGeopoliticaCrypto(categoria: InsightNoticia['categoria'], resumo: s
 /**
  * Busca notícias na NewsData.io com as palavras-chave combinadas (OR).
  */
-export async function pegarNoticias(apiKey?: string): Promise<NewsDataApiResponse> {
-  const key = apiKey ?? process.env.NEWSDATA_API_KEY
-  if (!key?.trim()) {
-    throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
-  }
-
+async function fetchQuery(key: string, q: string): Promise<NewsDataArticle[]> {
   const url = new URL(NEWSDATA_NEWS_URL)
-  url.searchParams.set('apikey', key.trim())
-  url.searchParams.set('q', KEYWORDS_Q)
-  /** Prioridade: notícias em português (BR/PT). Opcional: NEWSDATA_LANGUAGES=pt,en */
+  url.searchParams.set('apikey', key)
+  url.searchParams.set('q', q)
   url.searchParams.set(
     'language',
     (process.env.NEWSDATA_LANGUAGES ?? 'pt,en').trim() || 'pt,en'
   )
   url.searchParams.set('category', 'business,technology,top')
-  /** Plano gratuito NewsData: normalmente máx. 10 artigos por pedido. */
+  url.searchParams.set('prioritydomain', 'top')
   url.searchParams.set('size', '10')
 
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-  })
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 12_000)
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      const data = (await res.json()) as NewsDataApiResponse
+      if (data.status !== 'success' || !Array.isArray(data.results)) return []
+      return data.results
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch {
+    return []
+  }
+}
 
-  const data = (await res.json()) as NewsDataApiResponse
-  return data
+/**
+ * Faz duas queries em paralelo (cripto + macro/geo) para obter até ~20 artigos
+ * diversificados e com fontes prioritárias. Deduplica por article_id.
+ */
+export async function pegarTodasNoticias(apiKey?: string): Promise<{
+  results: NewsDataArticle[]
+  erro?: string
+}> {
+  const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
+  if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
+
+  const [cripto, macro] = await Promise.allSettled([
+    fetchQuery(key, KEYWORDS_CRIPTO),
+    fetchQuery(key, KEYWORDS_MACRO),
+  ])
+
+  const artigos = [
+    ...(cripto.status === 'fulfilled' ? cripto.value : []),
+    ...(macro.status === 'fulfilled' ? macro.value : []),
+  ]
+
+  // Deduplica por article_id ou link
+  const seen = new Set<string>()
+  const merged: NewsDataArticle[] = []
+  for (const a of artigos) {
+    const id = (a.article_id ?? a.link ?? '').trim()
+    if (id && seen.has(id)) continue
+    if (id) seen.add(id)
+    merged.push(a)
+  }
+
+  if (merged.length === 0) return { results: [], erro: 'sem_artigos' }
+  return { results: merged }
+}
+
+/** @deprecated Use pegarTodasNoticias. Mantido para compatibilidade. */
+export async function pegarNoticias(apiKey?: string): Promise<NewsDataApiResponse> {
+  const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
+  if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
+  const results = await fetchQuery(key, KEYWORDS_Q)
+  return { status: 'success', results, totalResults: results.length }
 }
 
 /**
@@ -271,14 +334,38 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
   }
 }
 
-export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
+export function processarNoticias(
+  articles: NewsDataArticle[],
+  maxPorCategoria = 7
+): NoticiaProcessada[] {
   if (!Array.isArray(articles)) return []
-  const out: NoticiaProcessada[] = []
+
+  // Processa e filtra por relevância mínima
+  const todas: NoticiaProcessada[] = []
   for (const a of articles) {
+    // Descarta artigos sem nenhuma palavra-chave relevante
+    const fullNorm = normalizarTextoMatch(
+      [a.title, a.description].filter(Boolean).join(' ')
+    )
+    const ehRelevante = [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
+    if (!ehRelevante) continue
     const p = processarNoticia(a)
-    if (p) out.push(p)
+    if (p) todas.push(p)
   }
-  return out
+
+  // Ordena por data mais recente primeiro
+  todas.sort((a, b) => {
+    const da = a.dataPublicacao ? new Date(a.dataPublicacao.replace(' ', 'T')).getTime() : 0
+    const db = b.dataPublicacao ? new Date(b.dataPublicacao.replace(' ', 'T')).getTime() : 0
+    return db - da
+  })
+
+  // Limita por categoria para equilibrar o feed
+  const contagem: Record<string, number> = {}
+  return todas.filter((n) => {
+    contagem[n.categoria] = (contagem[n.categoria] ?? 0) + 1
+    return contagem[n.categoria] <= maxPorCategoria
+  })
 }
 
 /** JSON só com os campos obrigatórios do contrato. */

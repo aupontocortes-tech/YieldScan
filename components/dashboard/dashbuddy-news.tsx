@@ -265,26 +265,39 @@ export function DashbuddyNews() {
       {/* ── Filter chips ── */}
       {!isConfigError && !isError && (
         <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-          {FILTROS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setFiltro(f.value)}
-              className={cn(
-                'shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-all',
-                filtro === f.value
-                  ? 'border-yellow-500 bg-yellow-500 text-black shadow-sm'
-                  : 'border-border/60 bg-card/50 text-muted-foreground hover:border-yellow-500/40 hover:text-foreground'
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-          {!isLoading && noticias.length > 0 && (
-            <span className="ml-auto shrink-0 self-center text-xs text-muted-foreground/60">
-              {noticiasFiltradas.length} notícia{noticiasFiltradas.length !== 1 ? 's' : ''}
-            </span>
-          )}
+          {FILTROS.map((f) => {
+            const count =
+              f.value === 'todos'
+                ? noticias.length
+                : noticias.filter((n) => n.categoria === f.value).length
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFiltro(f.value)}
+                className={cn(
+                  'shrink-0 flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition-all',
+                  filtro === f.value
+                    ? 'border-yellow-500 bg-yellow-500 text-black shadow-sm'
+                    : 'border-border/60 bg-card/50 text-muted-foreground hover:border-yellow-500/40 hover:text-foreground'
+                )}
+              >
+                {f.label}
+                {!isLoading && count > 0 && (
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
+                      filtro === f.value
+                        ? 'bg-black/20 text-black'
+                        : 'bg-muted/60 text-muted-foreground'
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
 
