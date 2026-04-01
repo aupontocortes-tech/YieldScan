@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -21,7 +21,8 @@ interface NewsPayload {
 async function fetchNoticias(): Promise<NewsPayload> {
   const res = await fetch('/api/news', { cache: 'no-store' })
   const json = (await res.json()) as NewsPayload
-  if (!res.ok && !json.erro) throw new Error('Erro ao carregar notícias.')
+  // Lança erro para que React Query tente de novo automaticamente
+  if (!res.ok) throw new Error(json.erro ?? 'Erro ao carregar notícias.')
   return json
 }
 
@@ -226,15 +227,24 @@ export function DashbuddyNews() {
     queryFn: fetchNoticias,
     retry: 2,
     retryDelay: 2_000,
-    staleTime: 30_000,
-    gcTime: 0,             // Não guarda erros em cache após fechar a página
+    staleTime: 0,          // Sempre considera os dados desactualizados → sempre refetch ao montar
+    gcTime: 0,             // Limpa a cache quando sai da página
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   })
 
+  // Garante que se houver dados em cache com erro, refaz o pedido imediatamente
+  useEffect(() => {
+    if (isError || (data && (data as NewsPayload & { erro?: string }).erro)) {
+      void refetch()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const noticias = data?.noticias ?? []
-  const isConfigError = Boolean(data?.erro?.includes('NEWSDATA_API_KEY'))
-  const apiErro = data?.erro && !isConfigError ? data.erro : null
+  // Com fetchNoticias a lançar erro em respostas não-OK, data?.erro nunca será definido
+  // em respostas com sucesso — mas mantemos a detecção como fallback
+  const isConfigError = isError && Boolean(error?.message?.includes('NEWSDATA_API_KEY'))
+  const apiErro = isError && !isConfigError ? (error?.message ?? 'Erro ao carregar notícias.') : null
 
   const noticiasFiltradas = useMemo(() => {
     if (filtro === 'todos') return noticias
