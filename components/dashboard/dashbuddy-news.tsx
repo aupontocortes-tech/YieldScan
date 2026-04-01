@@ -22,6 +22,9 @@ interface NewsPayload {
     ativo: boolean
     handlesSeguidos: string[]
     aviso: string | null
+    mensagem?: string | null
+    contasComErro?: string[] | null
+    tweetsCount?: number
   }
   insights: InsightNoticia[]
 }
@@ -354,6 +357,10 @@ export function DashbuddyNews() {
 
   const twitterAtivo = data?.twitter?.ativo === true
   const handles = data?.twitter?.handlesSeguidos ?? []
+  const twMsg = data?.twitter?.mensagem ?? null
+  const twAviso = data?.twitter?.aviso ?? null
+  const twCount = data?.twitter?.tweetsCount ?? data?.tweets?.length ?? 0
+  const twErroApi = twAviso === 'token_invalido' || twAviso === 'sem_permissao' || twAviso === 'rate_limit'
 
   return (
     <div className="space-y-6">
@@ -379,23 +386,57 @@ export function DashbuddyNews() {
         </Button>
       </div>
 
+      {!isConfigError && !isError && data && twErroApi && twMsg && (
+        <div className="rounded-2xl border border-red-500/35 bg-red-950/30 p-4">
+          <p className="text-sm font-semibold text-red-300">Problema com a API do X</p>
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{twMsg}</p>
+        </div>
+      )}
+
+      {!isConfigError && !isError && data && twitterAtivo && twCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-200/90">
+          <span className="font-semibold text-emerald-300">X ligado</span>
+          <span className="text-muted-foreground">·</span>
+          <span>{twCount} post{twCount !== 1 ? 's' : ''} no feed agora</span>
+        </div>
+      )}
+
+      {!isConfigError && !isError && data && twitterAtivo && twCount === 0 && twMsg && !twErroApi && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/25 p-4">
+          <p className="text-sm font-semibold text-amber-200">Posts do X</p>
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{twMsg}</p>
+        </div>
+      )}
+
       {!isConfigError && !isError && data && !twitterAtivo && (
         <div className="rounded-2xl border border-sky-500/25 bg-gradient-to-r from-sky-950/50 via-card/80 to-indigo-950/40 p-5 shadow-[inset_0_1px_0_0_rgba(56,189,248,0.15)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-sky-200">Integração com o X (Twitter)</p>
+              <p className="text-sm font-semibold text-sky-200">Ligar o X ao aplicativo</p>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-xl">
-                Para misturar tweets de Trump, Walter Bloomberg (estilo), Watcher.Guru e Arthur Reis no mesmo feed,
-                adiciona <code className="rounded bg-muted px-1 py-0.5 text-foreground">TWITTER_BEARER_TOKEN</code>{' '}
-                na Vercel (ou <code className="rounded bg-muted px-1">.env.local</code>) com um Bearer Token da API v2
-                do X Developer Portal, e faz redeploy.
+                Eu não consigo criar o token por ti: tens de ir a{' '}
+                <a
+                  href="https://developer.twitter.com/en/portal/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-300 underline underline-offset-2"
+                >
+                  developer.twitter.com
+                </a>
+                , criar um projeto com acesso de leitura a tweets, copiar o{' '}
+                <strong className="text-foreground/90">Bearer Token</strong> e colar na Vercel como{' '}
+                <code className="rounded bg-muted px-1 py-0.5 text-foreground">TWITTER_BEARER_TOKEN</code>
+                (Production + Preview). Depois <strong className="text-foreground/90">Redeploy</strong>.
               </p>
+              {twMsg && (
+                <p className="mt-2 text-xs text-sky-200/80 border-l-2 border-sky-500/50 pl-2">{twMsg}</p>
+              )}
             </div>
           </div>
           {handles.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 w-full sm:w-auto">
-                Contas previstas no feed:
+                Contas no feed:
               </span>
               {handles.map((h) => (
                 <span
@@ -408,9 +449,9 @@ export function DashbuddyNews() {
             </div>
           )}
           <p className="mt-3 text-[11px] text-muted-foreground/80 border-t border-border/30 pt-3">
-            <strong className="text-foreground/90">Mais contas:</strong> usa{' '}
-            <code className="rounded bg-muted px-1">TWITTER_EXTRA_USERNAMES=conta1,conta2</code> ou substitui tudo com{' '}
-            <code className="rounded bg-muted px-1">TWITTER_USERNAMES=a,b,c</code> (sem @, separado por vírgula).
+            <strong className="text-foreground/90">Mais contas:</strong>{' '}
+            <code className="rounded bg-muted px-1">TWITTER_EXTRA_USERNAMES=a,b</code> ou lista completa{' '}
+            <code className="rounded bg-muted px-1">TWITTER_USERNAMES=...</code>
           </p>
         </div>
       )}

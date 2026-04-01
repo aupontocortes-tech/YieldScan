@@ -76,7 +76,14 @@ export async function GET(req: NextRequest) {
         noticias: [],
         tweets: [],
         feed: [],
-        twitter: { ativo: false, handlesSeguidos: [], aviso: null },
+        twitter: {
+          ativo: false,
+          handlesSeguidos: [],
+          aviso: null,
+          mensagem: null,
+          contasComErro: null,
+          tweetsCount: 0,
+        },
         insights: [],
       },
       { status: 429 }
@@ -92,7 +99,15 @@ export async function GET(req: NextRequest) {
           noticias: [],
           tweets: [],
           feed: [],
-          twitter: { ativo: false, handlesSeguidos: resolverHandlesTwitter(), aviso: 'sem_token' },
+          twitter: {
+            ativo: false,
+            handlesSeguidos: resolverHandlesTwitter(),
+            aviso: 'sem_token',
+            mensagem:
+              'Sem TWITTER_BEARER_TOKEN no servidor. Na Vercel: Project → Settings → Environment Variables → adiciona o token e redeploy.',
+            contasComErro: null,
+            tweetsCount: 0,
+          },
           insights: [],
         },
         { status: 503 }
@@ -108,7 +123,14 @@ export async function GET(req: NextRequest) {
           noticias: [],
           tweets: [],
           feed: [],
-          twitter: { ativo: false, handlesSeguidos: [], aviso: null },
+          twitter: {
+            ativo: false,
+            handlesSeguidos: [],
+            aviso: null,
+            mensagem: null,
+            contasComErro: null,
+            tweetsCount: 0,
+          },
           insights: [],
         },
         { status: 502 }
@@ -134,6 +156,8 @@ export async function GET(req: NextRequest) {
             handlesSeguidos: resolverHandlesTwitter(),
             ativo: false,
             aviso: 'sem_token' as const,
+            mensagem:
+              'Sem TWITTER_BEARER_TOKEN no servidor. Na Vercel: Settings → Environment Variables → adiciona o token e redeploy.',
           }),
     ])
 
@@ -149,6 +173,9 @@ export async function GET(req: NextRequest) {
           ativo: twitterRes.ativo,
           handlesSeguidos: twitterRes.handlesSeguidos,
           aviso: twitterRes.aviso ?? null,
+          mensagem: twitterRes.mensagem ?? null,
+          contasComErro: twitterRes.contasComErro ?? null,
+          tweetsCount: twitterRes.tweets.length,
         },
         insights: paraJsonInsights(traduzidas),
       },
@@ -168,7 +195,14 @@ export async function GET(req: NextRequest) {
         noticias: [],
         tweets: [],
         feed: [],
-        twitter: { ativo: false, handlesSeguidos: [], aviso: null },
+        twitter: {
+          ativo: false,
+          handlesSeguidos: [],
+          aviso: null,
+          mensagem: null,
+          contasComErro: null,
+          tweetsCount: 0,
+        },
         insights: [],
       },
       { status: 500 }

@@ -1,17 +1,19 @@
 /**
  * Twitter / X API v2 (Bearer Token, app-only).
- * Variáveis: TWITTER_BEARER_TOKEN (obrigatório para tweets)
- * TWITTER_USERNAMES — lista completa (substitui defaults) sem @, separada por vírgula
- * TWITTER_EXTRA_USERNAMES — acrescenta contas às predefinidas
  *
- * Defaults: Trump, conta estilo headlines Bloomberg (DeItaone), Watcher.Guru, Arthur Reis.
+ * OBRIGATÓRIO no servidor: TWITTER_BEARER_TOKEN (Vercel → Environment Variables).
+ * Sem isto, não há tweets — não é possível “ligar” o X sem o teu token.
+ *
+ * TWITTER_USERNAMES — lista completa sem @ (substitui defaults)
+ * TWITTER_EXTRA_USERNAMES — acrescenta contas
+ * TWITTER_STRICT_ONLY=1 — só tweets que passem filtro estrito (menos posts)
  */
 
 import { analisarTextoMercado, type InsightNoticia } from '@/lib/newsdata'
 
 const TWITTER_API = 'https://api.twitter.com/2'
 
-/** Contas base pedidas pelo produto (handles sem @). Walter Bloomberg → @DeItaone (headlines mercado). */
+/** Contas base (sem @). Walter Bloomberg → estilo headlines @DeItaone. */
 export const TWITTER_HANDLES_PADRAO = [
   'realDonaldTrump',
   'DeItaone',
@@ -32,11 +34,20 @@ export interface TweetMercadoItem {
   tipo: 'tweet'
 }
 
+/** Palavras que alargam o feed além de cripto/macro/geo (política, mercado, breaking). */
+const RE_RELAXADO =
+  /\b(trump|biden|white\s*house|president|tariff|tariffs|china|trade|nato|war|iran|israel|ukraine|gaza|oil|opec|fed|powell|rate\s*cut|stock|nasdaq|sp\s*500|s&p|dollar|euro|yen|yield|treasury|inflation|jobs\s*report|cpi|gdp|breaking|just\s*in|alert|report|crypto|bitcoin|btc|eth|ethereum|solana|etf|sec|regulation)\b/i
+
 export interface TwitterFeedResult {
   tweets: TweetMercadoItem[]
   handlesSeguidos: string[]
   ativo: boolean
-  aviso?: string
+  /** Código interno para UI */
+  aviso?: 'sem_token' | 'token_invalido' | 'sem_permissao' | 'rate_limit' | 'ok'
+  /** Texto seguro para mostrar ao utilizador (PT) */
+  mensagem?: string
+  /** Contas com falha (404, etc.) */
+  contasComErro?: string[]
 }
 
 function parseHandlesList(raw: string | undefined): string[] {
@@ -56,7 +67,11 @@ export function resolverHandlesTwitter(): string[] {
   return [...new Set([...TWITTER_HANDLES_PADRAO, ...extra])]
 }
 
-/** Remove t.co e espaços extra; mantém @mentions (contexto). */
+function strictOnly(): boolean {
+  return process.env.TWITTER_STRICT_ONLY === '1' || process.env.TWITTER_STRICT_ONLY === 'true'
+}
+
+/** Remove t.co e espaços extra; mantém @mentions. */
 export function limparTextoTweet(texto: string): string {
   let t = texto.replace(/https?:\/\/t\.co\/\w+/gi, '').replace(/\s+/g, ' ').trim()
   if (t.length > 560) t = t.slice(0, 557).trim() + '…'
@@ -72,6 +87,18 @@ function ativosDoTweet(full: string, cat: InsightNoticia['categoria']): InsightN
   return Array.from(out)
 }
 
+/** Incluir tweet: filtro estrito OU (modo normal) relaxado para contas do feed. */
+function incluirTweetNoFeed(limpo: string): boolean {
+  if (limpo.length < 12) return false
+  const { relevanteParaFeed } = analisarTextoMercado(limpo)
+  if (relevanteParaFeed) return true
+  if (strictOnly()) return false
+  if (limpo.length >= 28 && RE_RELAXADO.test(limpo)) return true
+  /* Posts longos sem palavra-chave (ex. política geral) — máx. controlo por conta no loop */
+  if (limpo.length >= 55) return true
+  return false
+}
+
 async function twitterFetch<T>(
   path: string,
   token: string,
@@ -80,7 +107,7 @@ async function twitterFetch<T>(
   const url = new URL(`${TWITTER_API}${path}`)
   for (const [k, v] of Object.entries(searchParams)) url.searchParams.set(k, v)
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 10_000)
+  const timer = setTimeout(() => controller.abort(), 18_000)
   try {
     const res = await fetch(url.toString(), {
       method: 'GET',
@@ -97,26 +124,33 @@ async function twitterFetch<T>(
 
 interface TwitterUser {
   data?: { id: string; name: string; username: string }
-  errors?: { detail?: string }[]
+  errors?: { detail?: string; title?: string }[]
 }
 
 interface TwitterTweets {
   data?: { id: string; text: string; created_at?: string }[]
-  meta?: { result_count?: number }
-  errors?: { detail?: string }[]
+  errors?: { detail?: string; title?: string }[]
 }
 
-/**
- * Busca tweets recentes por utilizador, filtra por relevância mercado/cripto/geo.
- * Máx. ~3 tweets relevantes por conta (para poupar rate limit).
- */
 export async function buscarTweetsMercado(bearerToken: string): Promise<TwitterFeedResult> {
   const handles = resolverHandlesTwitter()
   if (!bearerToken.trim()) {
-    return { tweets: [], handlesSeguidos: handles, ativo: false, aviso: 'sem_token' }
+    return {
+      tweets: [],
+      handlesSeguidos: handles,
+      ativo: false,
+      aviso: 'sem_token',
+      mensagem:
+        'O X não está ligado: falta TWITTER_BEARER_TOKEN no servidor (Vercel → Settings → Environment Variables).',
+    }
   }
 
   const tweets: TweetMercadoItem[] = []
+  const contasComErro: string[] = []
+  let tokenInvalido = false
+  let semPermissao = false
+  let rateLimit = false
+  let utilizadoresOk = 0
 
   for (const username of handles) {
     const userRes = await twitterFetch<TwitterUser>(
@@ -124,12 +158,29 @@ export async function buscarTweetsMercado(bearerToken: string): Promise<TwitterF
       bearerToken,
       { 'user.fields': 'name,username' }
     )
+
+    if (userRes.status === 401) {
+      tokenInvalido = true
+      break
+    }
+    if (userRes.status === 403) {
+      semPermissao = true
+      break
+    }
+    if (userRes.status === 429) {
+      rateLimit = true
+      break
+    }
+
     if (!userRes.ok || !userRes.data.data?.id) {
+      contasComErro.push(username)
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`[twitter] user @${username}:`, userRes.status, userRes.data)
+        console.warn(`[twitter] @${username}`, userRes.status, userRes.data)
       }
       continue
     }
+
+    utilizadoresOk++
     const { id: userId, name: autorNome, username: autorHandle } = userRes.data.data
 
     const twRes = await twitterFetch<TwitterTweets>(`/users/${userId}/tweets`, bearerToken, {
@@ -138,16 +189,40 @@ export async function buscarTweetsMercado(bearerToken: string): Promise<TwitterF
       'tweet.fields': 'created_at',
     })
 
-    if (!twRes.ok || !Array.isArray(twRes.data.data)) continue
+    if (twRes.status === 401) {
+      tokenInvalido = true
+      break
+    }
+    if (twRes.status === 403) {
+      semPermissao = true
+      break
+    }
+    if (twRes.status === 429) {
+      rateLimit = true
+      break
+    }
+
+    if (!twRes.ok || !Array.isArray(twRes.data.data)) {
+      contasComErro.push(`${username}(tweets)`)
+      continue
+    }
 
     let aceites = 0
-    const maxPorConta = 4
+    let longosGenericos = 0
+    const maxPorConta = 5
+    const maxLongosGenericos = 2
+
     for (const tw of twRes.data.data) {
       if (aceites >= maxPorConta) break
       const limpo = limparTextoTweet(tw.text)
-      if (limpo.length < 12) continue
-      const { categoria, impacto, relevanteParaFeed, normalizado } = analisarTextoMercado(limpo)
-      if (!relevanteParaFeed) continue
+      const analise = analisarTextoMercado(limpo)
+
+      if (!incluirTweetNoFeed(limpo)) continue
+
+      if (!analise.relevanteParaFeed && limpo.length >= 55 && !RE_RELAXADO.test(limpo)) {
+        if (longosGenericos >= maxLongosGenericos) continue
+        longosGenericos++
+      }
 
       const dataIso = tw.created_at
         ? new Date(tw.created_at).toISOString()
@@ -161,21 +236,47 @@ export async function buscarTweetsMercado(bearerToken: string): Promise<TwitterF
         autorHandle,
         url: `https://x.com/${autorHandle}/status/${tw.id}`,
         dataPublicacao: dataIso,
-        categoria,
-        impacto,
-        ativos: ativosDoTweet(normalizado, categoria),
+        categoria: analise.categoria,
+        impacto: analise.impacto,
+        ativos: ativosDoTweet(analise.normalizado, analise.categoria),
       })
       aceites++
     }
 
-    await new Promise((r) => setTimeout(r, 120))
+    await new Promise((r) => setTimeout(r, 150))
   }
 
   tweets.sort((a, b) => new Date(b.dataPublicacao).getTime() - new Date(a.dataPublicacao).getTime())
+  const tweetsOut = tweets.slice(0, 45)
+
+  let aviso: TwitterFeedResult['aviso'] = 'ok'
+  let mensagem: string | undefined
+
+  if (tokenInvalido) {
+    aviso = 'token_invalido'
+    mensagem =
+      'Bearer Token do X inválido ou expirado. Gera um novo em developer.twitter.com → Keys and tokens.'
+  } else if (semPermissao) {
+    aviso = 'sem_permissao'
+    mensagem =
+      'O projeto do X não tem permissão para ler timelines (erro 403). No Developer Portal ativa OAuth 2.0 e o nível de acesso que inclua “Read” de tweets, ou subscreve um plano com acesso à API v2.'
+  } else if (rateLimit) {
+    aviso = 'rate_limit'
+    mensagem = 'Limite de pedidos da API do X atingido. Espera alguns minutos e carrega em Atualizar.'
+  } else if (tweetsOut.length === 0 && utilizadoresOk === 0 && contasComErro.length > 0) {
+    aviso = 'ok'
+    mensagem = `Nenhuma conta resolvida. Verifica os @: ${contasComErro.map((c) => `@${c.replace('(tweets)', '')}`).join(', ')} — podem estar errados ou suspensos.`
+  } else if (tweetsOut.length === 0 && utilizadoresOk > 0) {
+    mensagem =
+      'A API do X respondeu mas não há tweets recentes que passem o filtro. Tenta TWITTER_STRICT_ONLY=0 (predefinição) ou aumenta atividade nas contas.'
+  }
 
   return {
-    tweets: tweets.slice(0, 40),
+    tweets: tweetsOut,
     handlesSeguidos: handles,
     ativo: true,
+    aviso,
+    mensagem,
+    contasComErro: contasComErro.length ? contasComErro : undefined,
   }
 }
