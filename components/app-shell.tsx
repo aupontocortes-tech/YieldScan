@@ -9,6 +9,7 @@ import {
   BookOpen,
   Coins,
   LayoutGrid,
+  Newspaper,
   Sparkles,
 } from 'lucide-react'
 import {
@@ -32,6 +33,7 @@ import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
 const MAIN_NAV = [
   { name: 'Dashboard', href: '/', icon: Activity },
+  { name: 'Notícias', href: '/news', icon: Newspaper },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
   { name: 'DEX', href: '/dex', icon: LayoutGrid },
   { name: 'Swap', href: '/swap', icon: ArrowLeftRight },
@@ -39,6 +41,7 @@ const MAIN_NAV = [
 
 function pageTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard'
+  if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
   if (pathname.startsWith('/pools')) return 'Pools'
   if (pathname.startsWith('/dex')) return 'DEX'
   if (pathname.startsWith('/swap')) return 'Swap'
