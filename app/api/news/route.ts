@@ -106,11 +106,20 @@ export async function GET(req: NextRequest) {
       ),
     ])
 
-    return NextResponse.json({
-      totalResults: traduzidas.length,
-      noticias: traduzidas,
-      insights: paraJsonInsights(traduzidas),
-    })
+    return NextResponse.json(
+      {
+        totalResults: traduzidas.length,
+        noticias: traduzidas,
+        insights: paraJsonInsights(traduzidas),
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+        },
+      }
+    )
   } catch (e) {
     if (process.env.NODE_ENV === 'development') console.error('[api/news]', e)
     return NextResponse.json(

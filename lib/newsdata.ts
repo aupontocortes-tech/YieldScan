@@ -56,8 +56,9 @@ export type NewsDataApiResponse =
       results: { message?: string; code?: string }
     }
 
-/** Query única combinada — sem pedidos paralelos (evita rate-limit da NewsData free). */
-const KEYWORDS_Q = 'bitcoin OR ethereum OR cripto OR inflation OR geopolitics OR blockchain'
+/** Query única — cripto primeiro para o feed da API favorecer esse eixo. */
+const KEYWORDS_Q =
+  'bitcoin OR ethereum OR cripto OR blockchain OR altcoin OR inflation OR geopolitics'
 
 /**
  * Palavras-mínimo para que um artigo seja relevante para o feed.
@@ -166,10 +167,14 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
   const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
 
-  if (cry && !geo) return 'CRIPTO'
+  /**
+   * Cripto tem prioridade quando o texto menciona BTC/ETH/blockchain/etc.
+   * Antes: `cry && !geo` punía notícias tipo "Bitcoin sobe com tensão no Médio Oriente"
+   * e mandava tudo para Geopolítica — o filtro "Cripto" ficava vazio ou estático.
+   */
+  if (cry) return 'CRIPTO'
   if (geo) return 'GEOPOLÍTICA'
   if (macro) return 'MACRO'
-  if (cry) return 'CRIPTO'
   if (/economy|economic|economia|mercado|finance|financas|financeiro/.test(blob)) return 'MACRO'
   return 'MACRO'
 }
