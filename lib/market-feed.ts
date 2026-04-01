@@ -1,9 +1,10 @@
 import type { NoticiaProcessada } from '@/lib/newsdata'
-import type { TweetMercadoItem } from '@/lib/twitter-feed'
 
-export type ItemFeedMercado =
-  | { tipo: 'noticia'; id: string; ordenadoEm: string; dados: NoticiaProcessada }
-  | { tipo: 'tweet'; id: string; ordenadoEm: string; dados: TweetMercadoItem }
+export type ItemFeedNoticia = {
+  id: string
+  ordenadoEm: string
+  dados: NoticiaProcessada
+}
 
 function ts(s: string | null | undefined): number {
   if (!s) return 0
@@ -11,29 +12,13 @@ function ts(s: string | null | undefined): number {
   return Number.isFinite(t) ? t : 0
 }
 
-/** Junta notícias e tweets num único feed ordenado por data (mais recente primeiro). */
-export function mergeFeedMercado(
-  noticias: NoticiaProcessada[],
-  tweets: TweetMercadoItem[]
-): ItemFeedMercado[] {
-  const items: ItemFeedMercado[] = []
-  for (const n of noticias) {
-    const id = n.articleId ?? n.link
-    items.push({
-      tipo: 'noticia',
-      id: `n-${id}`,
-      ordenadoEm: n.dataPublicacao ?? '',
-      dados: n,
-    })
-  }
-  for (const t of tweets) {
-    items.push({
-      tipo: 'tweet',
-      id: `t-${t.id}`,
-      ordenadoEm: t.dataPublicacao,
-      dados: t,
-    })
-  }
+/** Ordena notícias por data (mais recente primeiro). */
+export function noticiasParaFeed(noticias: NoticiaProcessada[]): ItemFeedNoticia[] {
+  const items: ItemFeedNoticia[] = noticias.map((n) => ({
+    id: `n-${n.articleId ?? n.link}`,
+    ordenadoEm: n.dataPublicacao ?? '',
+    dados: n,
+  }))
   items.sort((a, b) => ts(b.ordenadoEm) - ts(a.ordenadoEm))
   return items
 }

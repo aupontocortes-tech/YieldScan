@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { mergeFeedMercado } from '@/lib/market-feed'
+import { noticiasParaFeed } from '@/lib/market-feed'
 import { paraJsonInsights, pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
 import type { NoticiaProcessada } from '@/lib/newsdata'
-import { buscarTweetsMercado, resolverHandlesTwitter } from '@/lib/twitter-feed'
 import { traduzirParaPortugues } from '@/lib/translate'
 
 export const dynamic = 'force-dynamic'
@@ -44,7 +43,6 @@ function normalizarLang(lang: string | null): string {
   if (l === 'english' || l.startsWith('en')) return 'en'
   if (l === 'spanish' || l.startsWith('es')) return 'es'
   if (l === 'french' || l.startsWith('fr')) return 'fr'
-  // Para qualquer outro, assume código ISO de 2 chars
   return l.slice(0, 2)
 }
 
@@ -74,16 +72,7 @@ export async function GET(req: NextRequest) {
       {
         erro: 'Muitas tentativas. Aguarda um minuto e tenta de novo.',
         noticias: [],
-        tweets: [],
         feed: [],
-        twitter: {
-          ativo: false,
-          handlesSeguidos: [],
-          aviso: null,
-          mensagem: null,
-          contasComErro: null,
-          tweetsCount: 0,
-        },
         insights: [],
       },
       { status: 429 }
@@ -97,17 +86,7 @@ export async function GET(req: NextRequest) {
         {
           erro: 'NEWSDATA_API_KEY não configurada. Define a chave em .env.local na raiz do projeto.',
           noticias: [],
-          tweets: [],
           feed: [],
-          twitter: {
-            ativo: false,
-            handlesSeguidos: resolverHandlesTwitter(),
-            aviso: 'sem_token',
-            mensagem:
-              'Sem TWITTER_BEARER_TOKEN no servidor. Na Vercel: Project → Settings → Environment Variables → adiciona o token e redeploy.',
-            contasComErro: null,
-            tweetsCount: 0,
-          },
           insights: [],
         },
         { status: 503 }
@@ -121,16 +100,7 @@ export async function GET(req: NextRequest) {
         {
           erro: 'Não foi possível obter notícias. Verifica a chave API ou o plano na NewsData.',
           noticias: [],
-          tweets: [],
           feed: [],
-          twitter: {
-            ativo: false,
-            handlesSeguidos: [],
-            aviso: null,
-            mensagem: null,
-            contasComErro: null,
-            tweetsCount: 0,
-          },
           insights: [],
         },
         { status: 502 }
@@ -139,44 +109,20 @@ export async function GET(req: NextRequest) {
 
     const processadas = processarNoticias(results)
 
-    /* Traduz artigos que não estejam em PT (com timeout de segurança de 18s) */
-    const twToken = process.env.TWITTER_BEARER_TOKEN?.trim() ?? ''
-
-    const [traduzidas, twitterRes] = await Promise.all([
-      Promise.race([
-        traduzirNoticias(processadas),
-        new Promise<NoticiaProcessada[]>((resolve) =>
-          setTimeout(() => resolve(processadas), 18_000)
-        ),
-      ]),
-      twToken
-        ? buscarTweetsMercado(twToken)
-        : Promise.resolve({
-            tweets: [],
-            handlesSeguidos: resolverHandlesTwitter(),
-            ativo: false,
-            aviso: 'sem_token' as const,
-            mensagem:
-              'Sem TWITTER_BEARER_TOKEN no servidor. Na Vercel: Settings → Environment Variables → adiciona o token e redeploy.',
-          }),
+    const traduzidas = await Promise.race([
+      traduzirNoticias(processadas),
+      new Promise<NoticiaProcessada[]>((resolve) =>
+        setTimeout(() => resolve(processadas), 18_000)
+      ),
     ])
 
-    const feed = mergeFeedMercado(traduzidas, twitterRes.tweets)
+    const feed = noticiasParaFeed(traduzidas)
 
     return NextResponse.json(
       {
         totalResults: traduzidas.length,
         noticias: traduzidas,
-        tweets: twitterRes.tweets,
         feed,
-        twitter: {
-          ativo: twitterRes.ativo,
-          handlesSeguidos: twitterRes.handlesSeguidos,
-          aviso: twitterRes.aviso ?? null,
-          mensagem: twitterRes.mensagem ?? null,
-          contasComErro: twitterRes.contasComErro ?? null,
-          tweetsCount: twitterRes.tweets.length,
-        },
         insights: paraJsonInsights(traduzidas),
       },
       {
@@ -193,16 +139,7 @@ export async function GET(req: NextRequest) {
       {
         erro: 'Erro interno ao processar notícias.',
         noticias: [],
-        tweets: [],
         feed: [],
-        twitter: {
-          ativo: false,
-          handlesSeguidos: [],
-          aviso: null,
-          mensagem: null,
-          contasComErro: null,
-          tweetsCount: 0,
-        },
         insights: [],
       },
       { status: 500 }

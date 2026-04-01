@@ -3,7 +3,11 @@
  * Defina NEWSDATA_API_KEY em `.env.local` (nunca commite a chave).
  *
  * Endpoint pedido pelo produto: https://newsdata.io/api/1/news
+ *
+ * Notícias cripto extra: CryptoPanic (Developer API v2) — CRYPTOPANIC_AUTH_TOKEN.
  */
+
+import { fetchCryptopanicAsNewsDataArticles, mergeArticlesDedupe } from '@/lib/cryptopanic'
 
 export const NEWSDATA_NEWS_URL = 'https://newsdata.io/api/1/news'
 
@@ -56,16 +60,20 @@ export type NewsDataApiResponse =
       results: { message?: string; code?: string }
     }
 
-/** Query única — cripto primeiro para o feed da API favorecer esse eixo. */
+/** Query geral: macro, geo e mercado. */
 const KEYWORDS_Q =
   'bitcoin OR ethereum OR cripto OR blockchain OR altcoin OR inflation OR geopolitics'
+
+/** Segunda query só cripto — a geral muitas vezes vem cheia de macro/geo e o filtro «Cripto» ficava vazio. */
+const KEYWORDS_CRYPTO =
+  'bitcoin OR ethereum OR cryptocurrency OR solana OR blockchain OR defi OR stablecoin OR altcoin OR xrp OR ripple OR binance OR coinbase OR web3 OR nft OR memecoin OR halving'
 
 /**
  * Palavras-mínimo para que um artigo seja relevante para o feed.
  * Artigos que não contenham NENHUMA serão descartados.
  */
 const RELEVANCE_WORDS = new Set([
-  'bitcoin','ethereum','cripto','crypto','blockchain','altcoin','defi','nft','token',
+  'bitcoin','ethereum','cripto','crypto','cryptocurrency','blockchain','altcoin','defi','nft','token',
   'inflation','inflação','fed','federal reserve','interest rate','taxa de juros',
   'war','guerra','sanction','sanção','geopolit','tariff','tarifa',
   'gdp','pib','recession','recessão','economy','economia','stock market',
@@ -112,7 +120,7 @@ const RE_GEO =
 const RE_MACRO =
   /\b(fed|federal reserve|taxa de juros|interest rate|juros|inflacao|inflation|cpi|pib|gdp|recessao|recession|desemprego|unemployment|tesouro|treasury|banco central|central bank|bce|ecb|boj|macroeconom|politica monetaria|monetary policy|fiscal|selic)\b/i
 const RE_CRYPTO =
-  /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoeda|cryptocurrency|blockchain|defi|stablecoin|stable coin|altcoin|solana|token|etf\s*bitcoin|spot\s*etf)\b/i
+  /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
 
 const RE_POS =
   /\b(approval|approve|aprovado|homologado|adoption|adocao|breakthrough|partnership|parceria|record high|recorde|all-?time high|rally|surge\s+approval|etf\s+approved|launch\s+success|alta\s+forte)\b/i
@@ -160,19 +168,38 @@ function textoParaAnalise(a: NewsDataArticle): string {
   return normalizarTextoMatch(parts)
 }
 
+function categoriasApiIndicamCripto(cats: string[] | null | undefined): boolean {
+  if (!cats?.length) return false
+  return cats.some((c) => {
+    const x = c.toLowerCase()
+    return (
+      x === 'crypto' ||
+      x === 'cryptocurrency' ||
+      x.includes('crypto') ||
+      x.includes('blockchain') ||
+      x.includes('bitcoin') ||
+      x.includes('ethereum') ||
+      x.includes('defi')
+    )
+  })
+}
+
 function classificarCategoria(full: string, catsApi: string[] | null | undefined): InsightNoticia['categoria'] {
+  if (categoriasApiIndicamCripto(catsApi)) return 'CRIPTO'
+
   const catJoined = (catsApi ?? []).join(' ').toLowerCase()
   const blob = `${full} ${catJoined}`
   const geo = RE_GEO.test(blob)
   const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
+  /* Futuros/swaps sobre cripto (ex. Índia Gen Z + futures) */
+  const futuroCripto =
+    /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
 
   /**
    * Cripto tem prioridade quando o texto menciona BTC/ETH/blockchain/etc.
-   * Antes: `cry && !geo` punía notícias tipo "Bitcoin sobe com tensão no Médio Oriente"
-   * e mandava tudo para Geopolítica — o filtro "Cripto" ficava vazio ou estático.
    */
-  if (cry) return 'CRIPTO'
+  if (cry || futuroCripto) return 'CRIPTO'
   if (geo) return 'GEOPOLÍTICA'
   if (macro) return 'MACRO'
   if (/economy|economic|economia|mercado|finance|financas|financeiro/.test(blob)) return 'MACRO'
@@ -186,7 +213,7 @@ function classificarImpacto(full: string): InsightNoticia['impacto'] {
 }
 
 /**
- * Análise de texto livre (ex.: tweets) com as mesmas regras de categoria/impacto das notícias.
+ * Análise de texto livre com as mesmas regras de categoria/impacto das notícias.
  * `relevanteParaFeed`: cripto, macro, geopolítica ou mercado em geral.
  */
 export function analisarTextoMercado(textoBruto: string): {
@@ -281,8 +308,7 @@ async function fetchQuery(key: string, q: string): Promise<NewsDataArticle[]> {
 }
 
 /**
- * Pedido único à NewsData com query combinada cripto+macro.
- * Um só pedido evita rate-limiting da chave gratuita.
+ * NewsData (cripto+macro+geo) + opcional CryptoPanic (cripto), fundidos sem URLs duplicadas.
  */
 export async function pegarTodasNoticias(apiKey?: string): Promise<{
   results: NewsDataArticle[]
@@ -291,7 +317,16 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
-  const results = await fetchQuery(key, KEYWORDS_Q)
+  const [newsdataGeral, newsdataCripto, cryptopanicResults] = await Promise.all([
+    fetchQuery(key, KEYWORDS_Q),
+    fetchQuery(key, KEYWORDS_CRYPTO),
+    fetchCryptopanicAsNewsDataArticles(),
+  ])
+
+  const results = mergeArticlesDedupe(
+    mergeArticlesDedupe(newsdataGeral, newsdataCripto),
+    cryptopanicResults
+  )
   if (results.length === 0) return { results: [], erro: 'sem_artigos' }
   return { results }
 }
@@ -310,7 +345,10 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
   const resumoBase = resumoDuasLinhas(baseText || title)
   const fullLower = textoParaAnalise(article)
 
-  const categoria = classificarCategoria(fullLower, article.category ?? null)
+  const categoria =
+    typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-')
+      ? 'CRIPTO'
+      : classificarCategoria(fullLower, article.category ?? null)
   let resumo = notaGeopoliticaCrypto(categoria, resumoBase || title)
 
   const impacto = classificarImpacto(fullLower)
@@ -335,7 +373,7 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
 
 export function processarNoticias(
   articles: NewsDataArticle[],
-  maxPorCategoria = 7
+  maxPorCategoria = 10
 ): NoticiaProcessada[] {
   if (!Array.isArray(articles)) return []
 
@@ -346,7 +384,10 @@ export function processarNoticias(
     const fullNorm = normalizarTextoMatch(
       [a.title, a.description].filter(Boolean).join(' ')
     )
-    const ehRelevante = [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
+    const fromCryptopanic =
+      typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')
+    const ehRelevante =
+      fromCryptopanic || [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
     if (!ehRelevante) continue
     const p = processarNoticia(a)
     if (p) todas.push(p)
