@@ -56,11 +56,8 @@ export type NewsDataApiResponse =
       results: { message?: string; code?: string }
     }
 
-/** NewsData limita query a 100 chars. */
-const KEYWORDS_CRIPTO = 'bitcoin OR ethereum OR cripto OR blockchain OR criptomoeda OR altcoin'
-const KEYWORDS_MACRO  = 'inflation OR geopolitics OR sanctions OR tariff OR recession OR treasury'
-/** Retrocompatibilidade — usado no antigo pegarNoticias. */
-const KEYWORDS_Q = KEYWORDS_CRIPTO
+/** Query única combinada — sem pedidos paralelos (evita rate-limit da NewsData free). */
+const KEYWORDS_Q = 'bitcoin OR ethereum OR cripto OR inflation OR geopolitics OR blockchain'
 
 /**
  * Palavras-mínimo para que um artigo seja relevante para o feed.
@@ -255,8 +252,8 @@ async function fetchQuery(key: string, q: string): Promise<NewsDataArticle[]> {
 }
 
 /**
- * Faz duas queries em paralelo (cripto + macro/geo) para obter até ~20 artigos
- * diversificados e com fontes prioritárias. Deduplica por article_id.
+ * Pedido único à NewsData com query combinada cripto+macro.
+ * Um só pedido evita rate-limiting da chave gratuita.
  */
 export async function pegarTodasNoticias(apiKey?: string): Promise<{
   results: NewsDataArticle[]
@@ -265,36 +262,9 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
-  const [cripto, macro] = await Promise.allSettled([
-    fetchQuery(key, KEYWORDS_CRIPTO),
-    fetchQuery(key, KEYWORDS_MACRO),
-  ])
-
-  const artigos = [
-    ...(cripto.status === 'fulfilled' ? cripto.value : []),
-    ...(macro.status === 'fulfilled' ? macro.value : []),
-  ]
-
-  // Deduplica por article_id ou link
-  const seen = new Set<string>()
-  const merged: NewsDataArticle[] = []
-  for (const a of artigos) {
-    const id = (a.article_id ?? a.link ?? '').trim()
-    if (id && seen.has(id)) continue
-    if (id) seen.add(id)
-    merged.push(a)
-  }
-
-  if (merged.length === 0) return { results: [], erro: 'sem_artigos' }
-  return { results: merged }
-}
-
-/** @deprecated Use pegarTodasNoticias. Mantido para compatibilidade. */
-export async function pegarNoticias(apiKey?: string): Promise<NewsDataApiResponse> {
-  const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
-  if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
   const results = await fetchQuery(key, KEYWORDS_Q)
-  return { status: 'success', results, totalResults: results.length }
+  if (results.length === 0) return { results: [], erro: 'sem_artigos' }
+  return { results }
 }
 
 /**
