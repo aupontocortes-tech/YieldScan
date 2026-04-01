@@ -21,6 +21,23 @@ export const TWITTER_HANDLES_PADRAO = [
   'ArthurReis',
 ] as const
 
+/**
+ * Correcção de typos frequentes (ex.: Deltaone em vez de DeItaone — falta o “i”).
+ * Chaves em minúsculas.
+ */
+const CORRECAO_HANDLE: Record<string, string> = {
+  deltaone: 'DeItaone',
+  delitaone: 'DeItaone',
+  deitaone: 'DeItaone',
+  walterbloomberg: 'DeItaone',
+}
+
+function corrigirHandle(handle: string): string {
+  const limpo = handle.replace(/^@/, '').trim()
+  const key = limpo.toLowerCase()
+  return CORRECAO_HANDLE[key] ?? limpo
+}
+
 export interface TweetMercadoItem {
   id: string
   texto: string
@@ -61,10 +78,10 @@ function parseHandlesList(raw: string | undefined): string[] {
 export function resolverHandlesTwitter(): string[] {
   const completo = process.env.TWITTER_USERNAMES?.trim()
   if (completo) {
-    return [...new Set(parseHandlesList(completo))]
+    return [...new Set(parseHandlesList(completo).map(corrigirHandle))]
   }
-  const extra = parseHandlesList(process.env.TWITTER_EXTRA_USERNAMES)
-  return [...new Set([...TWITTER_HANDLES_PADRAO, ...extra])]
+  const extra = parseHandlesList(process.env.TWITTER_EXTRA_USERNAMES).map(corrigirHandle)
+  return [...new Set([...TWITTER_HANDLES_PADRAO.map(corrigirHandle), ...extra])]
 }
 
 function strictOnly(): boolean {
@@ -265,7 +282,7 @@ export async function buscarTweetsMercado(bearerToken: string): Promise<TwitterF
     mensagem = 'Limite de pedidos da API do X atingido. Espera alguns minutos e carrega em Atualizar.'
   } else if (tweetsOut.length === 0 && utilizadoresOk === 0 && contasComErro.length > 0) {
     aviso = 'ok'
-    mensagem = `Nenhuma conta resolvida. Verifica os @: ${contasComErro.map((c) => `@${c.replace('(tweets)', '')}`).join(', ')} — podem estar errados ou suspensos.`
+    mensagem = `Nenhuma conta resolvida pela API do X: ${contasComErro.map((c) => `@${c.replace('(tweets)', '')}`).join(', ')}. Confirma os @ no perfil (ex.: headlines mercado é DeItaone com “i”, não Deltaone). @ArthurReis pode não existir — troca por TWITTER_USERNAMES com handles válidos.`
   } else if (tweetsOut.length === 0 && utilizadoresOk > 0) {
     mensagem =
       'A API do X respondeu mas não há tweets recentes que passem o filtro. Tenta TWITTER_STRICT_ONLY=0 (predefinição) ou aumenta atividade nas contas.'
