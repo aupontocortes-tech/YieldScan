@@ -224,8 +224,12 @@ export function DashbuddyNews() {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['dashbuddy-news'],
     queryFn: fetchNoticias,
-    retry: 1,
-    staleTime: 60_000,
+    retry: 2,
+    retryDelay: 2_000,
+    staleTime: 30_000,
+    gcTime: 0,             // Não guarda erros em cache após fechar a página
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   })
 
   const noticias = data?.noticias ?? []
