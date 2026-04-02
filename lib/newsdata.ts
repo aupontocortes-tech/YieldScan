@@ -46,6 +46,11 @@ export interface NewsDataArticle {
   language?: string | null
   keywords?: string[] | null
   image_url?: string | null
+  /**
+   * Interno: veio da query NewsData só cripto — classificar como CRIPTO no filtro
+   * (a API já filtrou por termos cripto; sem isto, muitos caíam em «Macro» só pela palavra «mercado»).
+   */
+  _yieldscanCryptoQuery?: boolean
 }
 
 export type NewsDataApiResponse =
@@ -356,10 +361,14 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
     fetchCryptopanicAsNewsDataArticles(),
   ])
 
-  const results = mergeArticlesDedupe(
-    mergeArticlesDedupe(newsdataGeral, newsdataCripto),
-    cryptopanicResults
-  )
+  const newsdataCriptoMarcados: NewsDataArticle[] = newsdataCripto.map((a) => ({
+    ...a,
+    _yieldscanCryptoQuery: true,
+  }))
+
+  /* CryptoPanic primeiro: é a API dedicada a cripto; em duplicado de URL, mantém-se o post dela. */
+  const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
+  const results = mergeArticlesDedupe(cryptopanicResults, mergedNd)
   if (results.length === 0) return { results: [], erro: 'sem_artigos' }
   return { results }
 }
@@ -379,9 +388,11 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
   const fullLower = textoParaAnalise(article)
 
   const categoria =
-    typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-')
+    article._yieldscanCryptoQuery === true
       ? 'CRIPTO'
-      : classificarCategoria(fullLower, article.category ?? null)
+      : typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-')
+        ? 'CRIPTO'
+        : classificarCategoria(fullLower, article.category ?? null)
   let resumo = notaGeopoliticaCrypto(categoria, resumoBase || title)
 
   const impacto = classificarImpacto(fullLower)
@@ -424,7 +435,9 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     const fromCryptopanic =
       typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')
     const ehRelevante =
-      fromCryptopanic || [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
+      fromCryptopanic ||
+      a._yieldscanCryptoQuery === true ||
+      [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
     if (!ehRelevante) continue
     const p = processarNoticia(a)
     if (p) todas.push(p)

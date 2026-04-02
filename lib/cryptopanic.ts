@@ -117,48 +117,15 @@ export async function fetchCryptopanicAsNewsDataArticles(): Promise<NewsDataArti
 
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 14_000)
+    const timer = setTimeout(() => controller.abort(), 22_000)
     try {
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'yieldscan-news/1',
-        },
-        cache: 'no-store',
-        signal: controller.signal,
-      })
-      const data: unknown = await res.json().catch(() => null)
-      const rec = asRecord(data)
-      if (!rec) return []
-
-      if (str(rec.status) === 'api_error') {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[cryptopanic]', str(rec.info) || res.status)
-        }
-        return []
-      }
-
-      const results = rec.results
-      if (!Array.isArray(results)) return []
-
       const out: NewsDataArticle[] = []
-      for (const item of results) {
-        const r = asRecord(item)
-        if (!r) continue
-        const mapped = mapPost(r)
-        if (mapped) out.push(mapped)
-      }
+      let fetchUrl: string | null = url.toString()
+      const maxPosts = 60
+      const maxPages = 5
 
-      /* Segunda página da API (campo `next`) — mais posts num único “feed” cripto. */
-      const nextRaw = str(rec.next)
-      const nextUrl = nextRaw.startsWith('http')
-        ? nextRaw
-        : nextRaw.startsWith('/')
-          ? `https://cryptopanic.com${nextRaw}`
-          : ''
-      if (nextUrl && out.length < 35) {
-        const res2 = await fetch(nextUrl, {
+      for (let page = 0; page < maxPages && out.length < maxPosts && fetchUrl; page++) {
+        const res = await fetch(fetchUrl, {
           method: 'GET',
           headers: {
             Accept: 'application/json',
@@ -167,18 +134,34 @@ export async function fetchCryptopanicAsNewsDataArticles(): Promise<NewsDataArti
           cache: 'no-store',
           signal: controller.signal,
         })
-        const data2: unknown = await res2.json().catch(() => null)
-        const rec2 = asRecord(data2)
-        const results2 = rec2?.results
-        if (Array.isArray(results2)) {
-          for (const item of results2) {
-            const r = asRecord(item)
-            if (!r) continue
-            const mapped = mapPost(r)
-            if (mapped) out.push(mapped)
-            if (out.length >= 40) break
+        const data: unknown = await res.json().catch(() => null)
+        const rec = asRecord(data)
+        if (!rec) break
+
+        if (str(rec.status) === 'api_error') {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[cryptopanic]', str(rec.info) || res.status)
           }
+          break
         }
+
+        const results = rec.results
+        if (!Array.isArray(results)) break
+
+        for (const item of results) {
+          const r = asRecord(item)
+          if (!r) continue
+          const mapped = mapPost(r)
+          if (mapped) out.push(mapped)
+          if (out.length >= maxPosts) break
+        }
+
+        const nextRaw = str(rec.next)
+        fetchUrl = nextRaw.startsWith('http')
+          ? nextRaw
+          : nextRaw.startsWith('/')
+            ? `https://cryptopanic.com${nextRaw}`
+            : null
       }
 
       return out
