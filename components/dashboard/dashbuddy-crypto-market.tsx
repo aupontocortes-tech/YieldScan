@@ -159,6 +159,8 @@ export function DashbuddyCryptoMarket() {
 
   const btc = data?.highlights.bitcoin ?? null
   const eth = data?.highlights.ethereum ?? null
+  const sol = data?.highlights.solana ?? null
+  const hype = data?.highlights.hyperliquid ?? null
 
   return (
     <section className="space-y-8" aria-labelledby="mercado-cripto-heading">
@@ -204,9 +206,10 @@ export function DashbuddyCryptoMarket() {
 
       {isLoading && (
         <div className="space-y-8">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Skeleton className="h-40 rounded-2xl" />
-            <Skeleton className="h-40 rounded-2xl" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-40 rounded-2xl" />
+            ))}
           </div>
           <SectionSkeleton />
         </div>
@@ -216,9 +219,9 @@ export function DashbuddyCryptoMarket() {
         <>
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Bitcoin e Ethereum
+              Bitcoin, Ethereum, Solana e Hyperliquid
             </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {btc ? (
                 <HighlightCard coin={btc} label="Bitcoin" />
               ) : (
@@ -231,6 +234,20 @@ export function DashbuddyCryptoMarket() {
               ) : (
                 <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
                   Ethereum indisponível
+                </div>
+              )}
+              {sol ? (
+                <HighlightCard coin={sol} label="Solana" />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
+                  Solana indisponível
+                </div>
+              )}
+              {hype ? (
+                <HighlightCard coin={hype} label="Hyperliquid Premium" />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
+                  Hyperliquid indisponível
                 </div>
               )}
             </div>

@@ -10,7 +10,7 @@ const LINKS = [
     href: '/news/mercado',
     label: 'Preços e mercado',
     shortLabel: 'Mercado',
-    description: 'Bitcoin, Ethereum, top 10 e tendências (CoinGecko).',
+    description: 'BTC, ETH, SOL, Hyperliquid, top 10 e tendências (CoinGecko).',
     icon: LineChart,
   },
   {

@@ -27,6 +27,8 @@ export async function GET() {
     const semNada =
       !fresh.highlights.bitcoin &&
       !fresh.highlights.ethereum &&
+      !fresh.highlights.solana &&
+      !fresh.highlights.hyperliquid &&
       fresh.top10.length === 0 &&
       fresh.trending.length === 0
 
@@ -74,7 +76,7 @@ export async function GET() {
     }
 
     const empty = {
-      highlights: { bitcoin: null, ethereum: null },
+      highlights: { bitcoin: null, ethereum: null, solana: null, hyperliquid: null },
       top10: [],
       trending: [],
       cachedAt: new Date().toISOString(),
