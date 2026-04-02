@@ -4,7 +4,7 @@
  */
 
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
-import { DEFAULT_MARKET_HIGHLIGHT_IDS } from '@/lib/mercado-highlight-ids'
+import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
 
 export type MercadoCoin = {
   id: string
@@ -54,6 +54,15 @@ const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
   'polygon-ecosystem-token': { name: 'Polygon', symbol: 'POL' },
   litecoin: { name: 'Litecoin', symbol: 'LTC' },
   monero: { name: 'Monero', symbol: 'XMR' },
+  binancecoin: { name: 'BNB', symbol: 'BNB' },
+  dai: { name: 'Dai', symbol: 'DAI' },
+  'shiba-inu': { name: 'Shiba Inu', symbol: 'SHIB' },
+  tron: { name: 'TRON', symbol: 'TRX' },
+  uniswap: { name: 'Uniswap', symbol: 'UNI' },
+  'wrapped-bitcoin': { name: 'Wrapped Bitcoin', symbol: 'WBTC' },
+  weth: { name: 'WETH', symbol: 'WETH' },
+  'staked-ether': { name: 'Lido Staked Ether', symbol: 'STETH' },
+  'ethereum-classic': { name: 'Ethereum Classic', symbol: 'ETC' },
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -248,12 +257,12 @@ function buildSimplePriceUrl(ids: string[]): string {
 
 /**
  * Agrega os três endpoints públicos; tolera falhas parciais.
- * @param highlightIds até 4 slugs CoinGecko (ex.: bitcoin, ethereum).
+ * @param highlightIds slugs CoinGecko (ex.: bitcoin), até MAX_MARKET_HIGHLIGHTS.
  */
 export async function agregarMercadoCoinGecko(
   highlightIds: string[] = [...DEFAULT_MARKET_HIGHLIGHT_IDS]
 ): Promise<MarketApiPayload> {
-  const ids = [...new Set(highlightIds.filter(Boolean))].slice(0, 4)
+  const ids = [...new Set(highlightIds.filter(Boolean))].slice(0, MAX_MARKET_HIGHLIGHTS)
   if (ids.length === 0) {
     return emptyPayload(
       [...DEFAULT_MARKET_HIGHLIGHT_IDS],

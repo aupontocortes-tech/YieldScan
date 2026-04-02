@@ -32,6 +32,9 @@ export const COINGECKO_LOGO_BY_ID: Record<string, string> = {
   hyperliquid:
     'https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg',
   bnb: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  binancecoin: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  tether: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+  'usd-coin': 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
   pancakeswap: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo_%281%29.png',
   uniswap: 'https://assets.coingecko.com/coins/images/12504/small/uni.jpg',
   aave: 'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',

@@ -12,12 +12,13 @@ import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import {
   clearStoredHighlightIds,
   DEFAULT_MARKET_HIGHLIGHT_IDS,
+  MAX_MARKET_HIGHLIGHTS,
   readStoredHighlightIds,
   sanitizeHighlightIds,
   writeStoredHighlightIds,
 } from '@/lib/mercado-highlight-ids'
 import { cn } from '@/lib/utils'
-import { Coins, ExternalLink, LineChart, RefreshCw, Settings2, TrendingUp } from 'lucide-react'
+import { Coins, ExternalLink, LineChart, Plus, RefreshCw, Settings2, Trash2, TrendingUp } from 'lucide-react'
 
 async function fetchMercado(ids: string[]): Promise<MarketApiPayload> {
   const q = `?highlights=${encodeURIComponent(ids.join(','))}`
@@ -167,8 +168,6 @@ function SectionSkeleton() {
   )
 }
 
-const SLOT_LABELS = ['1.º', '2.º', '3.º', '4.º'] as const
-
 export function DashbuddyCryptoMarket() {
   const [highlightIds, setHighlightIds] = useState<string[]>(() => [...DEFAULT_MARKET_HIGHLIGHT_IDS])
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -190,9 +189,7 @@ export function DashbuddyCryptoMarket() {
   })
 
   const syncDraftFromIds = useCallback((ids: string[]) => {
-    const base = [...ids]
-    while (base.length < 4) base.push('')
-    setDraftSlots(base.slice(0, 4).map((id) => id))
+    setDraftSlots(ids.length > 0 ? [...ids] : [...DEFAULT_MARKET_HIGHLIGHT_IDS])
   }, [])
 
   useEffect(() => {
@@ -238,32 +235,67 @@ export function DashbuddyCryptoMarket() {
                   <Settings2 className="h-4 w-4" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-[min(100vw-2rem,20rem)] space-y-3">
+              <PopoverContent align="start" className="w-[min(100vw-2rem,22rem)] space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Slugs CoinGecko (como na URL do site), até 4. Fica guardado só neste browser.
+                  Slug CoinGecko (URL do site) ou ticker comum: <span className="font-mono text-[10px]">usdt</span> vira{' '}
+                  <span className="font-mono text-[10px]">tether</span>, <span className="font-mono text-[10px]">btc</span>→
+                  bitcoin, etc. Até {MAX_MARKET_HIGHLIGHTS} moedas; guardado neste dispositivo.
                 </p>
-                <div className="space-y-2">
-                  {SLOT_LABELS.map((label, i) => (
-                    <div key={label} className="space-y-1">
-                      <Label htmlFor={`mercado-slot-${i}`} className="text-[11px] text-muted-foreground">
-                        Cartão {label}
-                      </Label>
-                      <Input
-                        id={`mercado-slot-${i}`}
-                        className="h-8 font-mono text-xs"
-                        placeholder="ex.: bitcoin"
-                        value={draftSlots[i] ?? ''}
-                        onChange={(e) => {
-                          const next = [...draftSlots]
-                          next[i] = e.target.value
-                          setDraftSlots(next)
-                        }}
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
+                <p className="text-[11px] text-muted-foreground/80">
+                  Preenchidas:{' '}
+                  <span className="tabular-nums text-foreground/90">
+                    {draftSlots.filter((s) => s.trim().length > 0).length}/{MAX_MARKET_HIGHLIGHTS}
+                  </span>
+                </p>
+                <div className="max-h-[min(50vh,18rem)] space-y-2 overflow-y-auto pr-1">
+                  {draftSlots.map((slot, i) => (
+                    <div key={i} className="flex items-end gap-1.5">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <Label htmlFor={`mercado-slot-${i}`} className="text-[11px] text-muted-foreground">
+                          Moeda {i + 1}
+                        </Label>
+                        <Input
+                          id={`mercado-slot-${i}`}
+                          className="h-8 font-mono text-xs"
+                          placeholder="ex.: chainlink"
+                          value={slot}
+                          onChange={(e) => {
+                            const next = [...draftSlots]
+                            next[i] = e.target.value
+                            setDraftSlots(next)
+                          }}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        disabled={draftSlots.length <= 1}
+                        title="Remover linha"
+                        aria-label={`Remover moeda ${i + 1}`}
+                        onClick={() =>
+                          setDraftSlots((rows) => (rows.length <= 1 ? rows : rows.filter((_, j) => j !== i)))
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   ))}
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full gap-1.5 text-xs"
+                  disabled={draftSlots.length >= MAX_MARKET_HIGHLIGHTS}
+                  onClick={() => setDraftSlots((rows) => (rows.length >= MAX_MARKET_HIGHLIGHTS ? rows : [...rows, '']))}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Adicionar moeda
+                </Button>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button
                     type="button"
@@ -314,8 +346,8 @@ export function DashbuddyCryptoMarket() {
 
       {isLoading && (
         <div className="space-y-8">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: Math.min(MAX_MARKET_HIGHLIGHTS, Math.max(4, highlightIds.length)) }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
             ))}
           </div>
@@ -329,7 +361,7 @@ export function DashbuddyCryptoMarket() {
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Moedas em destaque
             </h3>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {highlightCoins.map((coin, i) =>
                 coin ? (
                   <HighlightCard key={`${coin.id}-${i}`} coin={coin} />
