@@ -6,15 +6,27 @@
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
 
+/** Moedas fiduciárias suportadas na UI (cotações e exibição). */
+export type MercadoFiat = 'usd' | 'brl' | 'eur'
+
+export type MercadoQuoteSlice = {
+  price: number
+  change_24h: number | null
+  market_cap: number | null
+}
+
 export type MercadoCoin = {
   id: string
   name: string
   symbol: string
+  /** Preço em USD (legado / CoinGecko markets). */
   price: number | null
   change_24h: number | null
   image: string | null
   market_cap: number | null
   source: 'coingecko'
+  /** Cotações por moeda; destaques vêm do simple/price; top10/trending usam USD + taxas globais. */
+  quotes?: Partial<Record<MercadoFiat, MercadoQuoteSlice>>
 }
 
 export type MarketApiPayload = {
@@ -31,6 +43,7 @@ export type MarketApiPayload = {
 }
 
 const TRENDING_URL = 'https://api.coingecko.com/api/v3/search/trending'
+const EXCHANGE_RATES_URL = 'https://api.coingecko.com/api/v3/exchange_rates'
 const MARKETS_URL =
   'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1'
 
@@ -121,6 +134,114 @@ type SimplePriceEntry = {
   usd?: number
   usd_24h_change?: number
   usd_market_cap?: number
+  brl?: number
+  brl_24h_change?: number
+  brl_market_cap?: number
+  eur?: number
+  eur_24h_change?: number
+  eur_market_cap?: number
+}
+
+function parseFiatPerUsdFromExchangeRates(raw: unknown): { brlPerUsd: number; eurPerUsd: number } | null {
+  const r = asRecord(raw)
+  const rates = r && asRecord(r.rates)
+  if (!rates) return null
+  const usd = rates.usd
+  const brl = rates.brl
+  const eur = rates.eur
+  const usdV = usd && typeof (usd as { value?: unknown }).value === 'number' ? (usd as { value: number }).value : NaN
+  const brlV = brl && typeof (brl as { value?: unknown }).value === 'number' ? (brl as { value: number }).value : NaN
+  const eurV = eur && typeof (eur as { value?: unknown }).value === 'number' ? (eur as { value: number }).value : NaN
+  if (!Number.isFinite(usdV) || usdV <= 0 || !Number.isFinite(brlV) || !Number.isFinite(eurV)) return null
+  return { brlPerUsd: brlV / usdV, eurPerUsd: eurV / usdV }
+}
+
+function sliceFromSimpleFiat(
+  raw: SimplePriceEntry,
+  fiat: MercadoFiat
+): MercadoQuoteSlice | null {
+  const p = raw[fiat]
+  if (typeof p !== 'number' || !Number.isFinite(p)) return null
+  const ext = raw as Record<string, unknown>
+  const chKey = `${fiat}_24h_change`
+  const capKey = `${fiat}_market_cap`
+  const ch = ext[chKey]
+  const cap = ext[capKey]
+  return {
+    price: p,
+    change_24h: typeof ch === 'number' && Number.isFinite(ch) ? ch : null,
+    market_cap: typeof cap === 'number' && Number.isFinite(cap) ? cap : null,
+  }
+}
+
+function quotesFromSimpleEntry(raw: SimplePriceEntry): Partial<Record<MercadoFiat, MercadoQuoteSlice>> | undefined {
+  const out: Partial<Record<MercadoFiat, MercadoQuoteSlice>> = {}
+  for (const f of ['usd', 'brl', 'eur'] as const) {
+    const s = sliceFromSimpleFiat(raw, f)
+    if (s) out[f] = s
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function buildQuotesFromUsdBase(
+  usdPrice: number,
+  change: number | null,
+  cap: number | null,
+  brlPerUsd: number,
+  eurPerUsd: number
+): Partial<Record<MercadoFiat, MercadoQuoteSlice>> {
+  return {
+    usd: { price: usdPrice, change_24h: change, market_cap: cap },
+    brl: {
+      price: usdPrice * brlPerUsd,
+      change_24h: change,
+      market_cap: cap != null && Number.isFinite(cap) ? cap * brlPerUsd : null,
+    },
+    eur: {
+      price: usdPrice * eurPerUsd,
+      change_24h: change,
+      market_cap: cap != null && Number.isFinite(cap) ? cap * eurPerUsd : null,
+    },
+  }
+}
+
+function enrichCoinQuotesFromUsd(
+  coin: MercadoCoin,
+  brlPerUsd: number,
+  eurPerUsd: number
+): MercadoCoin {
+  const usdPrice =
+    coin.quotes?.usd?.price ??
+    (typeof coin.price === 'number' && Number.isFinite(coin.price) ? coin.price : null)
+  if (usdPrice == null) return coin
+  const change = coin.quotes?.usd?.change_24h ?? coin.change_24h
+  const cap = coin.quotes?.usd?.market_cap ?? coin.market_cap
+  const built = buildQuotesFromUsdBase(usdPrice, change, cap, brlPerUsd, eurPerUsd)
+  const merged: Partial<Record<MercadoFiat, MercadoQuoteSlice>> = { ...built, ...coin.quotes }
+  return {
+    ...coin,
+    quotes: merged,
+    price: usdPrice,
+    change_24h: change,
+    market_cap: cap,
+  }
+}
+
+function usdOnlyQuotes(coin: MercadoCoin): MercadoCoin {
+  if (coin.quotes?.usd) return coin
+  const p = coin.price
+  if (typeof p !== 'number' || !Number.isFinite(p)) return coin
+  return {
+    ...coin,
+    quotes: {
+      ...coin.quotes,
+      usd: {
+        price: p,
+        change_24h: coin.change_24h,
+        market_cap: coin.market_cap,
+      },
+    },
+  }
 }
 
 function metaForHighlightId(id: string): { name: string; symbol: string } {
@@ -139,25 +260,33 @@ function metaForHighlightId(id: string): { name: string; symbol: string } {
 }
 
 function fromSimpleHighlightById(id: string, raw: SimplePriceEntry): MercadoCoin | null {
-  if (typeof raw.usd !== 'number' || !Number.isFinite(raw.usd)) return null
+  const quotes = quotesFromSimpleEntry(raw)
+  const usdPx =
+    typeof raw.usd === 'number' && Number.isFinite(raw.usd)
+      ? raw.usd
+      : quotes?.usd?.price ?? null
+  if (typeof usdPx !== 'number' || !Number.isFinite(usdPx)) return null
   const m = metaForHighlightId(id)
   const change =
-    typeof raw.usd_24h_change === 'number' && Number.isFinite(raw.usd_24h_change)
+    quotes?.usd?.change_24h ??
+    (typeof raw.usd_24h_change === 'number' && Number.isFinite(raw.usd_24h_change)
       ? raw.usd_24h_change
-      : null
+      : null)
   const cap =
-    typeof raw.usd_market_cap === 'number' && Number.isFinite(raw.usd_market_cap)
+    quotes?.usd?.market_cap ??
+    (typeof raw.usd_market_cap === 'number' && Number.isFinite(raw.usd_market_cap)
       ? raw.usd_market_cap
-      : null
+      : null)
   return {
     id,
     name: m.name,
     symbol: m.symbol,
-    price: raw.usd,
+    price: usdPx,
     change_24h: change,
     image: COINGECKO_LOGO_BY_ID[id] ?? null,
     market_cap: cap,
     source: 'coingecko',
+    quotes,
   }
 }
 
@@ -173,23 +302,38 @@ function fillHighlightStaticLogo(coin: MercadoCoin | null): MercadoCoin | null {
 }
 
 function mergeSimpleIntoCoin(coin: MercadoCoin, raw: SimplePriceEntry): MercadoCoin {
-  let next = coin
-  if (coin.price == null && typeof raw.usd === 'number' && Number.isFinite(raw.usd)) {
+  const fromSimple = quotesFromSimpleEntry(raw)
+  let next = { ...coin }
+  if (fromSimple) {
+    next = {
+      ...next,
+      quotes: { ...next.quotes, ...fromSimple },
+    }
+  }
+  if (next.price == null && typeof raw.usd === 'number' && Number.isFinite(raw.usd)) {
     next = { ...next, price: raw.usd }
   }
   if (
-    coin.change_24h == null &&
+    next.change_24h == null &&
     typeof raw.usd_24h_change === 'number' &&
     Number.isFinite(raw.usd_24h_change)
   ) {
     next = { ...next, change_24h: raw.usd_24h_change }
   }
   if (
-    coin.market_cap == null &&
+    next.market_cap == null &&
     typeof raw.usd_market_cap === 'number' &&
     Number.isFinite(raw.usd_market_cap)
   ) {
     next = { ...next, market_cap: raw.usd_market_cap }
+  }
+  if (next.quotes?.usd) {
+    next = {
+      ...next,
+      price: next.quotes.usd.price,
+      change_24h: next.quotes.usd.change_24h,
+      market_cap: next.quotes.usd.market_cap,
+    }
   }
   return next
 }
@@ -252,7 +396,7 @@ function emptyPayload(
 function buildSimplePriceUrl(ids: string[]): string {
   const unique = [...new Set(ids)].filter(Boolean)
   const joined = unique.map((id) => encodeURIComponent(id)).join('%2C')
-  return `https://api.coingecko.com/api/v3/simple/price?ids=${joined}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
+  return `https://api.coingecko.com/api/v3/simple/price?ids=${joined}&vs_currencies=usd%2Cbrl%2Ceur&include_24hr_change=true&include_market_cap=true`
 }
 
 /**
@@ -273,11 +417,16 @@ export async function agregarMercadoCoinGecko(
 
   const simpleUrl = buildSimplePriceUrl(ids)
 
-  const [simpleRaw, trendingRaw, marketsRaw] = await Promise.all([
+  const [simpleRaw, trendingRaw, marketsRaw, exchangeRaw] = await Promise.all([
     fetchJson<Record<string, SimplePriceEntry>>(simpleUrl),
     fetchJson<{ coins?: unknown[] }>(TRENDING_URL),
     fetchJson<unknown[]>(MARKETS_URL),
+    fetchJson<unknown>(EXCHANGE_RATES_URL),
   ])
+
+  const fx = parseFiatPerUsdFromExchangeRates(exchangeRaw)
+  const brlPerUsd = fx?.brlPerUsd ?? 5.5
+  const eurPerUsd = fx?.eurPerUsd ?? 0.92
 
   let partial = false
   const erros: string[] = []
@@ -296,6 +445,15 @@ export async function agregarMercadoCoinGecko(
     erros.push('Lista top 10 indisponível.')
   }
 
+  if (!fx) {
+    partial = true
+    erros.push('Taxas BRL/EUR indisponíveis; cotações aproximadas.')
+  }
+
+  const top10Enriched = top10.map((c) => enrichCoinQuotesFromUsd(usdOnlyQuotes(c), brlPerUsd, eurPerUsd))
+  top10.length = 0
+  top10.push(...top10Enriched)
+
   const pick = (id: string) => top10.find((c) => c.id === id) ?? null
 
   const highlightCoins: (MercadoCoin | null)[] = ids.map((id) => {
@@ -309,6 +467,10 @@ export async function agregarMercadoCoinGecko(
       } else {
         coin = mergeSimpleIntoCoin(coin, entry)
       }
+    }
+
+    if (coin && (coin.price != null || coin.quotes?.usd != null)) {
+      coin = enrichCoinQuotesFromUsd(usdOnlyQuotes(coin), brlPerUsd, eurPerUsd)
     }
 
     if (!coin || coin.price == null) {
@@ -333,6 +495,10 @@ export async function agregarMercadoCoinGecko(
     partial = true
     erros.push('Trending indisponível.')
   }
+
+  const trendingEnriched = trending.map((c) => enrichCoinQuotesFromUsd(usdOnlyQuotes(c), brlPerUsd, eurPerUsd))
+  trending.length = 0
+  trending.push(...trendingEnriched)
 
   const anyHighlight = highlightCoins.some((c) => c != null && c.price != null)
   const semDados =

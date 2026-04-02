@@ -22,6 +22,7 @@ const ID_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/
  * Ex.: usdt → tether, bnb → binancecoin.
  */
 export const COINGECKO_HIGHLIGHT_ALIASES: Record<string, string> = {
+  sdt: 'tether',
   usdt: 'tether',
   'usd-t': 'tether',
   usdc: 'usd-coin',
