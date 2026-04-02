@@ -9,6 +9,7 @@ import {
   BookOpen,
   Coins,
   LayoutGrid,
+  LineChart,
   Newspaper,
   Sparkles,
 } from 'lucide-react'
@@ -36,6 +37,7 @@ const MAIN_NAV = [
   { name: 'Dashboard', href: '/dashboard', icon: Activity },
   { name: 'Notícias', href: '/news', icon: Newspaper },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
+  { name: 'Indicator', href: '/indicator', icon: LineChart },
   { name: 'DEX', href: '/dex', icon: LayoutGrid },
   { name: 'Swap', href: '/swap', icon: ArrowLeftRight },
 ] as const
@@ -44,6 +46,7 @@ function pageTitle(pathname: string): string {
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Dashboard'
   if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
   if (pathname.startsWith('/pools')) return 'Pools'
+  if (pathname.startsWith('/indicator')) return 'Indicator'
   if (pathname.startsWith('/dex')) return 'DEX'
   if (pathname.startsWith('/swap')) return 'Swap'
   if (pathname.startsWith('/token/')) {
@@ -129,7 +132,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           ? pathname === '/news' || pathname.startsWith('/news/')
                           : item.href === '/pools'
                             ? pathname.startsWith('/pools')
-                            : pathname === item.href
+                            : item.href === '/indicator'
+                              ? pathname.startsWith('/indicator')
+                              : pathname === item.href
                       }
                       tooltip={item.name}
                     >
