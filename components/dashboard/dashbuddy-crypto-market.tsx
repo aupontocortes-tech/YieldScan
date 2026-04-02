@@ -361,7 +361,8 @@ export function DashbuddyCryptoMarket() {
                 Mercado
               </h2>
             </div>
-            <Sheet open={prefsOpen} onOpenChange={setPrefsOpen}>
+            {/* modal={false}: Radix Dialog blocks pointer events on portaled Select dropdowns otherwise */}
+            <Sheet modal={false} open={prefsOpen} onOpenChange={setPrefsOpen}>
               <SheetTrigger asChild>
                 <button
                   type="button"

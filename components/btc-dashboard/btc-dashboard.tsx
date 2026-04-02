@@ -72,7 +72,7 @@ export function BtcDashboard() {
               <RefreshCw className={cn('mr-2 h-3.5 w-3.5', isFetching && 'animate-spin')} />
               Atualizar
             </Button>
-            <Sheet>
+            <Sheet modal={false}>
               <SheetTrigger asChild>
                 <Button size="sm" className="bg-[#d4af37] text-black hover:bg-[#c9a227]">
                   <Settings2 className="mr-2 h-4 w-4" />
