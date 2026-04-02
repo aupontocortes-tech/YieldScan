@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   Card,
   CardContent,
@@ -23,14 +22,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ChainBadge } from '@/components/chain-badge'
 import {
-  dashboardPoolsQueryKey,
-  fetchDashboardPools,
   formatCurrency,
   formatPercent,
   getAprColorClass,
   poolMatchesSearchQuery,
   sortPools,
 } from '@/lib/api'
+import { useDashboardPools } from '@/hooks/use-dashboard-pools'
 import { resolvePoolOrDexUrl } from '@/lib/dex'
 import { getDexScreenerUrl } from '@/lib/dexscreener'
 import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
@@ -43,10 +41,7 @@ export function TokenPoolsSearch() {
   const [searchValue, setSearchValue] = useState('')
   const [activeToken, setActiveToken] = useState('')
 
-  const { data: pools, isLoading } = useQuery({
-    queryKey: dashboardPoolsQueryKey,
-    queryFn: fetchDashboardPools,
-  })
+  const { pools, isLoading } = useDashboardPools()
 
   const filteredPools = useMemo(() => {
     if (!pools || !activeToken) return []

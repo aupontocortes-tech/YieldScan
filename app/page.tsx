@@ -8,11 +8,10 @@ import { TopPoolsTable } from '@/components/dashboard/top-pools-table'
 import { TokenPoolsSearch } from '@/components/dashboard/token-pools-search'
 import {
   DASHBOARD_POOLS_MIN_TVL,
-  dashboardPoolsQueryKey,
   fetchAllChainsTvl,
-  fetchDashboardPools,
   sortPools,
 } from '@/lib/api'
+import { useDashboardPools } from '@/hooks/use-dashboard-pools'
 import { formatCurrency, formatPercent } from '@/lib/api'
 import { Activity, TrendingUp, Layers, BarChart3 } from 'lucide-react'
 import { DataLoadError } from '@/components/data-load-error'
@@ -29,14 +28,11 @@ const TvlChart = dynamic(
 
 export default function DashboardPage() {
   const {
-    data: pools,
+    pools,
     isLoading: poolsLoading,
     isError: poolsError,
     refetch: refetchPools,
-  } = useQuery({
-    queryKey: dashboardPoolsQueryKey,
-    queryFn: fetchDashboardPools,
-  })
+  } = useDashboardPools()
 
   const {
     data: chainsTvl,

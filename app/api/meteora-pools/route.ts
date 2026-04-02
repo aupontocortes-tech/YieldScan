@@ -6,7 +6,12 @@ export const maxDuration = 25
 /** Só Meteora DLMM — rota leve, roda em paralelo com /api/pools no cliente. */
 export async function GET(req: NextRequest) {
   const minTvl = Math.max(0, Number(req.nextUrl.searchParams.get('minTvl')) || 10_000)
-  const pages = [1, 2, 3, 4, 5, 6, 7, 8]
+  const maxPagesRaw = req.nextUrl.searchParams.get('maxPages')
+  const maxPages =
+    maxPagesRaw != null
+      ? Math.min(8, Math.max(1, Number(maxPagesRaw) || 4))
+      : 8
+  const pages = Array.from({ length: maxPages }, (_, i) => i + 1)
 
   try {
     const pools = await fetchMeteoraDlmmPoolsParallel({

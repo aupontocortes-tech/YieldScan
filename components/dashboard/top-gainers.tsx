@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   Card,
   CardContent,
@@ -23,13 +22,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ChainBadge } from '@/components/chain-badge'
 import {
-  dashboardPoolsQueryKey,
-  fetchDashboardPools,
   formatCurrency,
   formatPercent,
   getAprColorClass,
   getChangeIndicator,
 } from '@/lib/api'
+import { useDashboardPools } from '@/hooks/use-dashboard-pools'
 import { resolvePoolOrDexUrl } from '@/lib/dex'
 import { getDexScreenerUrl } from '@/lib/dexscreener'
 import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
@@ -83,10 +81,7 @@ function sortPoolsByPeriod(pools: Pool[], period: TimePeriod): Pool[] {
 export function TopGainers() {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('24h')
 
-  const { data: pools, isLoading } = useQuery({
-    queryKey: dashboardPoolsQueryKey,
-    queryFn: fetchDashboardPools,
-  })
+  const { pools, isLoading } = useDashboardPools()
 
   const topGainers = useMemo(() => {
     if (!pools) return []

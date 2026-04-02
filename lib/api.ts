@@ -67,6 +67,51 @@ export const dashboardPoolsQueryKey = [
   DASHBOARD_POOLS_CAP,
 ] as const
 
+/** DefiLlama só — resposta tipicamente antes da Meteora; o painel junta no cliente. */
+export const dashboardPoolsLlamaQueryKey = [...dashboardPoolsQueryKey, 'llama'] as const
+
+/** Meteora DLMM em pedido separado (não bloqueia o primeiro paint com dados Llama). */
+export const dashboardPoolsMeteoraQueryKey = [...dashboardPoolsQueryKey, 'meteora'] as const
+
+export function mergeDashboardPoolLists(llama: Pool[], meteora: Pool[] | undefined): Pool[] {
+  if (!meteora?.length) return llama
+  const seen = new Set(llama.map((p) => p.pool))
+  const out = [...llama]
+  for (const p of meteora) {
+    if (!seen.has(p.pool)) {
+      seen.add(p.pool)
+      out.push(p)
+    }
+  }
+  out.sort((a, b) => b.tvlUsd - a.tvlUsd)
+  return out.slice(0, DASHBOARD_POOLS_CAP)
+}
+
+export async function fetchDashboardLlamaPools(): Promise<Pool[]> {
+  return fetchPools(DASHBOARD_POOLS_MIN_TVL, {
+    cap: DASHBOARD_POOLS_CAP,
+    includeMeteora: false,
+  })
+}
+
+/** Meteora para o dashboard: menos páginas que o pedido “completo” via fetchPools. */
+export async function fetchDashboardMeteoraOnly(): Promise<Pool[]> {
+  try {
+    const base = internalApiBase()
+    const q = encodeURIComponent(String(DASHBOARD_POOLS_MIN_TVL))
+    const signal = clientTimeoutSignal(60_000)
+    const metaRes = await fetch(`${base}/api/meteora-pools?minTvl=${q}&maxPages=4`, {
+      signal,
+    })
+    if (!metaRes.ok) return []
+    const mj = (await metaRes.json()) as { data?: Pool[] }
+    return normalizePoolChains(mj.data ?? [])
+  } catch {
+    return []
+  }
+}
+
+/** Bundle completo (Llama + Meteora em paralelo) — páginas que ainda precisem de um único queryFn. */
 export function fetchDashboardPools(): Promise<Pool[]> {
   return fetchPools(DASHBOARD_POOLS_MIN_TVL, {
     cap: DASHBOARD_POOLS_CAP,
