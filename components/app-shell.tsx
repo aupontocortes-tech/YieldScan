@@ -33,7 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
 const MAIN_NAV = [
-  { name: 'Dashboard', href: '/', icon: Activity },
+  { name: 'Dashboard', href: '/dashboard', icon: Activity },
   { name: 'Notícias', href: '/news', icon: Newspaper },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
   { name: 'DEX', href: '/dex', icon: LayoutGrid },
@@ -41,7 +41,7 @@ const MAIN_NAV = [
 ] as const
 
 function pageTitle(pathname: string): string {
-  if (pathname === '/') return 'Dashboard'
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Dashboard'
   if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
   if (pathname.startsWith('/pools')) return 'Pools'
   if (pathname.startsWith('/dex')) return 'DEX'
@@ -124,7 +124,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       asChild
-                      isActive={pathname === item.href}
+                      isActive={
+                        item.href === '/news'
+                          ? pathname === '/news' || pathname.startsWith('/news/')
+                          : item.href === '/pools'
+                            ? pathname.startsWith('/pools')
+                            : pathname === item.href
+                      }
                       tooltip={item.name}
                     >
                       <Link href={item.href}>
@@ -151,7 +157,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname === '/dex'} tooltip="Destaques PRO">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === '/dex' || pathname.startsWith('/dex/')}
+                    tooltip="Destaques PRO"
+                  >
                     <Link href="/dex">
                       <Sparkles />
                       <span>PRO</span>

@@ -4,6 +4,7 @@
  */
 
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
+import { DEFAULT_MARKET_HIGHLIGHT_IDS } from '@/lib/mercado-highlight-ids'
 
 export type MercadoCoin = {
   id: string
@@ -17,12 +18,10 @@ export type MercadoCoin = {
 }
 
 export type MarketApiPayload = {
-  highlights: {
-    bitcoin: MercadoCoin | null
-    ethereum: MercadoCoin | null
-    solana: MercadoCoin | null
-    hyperliquid: MercadoCoin | null
-  }
+  /** Ordem = pedido; null = moeda sem preço nesta resposta. */
+  highlightCoins: (MercadoCoin | null)[]
+  /** Eco dos ids pedidos (para o cliente). */
+  highlightIds: string[]
   top10: MercadoCoin[]
   trending: MercadoCoin[]
   cachedAt: string
@@ -31,13 +30,31 @@ export type MarketApiPayload = {
   fonte: 'coingecko'
 }
 
-const SIMPLE_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,hyperliquid&vs_currencies=usd&include_24hr_change=true&include_market_cap=true'
 const TRENDING_URL = 'https://api.coingecko.com/api/v3/search/trending'
 const MARKETS_URL =
   'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1'
 
 const UA = 'yieldscan-market/1 (public coingecko)'
+
+/** Nomes conhecidos para slugs frequentes (resto = título a partir do id). */
+const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
+  bitcoin: { name: 'Bitcoin', symbol: 'BTC' },
+  ethereum: { name: 'Ethereum', symbol: 'ETH' },
+  solana: { name: 'Solana', symbol: 'SOL' },
+  hyperliquid: { name: 'Hyperliquid', symbol: 'HYPE' },
+  tether: { name: 'Tether', symbol: 'USDT' },
+  'usd-coin': { name: 'USDC', symbol: 'USDC' },
+  ripple: { name: 'XRP', symbol: 'XRP' },
+  bnb: { name: 'BNB', symbol: 'BNB' },
+  dogecoin: { name: 'Dogecoin', symbol: 'DOGE' },
+  cardano: { name: 'Cardano', symbol: 'ADA' },
+  chainlink: { name: 'Chainlink', symbol: 'LINK' },
+  avalanche: { name: 'Avalanche', symbol: 'AVAX' },
+  polkadot: { name: 'Polkadot', symbol: 'DOT' },
+  'polygon-ecosystem-token': { name: 'Polygon', symbol: 'POL' },
+  litecoin: { name: 'Litecoin', symbol: 'LTC' },
+  monero: { name: 'Monero', symbol: 'XMR' },
+}
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -91,25 +108,30 @@ export function normalizeMarketsRow(raw: Record<string, unknown>): MercadoCoin |
   }
 }
 
-const HIGHLIGHT_IDS = ['bitcoin', 'ethereum', 'solana', 'hyperliquid'] as const
-type HighlightCoinId = (typeof HIGHLIGHT_IDS)[number]
-
-const HIGHLIGHT_META: Record<HighlightCoinId, { name: string; symbol: string }> = {
-  bitcoin: { name: 'Bitcoin', symbol: 'BTC' },
-  ethereum: { name: 'Ethereum', symbol: 'ETH' },
-  solana: { name: 'Solana', symbol: 'SOL' },
-  hyperliquid: { name: 'Hyperliquid', symbol: 'HYPE' },
-}
-
 type SimplePriceEntry = {
   usd?: number
   usd_24h_change?: number
   usd_market_cap?: number
 }
 
-function fromSimpleHighlight(id: HighlightCoinId, raw: SimplePriceEntry): MercadoCoin | null {
+function metaForHighlightId(id: string): { name: string; symbol: string } {
+  const k = KNOWN_COIN_META[id]
+  if (k) return k
+  const name = id
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+  const symbol = id
+    .replace(/-/g, '')
+    .slice(0, 8)
+    .toUpperCase()
+  return { name: name || id, symbol: symbol || id.toUpperCase().slice(0, 6) }
+}
+
+function fromSimpleHighlightById(id: string, raw: SimplePriceEntry): MercadoCoin | null {
   if (typeof raw.usd !== 'number' || !Number.isFinite(raw.usd)) return null
-  const m = HIGHLIGHT_META[id]
+  const m = metaForHighlightId(id)
   const change =
     typeof raw.usd_24h_change === 'number' && Number.isFinite(raw.usd_24h_change)
       ? raw.usd_24h_change
@@ -130,7 +152,6 @@ function fromSimpleHighlight(id: HighlightCoinId, raw: SimplePriceEntry): Mercad
   }
 }
 
-/** Preenche ícone quando o endpoint /markets devolve image vazio mas o coin é um destaque conhecido. */
 function fillHighlightStaticLogo(coin: MercadoCoin | null): MercadoCoin | null {
   if (!coin) return null
   const img = coin.image?.trim()
@@ -202,9 +223,14 @@ function normalizeTrendingEntry(item: unknown): MercadoCoin | null {
   }
 }
 
-function emptyPayload(erro: string | null, partial: boolean): MarketApiPayload {
+function emptyPayload(
+  highlightIds: string[],
+  erro: string | null,
+  partial: boolean
+): MarketApiPayload {
   return {
-    highlights: { bitcoin: null, ethereum: null, solana: null, hyperliquid: null },
+    highlightCoins: highlightIds.map(() => null),
+    highlightIds,
     top10: [],
     trending: [],
     cachedAt: new Date().toISOString(),
@@ -214,12 +240,32 @@ function emptyPayload(erro: string | null, partial: boolean): MarketApiPayload {
   }
 }
 
+function buildSimplePriceUrl(ids: string[]): string {
+  const unique = [...new Set(ids)].filter(Boolean)
+  const joined = unique.map((id) => encodeURIComponent(id)).join('%2C')
+  return `https://api.coingecko.com/api/v3/simple/price?ids=${joined}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
+}
+
 /**
  * Agrega os três endpoints públicos; tolera falhas parciais.
+ * @param highlightIds até 4 slugs CoinGecko (ex.: bitcoin, ethereum).
  */
-export async function agregarMercadoCoinGecko(): Promise<MarketApiPayload> {
+export async function agregarMercadoCoinGecko(
+  highlightIds: string[] = [...DEFAULT_MARKET_HIGHLIGHT_IDS]
+): Promise<MarketApiPayload> {
+  const ids = [...new Set(highlightIds.filter(Boolean))].slice(0, 4)
+  if (ids.length === 0) {
+    return emptyPayload(
+      [...DEFAULT_MARKET_HIGHLIGHT_IDS],
+      'Lista de destaques inválida.',
+      true
+    )
+  }
+
+  const simpleUrl = buildSimplePriceUrl(ids)
+
   const [simpleRaw, trendingRaw, marketsRaw] = await Promise.all([
-    fetchJson<Record<string, SimplePriceEntry>>(SIMPLE_URL),
+    fetchJson<Record<string, SimplePriceEntry>>(simpleUrl),
     fetchJson<{ coins?: unknown[] }>(TRENDING_URL),
     fetchJson<unknown[]>(MARKETS_URL),
   ])
@@ -243,62 +289,26 @@ export async function agregarMercadoCoinGecko(): Promise<MarketApiPayload> {
 
   const pick = (id: string) => top10.find((c) => c.id === id) ?? null
 
-  let bitcoin: MercadoCoin | null = pick('bitcoin')
-  let ethereum: MercadoCoin | null = pick('ethereum')
-  let solana: MercadoCoin | null = pick('solana')
-  let hyperliquid: MercadoCoin | null = pick('hyperliquid')
+  const highlightCoins: (MercadoCoin | null)[] = ids.map((id) => {
+    let coin: MercadoCoin | null = pick(id)
 
-  if (simpleRaw && simpleRaw.bitcoin) {
-    const s = simpleRaw.bitcoin
-    if (!bitcoin) {
-      bitcoin = fromSimpleHighlight('bitcoin', s)
-    } else {
-      bitcoin = mergeSimpleIntoCoin(bitcoin, s)
+    const s = simpleRaw?.[id]
+    if (s && typeof s === 'object') {
+      const entry = s as SimplePriceEntry
+      if (!coin) {
+        coin = fromSimpleHighlightById(id, entry)
+      } else {
+        coin = mergeSimpleIntoCoin(coin, entry)
+      }
     }
-  }
-  if (!bitcoin || bitcoin.price == null) {
-    partial = true
-    erros.push('Preço Bitcoin indisponível.')
-  }
 
-  if (simpleRaw && simpleRaw.ethereum) {
-    const s = simpleRaw.ethereum
-    if (!ethereum) {
-      ethereum = fromSimpleHighlight('ethereum', s)
-    } else {
-      ethereum = mergeSimpleIntoCoin(ethereum, s)
+    if (!coin || coin.price == null) {
+      partial = true
+      erros.push(`Preço ${id} indisponível.`)
     }
-  }
-  if (!ethereum || ethereum.price == null) {
-    partial = true
-    erros.push('Preço Ethereum indisponível.')
-  }
 
-  if (simpleRaw && simpleRaw.solana) {
-    const s = simpleRaw.solana
-    if (!solana) {
-      solana = fromSimpleHighlight('solana', s)
-    } else {
-      solana = mergeSimpleIntoCoin(solana, s)
-    }
-  }
-  if (!solana || solana.price == null) {
-    partial = true
-    erros.push('Preço Solana indisponível.')
-  }
-
-  if (simpleRaw && simpleRaw.hyperliquid) {
-    const s = simpleRaw.hyperliquid
-    if (!hyperliquid) {
-      hyperliquid = fromSimpleHighlight('hyperliquid', s)
-    } else {
-      hyperliquid = mergeSimpleIntoCoin(hyperliquid, s)
-    }
-  }
-  if (!hyperliquid || hyperliquid.price == null) {
-    partial = true
-    erros.push('Preço Hyperliquid indisponível.')
-  }
+    return fillHighlightStaticLogo(coin)
+  })
 
   const trending: MercadoCoin[] = []
   const coins = trendingRaw?.coins
@@ -315,21 +325,13 @@ export async function agregarMercadoCoinGecko(): Promise<MarketApiPayload> {
     erros.push('Trending indisponível.')
   }
 
+  const anyHighlight = highlightCoins.some((c) => c != null && c.price != null)
   const semDados =
-    top10.length === 0 &&
-    !bitcoin &&
-    !ethereum &&
-    !solana &&
-    !hyperliquid &&
-    trending.length === 0
+    top10.length === 0 && !anyHighlight && trending.length === 0
 
   return {
-    highlights: {
-      bitcoin: fillHighlightStaticLogo(bitcoin),
-      ethereum: fillHighlightStaticLogo(ethereum),
-      solana: fillHighlightStaticLogo(solana),
-      hyperliquid: fillHighlightStaticLogo(hyperliquid),
-    },
+    highlightCoins,
+    highlightIds: ids,
     top10,
     trending,
     cachedAt: new Date().toISOString(),

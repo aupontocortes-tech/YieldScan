@@ -1,15 +1,27 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
+import {
+  clearStoredHighlightIds,
+  DEFAULT_MARKET_HIGHLIGHT_IDS,
+  readStoredHighlightIds,
+  sanitizeHighlightIds,
+  writeStoredHighlightIds,
+} from '@/lib/mercado-highlight-ids'
 import { cn } from '@/lib/utils'
-import { Coins, ExternalLink, LineChart, RefreshCw, TrendingUp } from 'lucide-react'
+import { Coins, ExternalLink, LineChart, RefreshCw, Settings2, TrendingUp } from 'lucide-react'
 
-async function fetchMercado(): Promise<MarketApiPayload> {
-  const res = await fetch('/api/market')
+async function fetchMercado(ids: string[]): Promise<MarketApiPayload> {
+  const q = `?highlights=${encodeURIComponent(ids.join(','))}`
+  const res = await fetch(`/api/market${q}`)
   const json = (await res.json()) as MarketApiPayload
   return json
 }
@@ -50,10 +62,7 @@ function Variacao({ value }: { value: number | null }) {
 }
 
 function coinThumbSrc(coin: MercadoCoin): string | null {
-  if (coin.id === 'hyperliquid') {
-    return COINGECKO_LOGO_BY_ID.hyperliquid ?? coin.image
-  }
-  return coin.image
+  return COINGECKO_LOGO_BY_ID[coin.id] ?? coin.image
 }
 
 function CoinThumb({ coin, size = 40 }: { coin: MercadoCoin; size?: number }) {
@@ -112,7 +121,7 @@ function CoinRowCard({ coin, compact }: { coin: MercadoCoin; compact?: boolean }
   )
 }
 
-function HighlightCard({ coin, label }: { coin: MercadoCoin; label: string }) {
+function HighlightCard({ coin }: { coin: MercadoCoin }) {
   const href = `https://www.coingecko.com/en/coins/${encodeURIComponent(coin.id)}`
   return (
     <a
@@ -123,7 +132,7 @@ function HighlightCard({ coin, label }: { coin: MercadoCoin; label: string }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-cyan-400/90">{label}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-cyan-400/90">Em destaque</p>
           <h3 className="mt-1 text-lg font-bold text-foreground">{coin.name}</h3>
           <p className="text-xs text-muted-foreground">{coin.symbol}</p>
         </div>
@@ -158,29 +167,118 @@ function SectionSkeleton() {
   )
 }
 
+const SLOT_LABELS = ['1.º', '2.º', '3.º', '4.º'] as const
+
 export function DashbuddyCryptoMarket() {
+  const [highlightIds, setHighlightIds] = useState<string[]>(() => [...DEFAULT_MARKET_HIGHLIGHT_IDS])
+  const [prefsOpen, setPrefsOpen] = useState(false)
+  const [draftSlots, setDraftSlots] = useState<string[]>(() => [...DEFAULT_MARKET_HIGHLIGHT_IDS])
+
+  useEffect(() => {
+    const stored = readStoredHighlightIds()
+    if (stored?.length) setHighlightIds(stored)
+  }, [])
+
+  const highlightsCacheKey = highlightIds.join('|')
+
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ['crypto-market'],
-    queryFn: fetchMercado,
+    queryKey: ['crypto-market', highlightsCacheKey],
+    queryFn: () => fetchMercado(highlightIds),
     staleTime: 55_000,
     gcTime: 120_000,
     retry: 1,
   })
 
-  const btc = data?.highlights.bitcoin ?? null
-  const eth = data?.highlights.ethereum ?? null
-  const sol = data?.highlights.solana ?? null
-  const hype = data?.highlights.hyperliquid ?? null
+  const syncDraftFromIds = useCallback((ids: string[]) => {
+    const base = [...ids]
+    while (base.length < 4) base.push('')
+    setDraftSlots(base.slice(0, 4).map((id) => id))
+  }, [])
+
+  useEffect(() => {
+    if (prefsOpen) syncDraftFromIds(highlightIds)
+  }, [prefsOpen, highlightIds, syncDraftFromIds])
+
+  const applySavedHighlights = useCallback((rawSlots: string[]) => {
+    const cleaned = sanitizeHighlightIds(rawSlots.filter((s) => s.trim().length > 0))
+    writeStoredHighlightIds(cleaned)
+    setHighlightIds(cleaned)
+    setPrefsOpen(false)
+  }, [])
+
+  const restoreDefault = useCallback(() => {
+    clearStoredHighlightIds()
+    const d = [...DEFAULT_MARKET_HIGHLIGHT_IDS]
+    setHighlightIds(d)
+    syncDraftFromIds(d)
+    setPrefsOpen(false)
+  }, [syncDraftFromIds])
+
+  const highlightCoins = data?.highlightCoins ?? []
 
   return (
     <section className="space-y-8" aria-labelledby="mercado-cripto-heading">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2.5">
-            <LineChart className="h-5 w-5 text-cyan-400" />
-            <h2 id="mercado-cripto-heading" className="text-2xl font-bold tracking-tight">
-              Mercado
-            </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2.5">
+              <LineChart className="h-5 w-5 text-cyan-400" />
+              <h2 id="mercado-cripto-heading" className="text-2xl font-bold tracking-tight">
+                Mercado
+              </h2>
+            </div>
+            <Popover open={prefsOpen} onOpenChange={setPrefsOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-md p-1.5 text-muted-foreground/70 transition-colors hover:bg-muted/50 hover:text-muted-foreground"
+                  title="Personalizar moedas em destaque"
+                  aria-label="Personalizar moedas em destaque (guardado neste dispositivo)"
+                >
+                  <Settings2 className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[min(100vw-2rem,20rem)] space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Slugs CoinGecko (como na URL do site), até 4. Fica guardado só neste browser.
+                </p>
+                <div className="space-y-2">
+                  {SLOT_LABELS.map((label, i) => (
+                    <div key={label} className="space-y-1">
+                      <Label htmlFor={`mercado-slot-${i}`} className="text-[11px] text-muted-foreground">
+                        Cartão {label}
+                      </Label>
+                      <Input
+                        id={`mercado-slot-${i}`}
+                        className="h-8 font-mono text-xs"
+                        placeholder="ex.: bitcoin"
+                        value={draftSlots[i] ?? ''}
+                        onChange={(e) => {
+                          const next = [...draftSlots]
+                          next[i] = e.target.value
+                          setDraftSlots(next)
+                        }}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => applySavedHighlights(draftSlots)}
+                  >
+                    Guardar
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={restoreDefault}>
+                    Padrão
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Preços e tendências via API pública CoinGecko (USD). Actualização em cache ~60s para respeitar limites
@@ -229,36 +327,20 @@ export function DashbuddyCryptoMarket() {
         <>
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Bitcoin, Ethereum, Solana e Hyperliquid
+              Moedas em destaque
             </h3>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {btc ? (
-                <HighlightCard coin={btc} label="Bitcoin" />
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                  Bitcoin indisponível
-                </div>
-              )}
-              {eth ? (
-                <HighlightCard coin={eth} label="Ethereum" />
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                  Ethereum indisponível
-                </div>
-              )}
-              {sol ? (
-                <HighlightCard coin={sol} label="Solana" />
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                  Solana indisponível
-                </div>
-              )}
-              {hype ? (
-                <HighlightCard coin={hype} label="Hyperliquid Premium" />
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                  Hyperliquid indisponível
-                </div>
+              {highlightCoins.map((coin, i) =>
+                coin ? (
+                  <HighlightCard key={`${coin.id}-${i}`} coin={coin} />
+                ) : (
+                  <div
+                    key={`empty-${data.highlightIds[i] ?? i}`}
+                    className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground"
+                  >
+                    {data.highlightIds[i] ? `${data.highlightIds[i]} indisponível` : 'Sem dados'}
+                  </div>
+                )
               )}
             </div>
           </div>

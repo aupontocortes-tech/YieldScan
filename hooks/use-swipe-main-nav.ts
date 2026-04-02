@@ -25,7 +25,7 @@ function useIsMobileNavWidth() {
 }
 
 /**
- * Mobile: deslizar para a direita → Dashboard (/).
+ * Mobile: deslizar para a direita → início (mercado / notícias em /news/mercado).
  * Deslizar para a esquerda → voltar (histórico), se existir.
  */
 export function useSwipeMainNavHandlers() {
@@ -86,7 +86,7 @@ export function useSwipeMainNavHandlers() {
       if (Math.abs(dy) > Math.abs(dx) * VERTICAL_RATIO) return
 
       if (dx > 0) {
-        if (pathname !== '/') router.push('/')
+        if (pathname !== '/news/mercado') router.push('/news/mercado')
       } else if (typeof window !== 'undefined' && window.history.length > 1) {
         router.back()
       }
