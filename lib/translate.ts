@@ -29,7 +29,8 @@ export async function traduzirParaPortugues(
 
   try {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5_000)
+    /* Pedidos em lote na API de notícias: timeout mais curto evita fila gigante. */
+    const timer = setTimeout(() => controller.abort(), 3_500)
     try {
       const res = await fetch(`${MYMEMORY_URL}?${params}`, {
         cache: 'no-store',

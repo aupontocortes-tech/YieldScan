@@ -121,8 +121,8 @@ export async function fetchCryptopanicAsNewsDataArticles(): Promise<NewsDataArti
     try {
       const out: NewsDataArticle[] = []
       let fetchUrl: string | null = url.toString()
-      const maxPosts = 60
-      const maxPages = 5
+      const maxPosts = 40
+      const maxPages = 3
 
       for (let page = 0; page < maxPages && out.length < maxPosts && fetchUrl; page++) {
         const res = await fetch(fetchUrl, {

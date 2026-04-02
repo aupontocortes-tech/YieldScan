@@ -6,6 +6,7 @@ import { cva, VariantProps } from 'class-variance-authority'
 import { PanelLeftIcon } from 'lucide-react'
 
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useMobileSidebarSwipeCloseHandlers } from '@/hooks/use-mobile-sidebar-swipe'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -164,6 +165,11 @@ function Sidebar({
   collapsible?: 'offcanvas' | 'icon' | 'none'
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const swipeCloseMobile = useMobileSidebarSwipeCloseHandlers(
+    openMobile,
+    setOpenMobile,
+    isMobile,
+  )
 
   if (collapsible === 'none') {
     return (
@@ -187,13 +193,20 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
+          className={cn(
+            'bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden',
+            'data-[state=open]:duration-400 data-[state=closed]:duration-400 motion-reduce:data-[state=open]:duration-200 motion-reduce:data-[state=closed]:duration-200',
+          )}
           style={
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
           }
           side={side}
+          overlayProps={{
+            onPointerDownCapture: swipeCloseMobile.onPointerDownCapture,
+          }}
+          onPointerDownCapture={swipeCloseMobile.onPointerDownCapture}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>

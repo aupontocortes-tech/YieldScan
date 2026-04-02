@@ -2,6 +2,10 @@
 
 import { useRouter, usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  isMainNavSwipeSuppressed,
+  SIDEBAR_EDGE_ZONE_PX,
+} from '@/hooks/swipe-gesture-coordination'
 
 const MIN_HORIZONTAL_PX = 72
 /** Gestos mais horizontais que verticais (evita confundir com scroll). */
@@ -45,6 +49,8 @@ export function useSwipeMainNavHandlers() {
       if (target instanceof HTMLElement && target.closest('button,a')) return
       const touch = e.touches[0]
       if (!touch) return
+      /* Não competir com o gesto de abrir o menu na borda esquerda (Pointer Events). */
+      if (touch.clientX < SIDEBAR_EDGE_ZONE_PX) return
       startRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now() }
     },
     [mobile, shouldIgnoreTarget]
@@ -53,6 +59,10 @@ export function useSwipeMainNavHandlers() {
   const onTouchEnd = useCallback(
     (e: React.TouchEvent<HTMLDivElement>) => {
       if (!mobile || !startRef.current) return
+      if (isMainNavSwipeSuppressed()) {
+        startRef.current = null
+        return
+      }
       const touch = e.changedTouches[0]
       if (!touch) {
         startRef.current = null

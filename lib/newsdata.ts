@@ -355,9 +355,10 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
+  /* Menos páginas = resposta mais rápida; volume ainda cobre o feed. */
   const [newsdataGeral, newsdataCripto, cryptopanicResults] = await Promise.all([
-    fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 24, maxPages: 4, size: '10' }),
-    fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 40, maxPages: 6, size: '10' }),
+    fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
+    fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
     fetchCryptopanicAsNewsDataArticles(),
   ])
 

@@ -1,8 +1,9 @@
+import { unstable_cache } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
 import { noticiasParaFeed } from '@/lib/market-feed'
 import { paraJsonInsights, pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
 import type { NoticiaProcessada } from '@/lib/newsdata'
-import { traduzirParaPortugues } from '@/lib/translate'
+import { traduzirNoticiasRapido } from '@/lib/traduzir-noticias'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,36 +35,28 @@ function permitir(id: string): boolean {
   return true
 }
 
-/* ── Tradução sequencial (respeita limite/dia da API gratuita) ─────────── */
-/** NewsData usa nomes completos ('portuguese', 'english') — normaliza para código ISO. */
-function normalizarLang(lang: string | null): string {
-  if (!lang) return 'pt'
-  const l = lang.toLowerCase()
-  if (l === 'portuguese' || l.startsWith('pt')) return 'pt'
-  if (l === 'english' || l.startsWith('en')) return 'en'
-  if (l === 'spanish' || l.startsWith('es')) return 'es'
-  if (l === 'french' || l.startsWith('fr')) return 'fr'
-  return l.slice(0, 2)
-}
-
-async function traduzirNoticias(
-  processadas: NoticiaProcessada[]
-): Promise<NoticiaProcessada[]> {
-  const out: NoticiaProcessada[] = []
-  for (const n of processadas) {
-    const lang = normalizarLang(n.linguagem)
-    if (lang === 'pt') {
-      out.push(n)
-    } else {
-      const [titulo, resumo] = await Promise.all([
-        traduzirParaPortugues(n.titulo, lang),
-        traduzirParaPortugues(n.resumo, lang),
-      ])
-      out.push({ ...n, titulo, resumo })
-    }
-  }
-  return out
-}
+/** Agrega fetch + processamento + tradução; cacheia ~45s para vários utilizadores não repetirem o trabalho. */
+const montarNoticiasEmCache = unstable_cache(
+  async (): Promise<
+    | { ok: true; traduzidas: NoticiaProcessada[] }
+    | { ok: false; erro: 'sem_artigos' | 'no_key' }
+  > => {
+    const key = process.env.NEWSDATA_API_KEY?.trim()
+    if (!key) return { ok: false, erro: 'no_key' }
+    const { results, erro } = await pegarTodasNoticias(key)
+    if (erro === 'sem_artigos') return { ok: false, erro: 'sem_artigos' }
+    const processadas = processarNoticias(results)
+    const traduzidas = await Promise.race([
+      traduzirNoticiasRapido(processadas),
+      new Promise<NoticiaProcessada[]>((resolve) =>
+        setTimeout(() => resolve(processadas), 14_000)
+      ),
+    ])
+    return { ok: true, traduzidas }
+  },
+  ['api-news-montar-v1'],
+  { revalidate: 45, tags: ['news'] }
+)
 
 /* ── Handler ────────────────────────────────────────────────────────────── */
 export async function GET(req: NextRequest) {
@@ -93,9 +86,9 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const { results, erro: erroApi } = await pegarTodasNoticias(key)
+    const payload = await montarNoticiasEmCache()
 
-    if (erroApi === 'sem_artigos') {
+    if (!payload.ok && payload.erro === 'sem_artigos') {
       return NextResponse.json(
         {
           erro: 'Não foi possível obter notícias. Verifica a chave API ou o plano na NewsData.',
@@ -107,15 +100,19 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const processadas = processarNoticias(results)
+    if (!payload.ok) {
+      return NextResponse.json(
+        {
+          erro: 'NEWSDATA_API_KEY não configurada. Define a chave em .env.local na raiz do projeto.',
+          noticias: [],
+          feed: [],
+          insights: [],
+        },
+        { status: 503 }
+      )
+    }
 
-    const traduzidas = await Promise.race([
-      traduzirNoticias(processadas),
-      new Promise<NoticiaProcessada[]>((resolve) =>
-        setTimeout(() => resolve(processadas), 18_000)
-      ),
-    ])
-
+    const { traduzidas } = payload
     const feed = noticiasParaFeed(traduzidas)
 
     return NextResponse.json(
@@ -127,9 +124,10 @@ export async function GET(req: NextRequest) {
       },
       {
         headers: {
-          'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
-          'CDN-Cache-Control': 'no-store',
-          'Vercel-CDN-Cache-Control': 'no-store',
+          'Cache-Control':
+            'public, s-maxage=45, stale-while-revalidate=120',
+          'CDN-Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
+          'Vercel-CDN-Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
         },
       }
     )

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -20,7 +20,7 @@ interface NewsPayload {
 
 /* ── Data ───────────────────────────────────────────────────────────────── */
 async function fetchNoticias(): Promise<NewsPayload> {
-  const res = await fetch('/api/news', { cache: 'no-store' })
+  const res = await fetch('/api/news')
   const json = (await res.json()) as NewsPayload
   if (!res.ok) throw new Error(json.erro ?? 'Erro ao carregar notícias.')
   return json
@@ -189,17 +189,11 @@ export function DashbuddyNews() {
     queryFn: fetchNoticias,
     retry: 2,
     retryDelay: 2_000,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
     refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   })
-
-  useEffect(() => {
-    if (isError || (data && (data as NewsPayload & { erro?: string }).erro)) {
-      void refetch()
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const feed = useMemo((): ItemFeedNoticia[] => {
     if (data?.feed && data.feed.length > 0) return data.feed

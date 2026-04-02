@@ -29,6 +29,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
+import { useSidebarEdgeOpenPointerHandlers } from '@/hooks/use-mobile-sidebar-swipe'
 import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
 const MAIN_NAV = [
@@ -56,6 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const title = pageTitle(pathname)
   const swipeNav = useSwipeMainNavHandlers()
+  const sidebarEdgeOpen = useSidebarEdgeOpenPointerHandlers()
 
   return (
     <SidebarProvider>
@@ -138,7 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset>
+      <SidebarInset {...sidebarEdgeOpen}>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-1 h-6" />
