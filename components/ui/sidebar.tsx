@@ -196,15 +196,19 @@ function Sidebar({
           className={cn(
             'bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden',
             'data-[state=open]:duration-400 data-[state=closed]:duration-400 motion-reduce:data-[state=open]:duration-200 motion-reduce:data-[state=closed]:duration-200',
+            swipeCloseMobile.contentClassName,
           )}
           style={
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
+              ...swipeCloseMobile.contentStyle,
             } as React.CSSProperties
           }
           side={side}
           overlayProps={{
             onPointerDownCapture: swipeCloseMobile.onPointerDownCapture,
+            style: swipeCloseMobile.overlayStyle,
+            className: swipeCloseMobile.overlayClassName,
           }}
           onPointerDownCapture={swipeCloseMobile.onPointerDownCapture}
         >

@@ -28,8 +28,8 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
+import { MobileSidebarEdgeOpenStrip } from '@/components/mobile-sidebar-edge-strip'
 import { Separator } from '@/components/ui/separator'
-import { useSidebarEdgeOpenPointerHandlers } from '@/hooks/use-mobile-sidebar-swipe'
 import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
 const MAIN_NAV = [
@@ -53,7 +53,6 @@ function pageTitle(pathname: string): string {
   return 'YieldScan'
 }
 
-/** Tem de ser filho de SidebarProvider — useSidebarEdgeOpenPointerHandlers chama useSidebar(). */
 function AppShellInset({
   title,
   swipeNav,
@@ -63,11 +62,9 @@ function AppShellInset({
   swipeNav: ReturnType<typeof useSwipeMainNavHandlers>
   children: React.ReactNode
 }) {
-  const sidebarEdgeOpen = useSidebarEdgeOpenPointerHandlers()
-
   return (
-    <SidebarInset {...sidebarEdgeOpen}>
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
+    <SidebarInset>
+      <header className="relative z-40 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-1 h-6" />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -173,6 +170,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
+
+      <MobileSidebarEdgeOpenStrip />
 
       <AppShellInset title={title} swipeNav={swipeNav}>
         {children}

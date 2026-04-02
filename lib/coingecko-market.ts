@@ -32,7 +32,7 @@ export type MarketApiPayload = {
 }
 
 const SIMPLE_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd'
+  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,hyperliquid&vs_currencies=usd&include_24hr_change=true&include_market_cap=true'
 const TRENDING_URL = 'https://api.coingecko.com/api/v3/search/trending'
 const MARKETS_URL =
   'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1'
@@ -100,18 +100,55 @@ const HIGHLIGHT_META: Record<HighlightCoinId, { name: string; symbol: string }> 
   hyperliquid: { name: 'Hyperliquid', symbol: 'HYPE' },
 }
 
-function fromSimpleOnly(id: HighlightCoinId, usd: number): MercadoCoin {
+type SimplePriceEntry = {
+  usd?: number
+  usd_24h_change?: number
+  usd_market_cap?: number
+}
+
+function fromSimpleHighlight(id: HighlightCoinId, raw: SimplePriceEntry): MercadoCoin | null {
+  if (typeof raw.usd !== 'number' || !Number.isFinite(raw.usd)) return null
   const m = HIGHLIGHT_META[id]
+  const change =
+    typeof raw.usd_24h_change === 'number' && Number.isFinite(raw.usd_24h_change)
+      ? raw.usd_24h_change
+      : null
+  const cap =
+    typeof raw.usd_market_cap === 'number' && Number.isFinite(raw.usd_market_cap)
+      ? raw.usd_market_cap
+      : null
   return {
     id,
     name: m.name,
     symbol: m.symbol,
-    price: usd,
-    change_24h: null,
+    price: raw.usd,
+    change_24h: change,
     image: COINGECKO_LOGO_BY_ID[id] ?? null,
-    market_cap: null,
+    market_cap: cap,
     source: 'coingecko',
   }
+}
+
+function mergeSimpleIntoCoin(coin: MercadoCoin, raw: SimplePriceEntry): MercadoCoin {
+  let next = coin
+  if (coin.price == null && typeof raw.usd === 'number' && Number.isFinite(raw.usd)) {
+    next = { ...next, price: raw.usd }
+  }
+  if (
+    coin.change_24h == null &&
+    typeof raw.usd_24h_change === 'number' &&
+    Number.isFinite(raw.usd_24h_change)
+  ) {
+    next = { ...next, change_24h: raw.usd_24h_change }
+  }
+  if (
+    coin.market_cap == null &&
+    typeof raw.usd_market_cap === 'number' &&
+    Number.isFinite(raw.usd_market_cap)
+  ) {
+    next = { ...next, market_cap: raw.usd_market_cap }
+  }
+  return next
 }
 
 function normalizeTrendingEntry(item: unknown): MercadoCoin | null {
@@ -169,7 +206,7 @@ function emptyPayload(erro: string | null, partial: boolean): MarketApiPayload {
  */
 export async function agregarMercadoCoinGecko(): Promise<MarketApiPayload> {
   const [simpleRaw, trendingRaw, marketsRaw] = await Promise.all([
-    fetchJson<Record<string, { usd?: number }>>(SIMPLE_URL),
+    fetchJson<Record<string, SimplePriceEntry>>(SIMPLE_URL),
     fetchJson<{ coins?: unknown[] }>(TRENDING_URL),
     fetchJson<unknown[]>(MARKETS_URL),
   ])
@@ -198,46 +235,54 @@ export async function agregarMercadoCoinGecko(): Promise<MarketApiPayload> {
   let solana: MercadoCoin | null = pick('solana')
   let hyperliquid: MercadoCoin | null = pick('hyperliquid')
 
-  if (simpleRaw && typeof simpleRaw.bitcoin?.usd === 'number') {
+  if (simpleRaw && simpleRaw.bitcoin) {
+    const s = simpleRaw.bitcoin
     if (!bitcoin) {
-      bitcoin = fromSimpleOnly('bitcoin', simpleRaw.bitcoin.usd)
-    } else if (bitcoin.price == null) {
-      bitcoin = { ...bitcoin, price: simpleRaw.bitcoin.usd }
+      bitcoin = fromSimpleHighlight('bitcoin', s)
+    } else {
+      bitcoin = mergeSimpleIntoCoin(bitcoin, s)
     }
-  } else if (!bitcoin) {
+  }
+  if (!bitcoin || bitcoin.price == null) {
     partial = true
     erros.push('Preço Bitcoin indisponível.')
   }
 
-  if (simpleRaw && typeof simpleRaw.ethereum?.usd === 'number') {
+  if (simpleRaw && simpleRaw.ethereum) {
+    const s = simpleRaw.ethereum
     if (!ethereum) {
-      ethereum = fromSimpleOnly('ethereum', simpleRaw.ethereum.usd)
-    } else if (ethereum.price == null) {
-      ethereum = { ...ethereum, price: simpleRaw.ethereum.usd }
+      ethereum = fromSimpleHighlight('ethereum', s)
+    } else {
+      ethereum = mergeSimpleIntoCoin(ethereum, s)
     }
-  } else if (!ethereum) {
+  }
+  if (!ethereum || ethereum.price == null) {
     partial = true
     erros.push('Preço Ethereum indisponível.')
   }
 
-  if (simpleRaw && typeof simpleRaw.solana?.usd === 'number') {
+  if (simpleRaw && simpleRaw.solana) {
+    const s = simpleRaw.solana
     if (!solana) {
-      solana = fromSimpleOnly('solana', simpleRaw.solana.usd)
-    } else if (solana.price == null) {
-      solana = { ...solana, price: simpleRaw.solana.usd }
+      solana = fromSimpleHighlight('solana', s)
+    } else {
+      solana = mergeSimpleIntoCoin(solana, s)
     }
-  } else if (!solana) {
+  }
+  if (!solana || solana.price == null) {
     partial = true
     erros.push('Preço Solana indisponível.')
   }
 
-  if (simpleRaw && typeof simpleRaw.hyperliquid?.usd === 'number') {
+  if (simpleRaw && simpleRaw.hyperliquid) {
+    const s = simpleRaw.hyperliquid
     if (!hyperliquid) {
-      hyperliquid = fromSimpleOnly('hyperliquid', simpleRaw.hyperliquid.usd)
-    } else if (hyperliquid.price == null) {
-      hyperliquid = { ...hyperliquid, price: simpleRaw.hyperliquid.usd }
+      hyperliquid = fromSimpleHighlight('hyperliquid', s)
+    } else {
+      hyperliquid = mergeSimpleIntoCoin(hyperliquid, s)
     }
-  } else if (!hyperliquid) {
+  }
+  if (!hyperliquid || hyperliquid.price == null) {
     partial = true
     erros.push('Preço Hyperliquid indisponível.')
   }
