@@ -53,11 +53,45 @@ function pageTitle(pathname: string): string {
   return 'YieldScan'
 }
 
+/** Tem de ser filho de SidebarProvider — useSidebarEdgeOpenPointerHandlers chama useSidebar(). */
+function AppShellInset({
+  title,
+  swipeNav,
+  children,
+}: {
+  title: string
+  swipeNav: ReturnType<typeof useSwipeMainNavHandlers>
+  children: React.ReactNode
+}) {
+  const sidebarEdgeOpen = useSidebarEdgeOpenPointerHandlers()
+
+  return (
+    <SidebarInset {...sidebarEdgeOpen}>
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-1 h-6" />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            YieldScan
+          </span>
+          <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+        </div>
+      </header>
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        onTouchStart={swipeNav.onTouchStart}
+        onTouchEnd={swipeNav.onTouchEnd}
+      >
+        {children}
+      </div>
+    </SidebarInset>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const title = pageTitle(pathname)
   const swipeNav = useSwipeMainNavHandlers()
-  const sidebarEdgeOpen = useSidebarEdgeOpenPointerHandlers()
 
   return (
     <SidebarProvider>
@@ -140,25 +174,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset {...sidebarEdgeOpen}>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-1 h-6" />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              YieldScan
-            </span>
-            <span className="truncate text-sm font-semibold text-foreground">{title}</span>
-          </div>
-        </header>
-        <div
-          className="flex min-h-0 flex-1 flex-col"
-          onTouchStart={swipeNav.onTouchStart}
-          onTouchEnd={swipeNav.onTouchEnd}
-        >
-          {children}
-        </div>
-      </SidebarInset>
+      <AppShellInset title={title} swipeNav={swipeNav}>
+        {children}
+      </AppShellInset>
     </SidebarProvider>
   )
 }
