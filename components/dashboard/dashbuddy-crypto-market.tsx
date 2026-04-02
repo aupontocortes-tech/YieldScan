@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
+import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import { cn } from '@/lib/utils'
 import { Coins, ExternalLink, LineChart, RefreshCw, TrendingUp } from 'lucide-react'
 
@@ -48,16 +49,25 @@ function Variacao({ value }: { value: number | null }) {
   )
 }
 
+function coinThumbSrc(coin: MercadoCoin): string | null {
+  if (coin.id === 'hyperliquid') {
+    return COINGECKO_LOGO_BY_ID.hyperliquid ?? coin.image
+  }
+  return coin.image
+}
+
 function CoinThumb({ coin, size = 40 }: { coin: MercadoCoin; size?: number }) {
-  if (coin.image) {
+  const src = coinThumbSrc(coin)
+  if (src) {
     return (
       <img
-        src={coin.image}
+        src={src}
         alt=""
         width={size}
         height={size}
         className="rounded-full bg-muted/40 object-cover"
         loading="lazy"
+        referrerPolicy="no-referrer"
       />
     )
   }

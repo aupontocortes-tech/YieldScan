@@ -3,7 +3,7 @@
  * Docs: https://docs.coingecko.com/reference
  */
 
-import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
+import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
 
 export type MercadoCoin = {
   id: string
@@ -84,7 +84,8 @@ export function normalizeMarketsRow(raw: Record<string, unknown>): MercadoCoin |
     symbol: String(raw.symbol ?? '').toUpperCase() || id.toUpperCase(),
     price,
     change_24h: change,
-    image: typeof raw.image === 'string' ? raw.image : null,
+    image:
+      typeof raw.image === 'string' && raw.image.trim().length > 0 ? raw.image.trim() : null,
     market_cap: cap,
     source: 'coingecko',
   }
@@ -127,6 +128,18 @@ function fromSimpleHighlight(id: HighlightCoinId, raw: SimplePriceEntry): Mercad
     market_cap: cap,
     source: 'coingecko',
   }
+}
+
+/** Preenche ícone quando o endpoint /markets devolve image vazio mas o coin é um destaque conhecido. */
+function fillHighlightStaticLogo(coin: MercadoCoin | null): MercadoCoin | null {
+  if (!coin) return null
+  const img = coin.image?.trim()
+  if (img) return { ...coin, image: img }
+  const byId = COINGECKO_LOGO_BY_ID[coin.id]
+  if (byId) return { ...coin, image: byId }
+  const bySym = SYMBOL_LOGO_URL[coin.symbol.toUpperCase()]
+  if (bySym) return { ...coin, image: bySym }
+  return { ...coin, image: null }
 }
 
 function mergeSimpleIntoCoin(coin: MercadoCoin, raw: SimplePriceEntry): MercadoCoin {
@@ -311,7 +324,12 @@ export async function agregarMercadoCoinGecko(): Promise<MarketApiPayload> {
     trending.length === 0
 
   return {
-    highlights: { bitcoin, ethereum, solana, hyperliquid },
+    highlights: {
+      bitcoin: fillHighlightStaticLogo(bitcoin),
+      ethereum: fillHighlightStaticLogo(ethereum),
+      solana: fillHighlightStaticLogo(solana),
+      hyperliquid: fillHighlightStaticLogo(hyperliquid),
+    },
     top10,
     trending,
     cachedAt: new Date().toISOString(),

@@ -29,7 +29,8 @@ export const COINGECKO_LOGO_BY_ID: Record<string, string> = {
   berachain: 'https://assets.coingecko.com/coins/images/25235/small/berachain.jpeg',
   flare: 'https://assets.coingecko.com/coins/images/28705/small/flare.png',
   sonic: 'https://assets.coingecko.com/coins/images/38108/small/sonic-token.png',
-  hyperliquid: 'https://assets.coingecko.com/coins/images/50891/small/hyperliquid.jpg',
+  hyperliquid:
+    'https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg',
   bnb: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
   pancakeswap: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo_%281%29.png',
   uniswap: 'https://assets.coingecko.com/coins/images/12504/small/uni.jpg',
