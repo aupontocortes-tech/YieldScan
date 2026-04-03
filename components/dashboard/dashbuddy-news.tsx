@@ -230,7 +230,7 @@ export function DashbuddyNews() {
             <h2 className="text-2xl font-bold tracking-tight">Notícias</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Filtros por categoria. Em português; sem imagem na fonte, o cartão mostra só o texto.
+            Filtros por categoria. Títulos e resumos vêm em português (tradução automática quando a fonte é noutro idioma). Sem imagem na fonte, o cartão mostra só o texto.
           </p>
         </div>
         <Button
