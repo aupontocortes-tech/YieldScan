@@ -74,26 +74,26 @@ export function computeAdvancedMetrics(bars: OhlcvBar[]): AdvancedMetricsResult 
   const whaleCandle = medRange > 0 && rangePct > medRange * 2.2
   const whaleDetected = whaleVol || whaleCandle
 
-  let whaleSummary = 'No unusual volume or range vs recent bars.'
-  if (whaleVol && whaleCandle) whaleSummary = 'Volume > 2× average and wide candle vs median.'
-  else if (whaleVol) whaleSummary = 'Volume spike vs 20-bar average (possible large flow).'
-  else if (whaleCandle) whaleSummary = 'Single bar range much wider than recent median.'
+  let whaleSummary = 'Nenhum volume ou amplitude de vela fora do comum vs barras recentes.'
+  if (whaleVol && whaleCandle) whaleSummary = 'Volume > 2× média e vela larga vs mediana — sinal forte.'
+  else if (whaleVol) whaleSummary = 'Pico de volume vs média das últimas 20 barras (possível grande fluxo).'
+  else if (whaleCandle) whaleSummary = 'Amplitude da vela muito superior à mediana recente.'
 
   return {
     sthScore,
     sthLabel:
       sthScore > 65
-        ? 'High short-term churn — volatile swings, more tactical flow (simulated).'
+        ? 'Alta rotatividade de curto prazo — oscilações voláteis, mais fluxo táctico (simulado).'
         : sthScore > 35
-          ? 'Moderate activity — mixed horizons (simulated).'
-          : 'Calmer tape — less frantic short-term trading (simulated).',
+          ? 'Actividade moderada — horizonte misto de compradores e vendedores (simulado).'
+          : 'Mercado mais calmo — menos negociação de curto prazo (simulado).',
     lthScore,
     lthLabel:
       lthScore > 65
-        ? 'Price well above long MAs / stable context — narrative of stronger hands (simulated).'
+        ? 'Preço bem acima das médias longas / contexto estável — mãos fortes predominam (simulado).'
         : lthScore > 40
-          ? 'Neutral structure vs 100/200 MA (simulated).'
-          : 'Weak vs long averages or high noise — fragile holder base (simulated).',
+          ? 'Estrutura neutra vs MA100/200 — sem sinal claro de dominância (simulado).'
+          : 'Fraco vs médias longas ou muito ruído — base de holders frágil (simulado).',
     whaleDetected,
     whaleSummary,
   }

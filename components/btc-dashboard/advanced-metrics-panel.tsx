@@ -27,7 +27,7 @@ export function AdvancedMetricsPanel({ bars }: { bars: OhlcvBar[] }) {
   if (!m) {
     return (
       <div className="rounded-xl border border-[#d4af37]/20 bg-black/50 p-4 text-sm text-zinc-500">
-        Advanced metrics — need more history (60+ bars).
+        Métricas avançadas — precisam de mais histórico (60+ barras).
       </div>
     )
   }
@@ -35,30 +35,28 @@ export function AdvancedMetricsPanel({ bars }: { bars: OhlcvBar[] }) {
   return (
     <div className="rounded-xl border border-[#d4af37]/25 bg-[#080808] p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-[#d4af37]/90">
-        Advanced metrics (simulated / free data)
+        Métricas avançadas (simuladas · dados gratuitos)
       </h3>
       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-        STH/LTH are <strong className="text-zinc-400">heuristic scores</strong>, not on-chain labels. Whale flags use
-        volume and candle range vs recent history.
+        STH/LTH são <strong className="text-zinc-400">pontuações heurísticas</strong>, não dados on-chain reais.
+        O alerta de baleias usa volume e amplitude de vela vs histórico recente.
       </p>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <div className="rounded-lg border border-zinc-800/80 bg-black/40 p-3">
-          <p className="text-[10px] font-semibold uppercase text-cyan-400/90">STH activity (sim.)</p>
-          <Meter value={m.sthScore} label="Score" />
+          <p className="text-[10px] font-semibold uppercase text-cyan-400/90">STH — Holders de Curto Prazo (sim.)</p>
+          <Meter value={m.sthScore} label="Pontuação" />
           <p className="mt-3 text-xs leading-relaxed text-zinc-400">{m.sthLabel}</p>
         </div>
         <div className="rounded-lg border border-zinc-800/80 bg-black/40 p-3">
-          <p className="text-[10px] font-semibold uppercase text-emerald-400/90">LTH strength (sim.)</p>
-          <Meter value={m.lthScore} label="Score" />
+          <p className="text-[10px] font-semibold uppercase text-emerald-400/90">LTH — Holders de Longo Prazo (sim.)</p>
+          <Meter value={m.lthScore} label="Pontuação" />
           <p className="mt-3 text-xs leading-relaxed text-zinc-400">{m.lthLabel}</p>
         </div>
-        <div
-          className={cnPanel(m.whaleDetected)}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#d4af37]/90">Whale activity</p>
+        <div className={cnPanel(m.whaleDetected)}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#d4af37]/90">Actividade de Baleias</p>
           <p className="mt-2 text-lg font-semibold text-white">
-            {m.whaleDetected ? '🐋 Activity flagged' : 'No strong flag'}
+            {m.whaleDetected ? '🐋 Actividade detectada' : 'Sem sinal relevante'}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-zinc-400">{m.whaleSummary}</p>
         </div>
