@@ -9,6 +9,18 @@ export type MaConfig = {
   color: string
 }
 
+/** Cores das velas no gráfico principal (Lightweight Charts) */
+export type CandlestickSettings = {
+  colors: {
+    /** Vela de alta: corpo, borda e pavio */
+    up: string
+    /** Vela de baixa: corpo e borda */
+    down: string
+    /** Pavio da vela de baixa (só o pavio; por defeito um vermelho um pouco mais claro) */
+    wickDown: string
+  }
+}
+
 export type RsiSettings = {
   enabled: boolean
   period: number

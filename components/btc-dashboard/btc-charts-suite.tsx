@@ -15,8 +15,6 @@ import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { bollingerBands, macd, movingAverage, rsi, sma, stochastic } from '@/lib/btc/indicators'
 import type { OhlcvBar } from '@/lib/btc/types'
-
-const { gold: GOLD } = BTC_CHART_THEME
 const BG = '#050505'
 const GRID = '#1c1917'
 const TEXT = '#a1a1aa'
@@ -52,7 +50,7 @@ function syncCharts(charts: IChartApi[]) {
 }
 
 export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
-  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg, bollinger: bbCfg, zones: zonesCfg } = useBtcSettings()
+  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg, bollinger: bbCfg, zones: zonesCfg, candles } = useBtcSettings()
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
@@ -108,13 +106,14 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     const cMain = createChart(elM, { ...baseLayout(w, 400) })
     charts.push(cMain)
 
+    const { up, down, wickDown } = candles.colors
     cMain.addSeries(CandlestickSeries, {
-      upColor: GOLD,
-      downColor: BTC_CHART_THEME.candleDown,
-      borderUpColor: GOLD,
-      borderDownColor: BTC_CHART_THEME.candleDown,
-      wickUpColor: GOLD,
-      wickDownColor: BTC_CHART_THEME.candleDownWick,
+      upColor: up,
+      downColor: down,
+      borderUpColor: up,
+      borderDownColor: down,
+      wickUpColor: up,
+      wickDownColor: wickDown,
     }).setData(bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })))
 
     // Moving averages
@@ -222,7 +221,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     ro.observe(wrap)
 
     return () => { ro.disconnect(); charts.forEach((c) => c.remove()) }
-  }, [bars, closes, mas, rsiCfg, macdCfg, stochCfg, rsiSeries, macdOut, stochOut, bbSeries, bbCfg, zonesCfg, zoneValues, highs, lows])
+  }, [bars, closes, mas, rsiCfg, macdCfg, stochCfg, rsiSeries, macdOut, stochOut, bbSeries, bbCfg, zonesCfg, zoneValues, highs, lows, candles])
 
   if (bars.length < 10) {
     return (

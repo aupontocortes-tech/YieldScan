@@ -121,7 +121,7 @@ function ColorDot({
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function SettingsPanel() {
-  const { mas, addMa, updateMa, removeMa, rsi, setRsi, macd, setMacd, stoch, setStoch, bollinger, setBollinger, zones, setZones, resetDefaults } = useBtcSettings()
+  const { mas, addMa, updateMa, removeMa, rsi, setRsi, macd, setMacd, stoch, setStoch, bollinger, setBollinger, zones, setZones, candles, setCandles, resetDefaults } = useBtcSettings()
 
   return (
     <div className="space-y-4">
@@ -135,6 +135,28 @@ export function SettingsPanel() {
           Repor
         </Button>
       </div>
+
+      {/* ── Velas BTC ───────────────────────────────────────────── */}
+      <Section title="Velas (BTC / USDT)" subtitle="Corpo, bordas e pavios do gráfico de velas — clica na cor para mudar">
+        <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
+        <div className="flex flex-wrap gap-3">
+          <ColorDot
+            label="Alta (corpo, borda, pavio)"
+            color={candles.colors.up}
+            onChange={(c) => setCandles({ ...candles, colors: { ...candles.colors, up: c } })}
+          />
+          <ColorDot
+            label="Baixa (corpo e borda)"
+            color={candles.colors.down}
+            onChange={(c) => setCandles({ ...candles, colors: { ...candles.colors, down: c } })}
+          />
+          <ColorDot
+            label="Pavio da baixa"
+            color={candles.colors.wickDown}
+            onChange={(c) => setCandles({ ...candles, colors: { ...candles.colors, wickDown: c } })}
+          />
+        </div>
+      </Section>
 
       {/* ── Moving Averages ─────────────────────────────────────── */}
       <Section title="Moving Averages" subtitle="Médias móveis sobre o preço de fecho — clica nas bolinhas para mudar a cor">

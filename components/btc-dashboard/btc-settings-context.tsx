@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import type {
   BollingerSettings,
+  CandlestickSettings,
   MaConfig,
   MacdSettings,
   RsiSettings,
@@ -60,6 +61,10 @@ const DEFAULT_ZONES: ZonesSettings = {
   showSmartMultipliers: true,
 }
 
+const DEFAULT_CANDLES: CandlestickSettings = {
+  colors: { up: '#D4AF37', down: '#991b1b', wickDown: '#b91c1c' },
+}
+
 type Ctx = {
   timeframe: TimeframePreset
   setTimeframe: (t: TimeframePreset) => void
@@ -78,6 +83,8 @@ type Ctx = {
   setBollinger: (b: BollingerSettings) => void
   zones: ZonesSettings
   setZones: (z: ZonesSettings) => void
+  candles: CandlestickSettings
+  setCandles: (c: CandlestickSettings) => void
   resetDefaults: () => void
 }
 
@@ -99,6 +106,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [stoch, setStoch] = useState<StochSettings>(() => ({ ...DEFAULT_STOCH }))
   const [bollinger, setBollinger] = useState<BollingerSettings>(() => ({ ...DEFAULT_BOLLINGER }))
   const [zones, setZones] = useState<ZonesSettings>(() => ({ ...DEFAULT_ZONES }))
+  const [candles, setCandles] = useState<CandlestickSettings>(() => ({ ...DEFAULT_CANDLES }))
 
   const addMa = useCallback(() => {
     setMas((prev) => [...prev, { id: newMaId(), period: 20, type: 'EMA', color: '#D4AF37' }])
@@ -120,6 +128,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setStoch({ ...DEFAULT_STOCH })
     setBollinger({ ...DEFAULT_BOLLINGER })
     setZones({ ...DEFAULT_ZONES })
+    setCandles({ ...DEFAULT_CANDLES })
   }, [])
 
   const value = useMemo(
@@ -141,9 +150,11 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setBollinger,
       zones,
       setZones,
+      candles,
+      setCandles,
       resetDefaults,
     }),
-    [timeframe, mas, rsi, macd, stoch, bollinger, zones, addMa, updateMa, removeMa, resetDefaults]
+    [timeframe, mas, rsi, macd, stoch, bollinger, zones, candles, addMa, updateMa, removeMa, resetDefaults]
   )
 
   return <BtcSettingsContext.Provider value={value}>{children}</BtcSettingsContext.Provider>
