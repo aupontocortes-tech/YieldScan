@@ -34,7 +34,7 @@ import {
   type PoolFilters,
 } from '@/lib/types'
 import { poolDisplayApr } from '@/lib/api'
-import { aggregateProtocols } from '@/lib/pool-smart-rank'
+import { aggregateProtocols, type ProtocolAgg } from '@/lib/pool-smart-rank'
 import {
   poolMatchesSelectedChains,
   primaryChainsPresentInData,
@@ -97,7 +97,30 @@ export function PoolFiltersComponent({
     [pools, filters.chains, aprOf]
   )
 
-  const visibleCurated = useMemo(() => curatedAggs.slice(0, 8), [curatedAggs])
+  /** Chip Meteora em Solana mesmo quando o merge/cap ou a API DLMM não trazem linhas no recorte. */
+  const curatedAggsForDexChips = useMemo((): ProtocolAgg[] => {
+    const solanaSelected = filters.chains.some((c) => canonicalLlamaChain(c) === 'Solana')
+    if (!solanaSelected) return curatedAggs
+    if (curatedAggs.some((a) => a.project.toLowerCase().includes('meteora'))) return curatedAggs
+    const hasSolanaPools = pools.some((p) => canonicalLlamaChain(p.chain) === 'Solana')
+    if (!hasSolanaPools) return curatedAggs
+    const stub: ProtocolAgg = {
+      project: 'meteora-dlmm',
+      totalTvl: 0,
+      totalVol: 0,
+      aprSum: 0,
+      count: 0,
+    }
+    return [...curatedAggs, stub].sort((a, b) => {
+      if (b.totalTvl !== a.totalTvl) return b.totalTvl - a.totalTvl
+      if (b.totalVol !== a.totalVol) return b.totalVol - a.totalVol
+      const avgA = a.count ? a.aprSum / a.count : 0
+      const avgB = b.count ? b.aprSum / b.count : 0
+      return avgB - avgA
+    })
+  }, [curatedAggs, filters.chains, pools])
+
+  const visibleCurated = useMemo(() => curatedAggsForDexChips.slice(0, 8), [curatedAggsForDexChips])
 
   const moreProtocolAggs = useMemo(() => {
     if (!expandDexList) return []

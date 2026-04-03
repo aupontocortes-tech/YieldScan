@@ -163,11 +163,13 @@ export async function fetchPools(
 
   const llamaJson = (await llamaRes.json()) as { data?: Pool[] }
   let pools = llamaJson.data ?? []
+  let meteoraMerged: Pool[] = []
 
   if (includeMeteora && metaRes?.ok) {
     try {
       const mj = (await metaRes.json()) as { data?: Pool[] }
       const meta = mj.data ?? []
+      meteoraMerged = meta
       const seen = new Set(pools.map((p) => p.pool))
       for (const p of meta) {
         if (!seen.has(p.pool)) {
@@ -182,6 +184,18 @@ export async function fetchPools(
 
   pools.sort((a, b) => b.tvlUsd - a.tvlUsd)
   pools = pools.slice(0, mergeCap)
+
+  // Meteora vem de outra API; o slice global por TVL não pode remover todas as pools Meteora
+  // (senão some o chip «Meteora» em Solana quando há Raydium/Orca).
+  if (meteoraMerged.length > 0) {
+    const keep = new Set(pools.map((p) => p.pool))
+    for (const p of meteoraMerged) {
+      if (!keep.has(p.pool) && p.project.toLowerCase().includes('meteora')) {
+        pools.push(p)
+        keep.add(p.pool)
+      }
+    }
+  }
 
   return normalizePoolChains(pools)
 }

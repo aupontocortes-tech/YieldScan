@@ -1,9 +1,25 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import type { SignalEngineResult } from '@/lib/btc/signal-engine'
+import type { MarketRegime, SignalEngineResult, TradeSignal } from '@/lib/btc/signal-engine'
 import type { OhlcvBar } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
+
+const TRADE_SIGNAL_PT: Record<TradeSignal, string> = {
+  '🔥 STRONG BUY': '🔥 COMPRA FORTE',
+  '🟢 BUY': '🟢 COMPRAR',
+  '⚪ NEUTRAL': '⚪ NEUTRO',
+  '🟠 SELL': '🟠 VENDER',
+  '🔴 STRONG SELL': '🔴 VENDA FORTE',
+}
+
+const MARKET_REGIME_PT: Record<MarketRegime, string> = {
+  'Strong Bull': 'Alta forte',
+  Bull: 'Alta',
+  Neutral: 'Neutro',
+  Bear: 'Baixa',
+  'Strong Bear': 'Baixa forte',
+}
 
 type BtcContextPayload = {
   coingecko: { usd: number; change24h: number | null } | null
@@ -33,7 +49,11 @@ export function MarketCard({ bars, signal }: { bars: OhlcvBar[]; signal: SignalE
     last && prev && prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : null
 
   const trendLabel =
-    signal?.trendBullish === true ? 'Bullish (EMA9 > EMA21)' : signal?.trendBullish === false ? 'Bearish (EMA9 ≤ EMA21)' : '—'
+    signal?.trendBullish === true
+      ? 'Alta (EMA9 > EMA21)'
+      : signal?.trendBullish === false
+        ? 'Baixa (EMA9 ≤ EMA21)'
+        : '—'
 
   return (
     <div className="space-y-3">
@@ -48,38 +68,44 @@ export function MarketCard({ bars, signal }: { bars: OhlcvBar[]; signal: SignalE
           {ch != null && (
             <p className={ch >= 0 ? 'mt-1 text-sm text-emerald-400' : 'mt-1 text-sm text-red-400'}>
               {ch >= 0 ? '+' : ''}
-              {ch.toFixed(2)}% vs previous bar
+              {ch.toFixed(2)}% vs. vela anterior
             </p>
           )}
-          <p className="mt-2 text-[11px] text-zinc-500">Binance klines (last candle)</p>
+          <p className="mt-2 text-[11px] text-zinc-500">Binance — última vela (klines)</p>
         </div>
 
         <div className="rounded-xl border border-[#d4af37]/35 bg-gradient-to-br from-black via-[#0a0a0a] to-[#111] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">Market score</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">
+            Pontuação do mercado
+          </p>
           {signal ? (
             <>
               <p className="mt-2 font-mono text-3xl font-bold tabular-nums text-[#d4af37]">{signal.score}</p>
-              <p className="mt-1 text-sm font-medium text-zinc-200">{signal.marketRegime}</p>
-              <p className="mt-2 text-[10px] uppercase tracking-wide text-zinc-500">Range −100 … +100</p>
+              <p className="mt-1 text-sm font-medium text-zinc-200">
+                {MARKET_REGIME_PT[signal.marketRegime]}
+              </p>
+              <p className="mt-2 text-[10px] uppercase tracking-wide text-zinc-500">Escala −100 … +100</p>
             </>
           ) : (
-            <p className="mt-2 text-sm text-zinc-500">Need more bars for model</p>
+            <p className="mt-2 text-sm text-zinc-500">Precisamos de mais velas para o modelo</p>
           )}
         </div>
 
         <div className="rounded-xl border border-[#d4af37]/35 bg-gradient-to-br from-black via-[#0a0a0a] to-[#111] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">Signal</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">Sinal</p>
           {signal ? (
-            <p className="mt-2 text-lg font-semibold leading-snug text-white">{signal.tradeSignal}</p>
+            <p className="mt-2 text-lg font-semibold leading-snug text-white">
+              {TRADE_SIGNAL_PT[signal.tradeSignal]}
+            </p>
           ) : (
             <p className="mt-2 text-sm text-zinc-500">—</p>
           )}
-          <p className="mt-3 text-[10px] font-medium uppercase tracking-wide text-zinc-500">Trend</p>
+          <p className="mt-3 text-[10px] font-medium uppercase tracking-wide text-zinc-500">Tendência</p>
           <p className="mt-0.5 text-xs text-zinc-300">{trendLabel}</p>
         </div>
 
         <div className="rounded-xl border border-[#d4af37]/35 bg-gradient-to-br from-black via-[#0a0a0a] to-[#111] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">Free APIs</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">APIs gratuitas</p>
           {ctx?.coingecko ? (
             <>
               <p className="mt-2 font-mono text-sm tabular-nums text-white">
@@ -93,16 +119,16 @@ export function MarketCard({ bars, signal }: { bars: OhlcvBar[]; signal: SignalE
                   )}
                 >
                   {ctx.coingecko.change24h >= 0 ? '+' : ''}
-                  {ctx.coingecko.change24h.toFixed(2)}% 24h
+                  {ctx.coingecko.change24h.toFixed(2)}% em 24 h
                 </p>
               )}
             </>
           ) : (
-            <p className="mt-2 text-xs text-zinc-500">CoinGecko — n/a</p>
+            <p className="mt-2 text-xs text-zinc-500">CoinGecko — indisponível</p>
           )}
           {ctx?.defiTvlUsd != null && (
             <p className="mt-2 text-[11px] text-zinc-400">
-              DeFi TVL (Llama){' '}
+              TVL DeFi (Llama){' '}
               <span className="font-mono text-zinc-200">
                 US$
                 {(ctx.defiTvlUsd / 1e9).toFixed(2)}B
@@ -111,7 +137,7 @@ export function MarketCard({ bars, signal }: { bars: OhlcvBar[]; signal: SignalE
           )}
           {ctx?.hashRateEH != null && (
             <p className="mt-1 text-[11px] text-zinc-500">
-              Est. hash ·{' '}
+              Hash estim. ·{' '}
               <span className="font-mono text-zinc-400">{ctx.hashRateEH.toFixed(1)} EH/s</span>
               <span className="text-zinc-600"> · blockchain.com</span>
             </p>
