@@ -25,10 +25,25 @@ const DEFAULT_RSI: RsiSettings = {
   oversold: 30,
   overbought: 70,
   showLevels: true,
+  colors: { line: '#D4AF37', oversold: '#22c55e', overbought: '#ef4444' },
 }
 
-const DEFAULT_MACD: MacdSettings = { enabled: true, fast: 12, slow: 26, signal: 9 }
-const DEFAULT_STOCH: StochSettings = { enabled: true, kPeriod: 14, dPeriod: 3, smooth: 3 }
+const DEFAULT_MACD: MacdSettings = {
+  enabled: true,
+  fast: 12,
+  slow: 26,
+  signal: 9,
+  colors: { line: '#D4AF37', signal: '#94a3b8' },
+}
+
+const DEFAULT_STOCH: StochSettings = {
+  enabled: true,
+  kPeriod: 14,
+  dPeriod: 3,
+  smooth: 3,
+  colors: { k: '#D4AF37', d: '#a78bfa' },
+}
+
 const DEFAULT_BOLLINGER: BollingerSettings = {
   enabled: true,
   period: 20,
@@ -36,6 +51,7 @@ const DEFAULT_BOLLINGER: BollingerSettings = {
   showUpper: true,
   showMiddle: true,
   showLower: true,
+  colors: { upper: '#94a3b8', middle: '#D4AF37', lower: '#64748b' },
 }
 const DEFAULT_ZONES: ZonesSettings = {
   enabled: true,

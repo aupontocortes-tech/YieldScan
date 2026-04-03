@@ -89,6 +89,36 @@ function Rule() {
   return <div className="my-4 border-t border-zinc-800/70" />
 }
 
+// ── Interactive color dot — click to open native color picker ──────────────
+function ColorDot({
+  label,
+  color,
+  onChange,
+}: {
+  label: string
+  color: string
+  onChange: (c: string) => void
+}) {
+  return (
+    <label
+      className="group relative flex cursor-pointer items-center gap-1.5"
+      title={`Cor: ${label} — clica para mudar`}
+    >
+      <span
+        className="h-3 w-6 rounded-sm border border-zinc-700 transition-all group-hover:scale-110 group-hover:border-zinc-400"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-[10px] text-zinc-500 transition-colors group-hover:text-zinc-300">{label}</span>
+      <input
+        type="color"
+        value={color}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </label>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export function SettingsPanel() {
   const { mas, addMa, updateMa, removeMa, rsi, setRsi, macd, setMacd, stoch, setStoch, bollinger, setBollinger, zones, setZones, resetDefaults } = useBtcSettings()
@@ -230,18 +260,27 @@ export function SettingsPanel() {
             <Num label="Sobrecompra" value={rsi.overbought} min={50} max={100} onChange={(n) => setRsi({ ...rsi, overbought: n })} />
           </div>
           <Rule />
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500">
-              <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.rsiLine }} />RSI
-            </span>
-            {rsi.showLevels && <>
-              <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500">
-                <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.rsiOversoldLine }} />{rsi.oversold}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500">
-                <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.rsiOverboughtLine }} />{rsi.overbought}
-              </span>
-            </>}
+          <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
+          <div className="flex flex-wrap gap-3">
+            <ColorDot
+              label="RSI"
+              color={rsi.colors.line}
+              onChange={(c) => setRsi({ ...rsi, colors: { ...rsi.colors, line: c } })}
+            />
+            {rsi.showLevels && (
+              <>
+                <ColorDot
+                  label={`Sobrevenda (${rsi.oversold})`}
+                  color={rsi.colors.oversold}
+                  onChange={(c) => setRsi({ ...rsi, colors: { ...rsi.colors, oversold: c } })}
+                />
+                <ColorDot
+                  label={`Sobrecompra (${rsi.overbought})`}
+                  color={rsi.colors.overbought}
+                  onChange={(c) => setRsi({ ...rsi, colors: { ...rsi.colors, overbought: c } })}
+                />
+              </>
+            )}
           </div>
         </Section>
 
@@ -257,16 +296,18 @@ export function SettingsPanel() {
             <Num label="Sinal" value={macd.signal} min={1} max={100} onChange={(n) => setMacd({ ...macd, signal: n })} />
           </div>
           <Rule />
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500">
-              <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.macdLine }} />Linha
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500">
-              <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.macdSignal }} />Sinal
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500">
-              <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.macdHistogramPos }} />Hist+
-            </span>
+          <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
+          <div className="flex flex-wrap gap-3">
+            <ColorDot
+              label="Linha"
+              color={macd.colors.line}
+              onChange={(c) => setMacd({ ...macd, colors: { ...macd.colors, line: c } })}
+            />
+            <ColorDot
+              label="Sinal"
+              color={macd.colors.signal}
+              onChange={(c) => setMacd({ ...macd, colors: { ...macd.colors, signal: c } })}
+            />
           </div>
         </Section>
       </div>
@@ -285,9 +326,18 @@ export function SettingsPanel() {
             <Num label="Suavização" value={stoch.smooth} min={1} max={20} onChange={(n) => setStoch({ ...stoch, smooth: n })} />
           </div>
           <Rule />
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500"><span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.stochK }} />%K (rápido)</span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500"><span className="h-2 w-5 rounded-sm" style={{ backgroundColor: BTC_CHART_THEME.stochD }} />%D (suavizado)</span>
+          <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
+          <div className="flex flex-wrap gap-3">
+            <ColorDot
+              label="%K (rápido)"
+              color={stoch.colors.k}
+              onChange={(c) => setStoch({ ...stoch, colors: { ...stoch.colors, k: c } })}
+            />
+            <ColorDot
+              label="%D (suavizado)"
+              color={stoch.colors.d}
+              onChange={(c) => setStoch({ ...stoch, colors: { ...stoch.colors, d: c } })}
+            />
           </div>
         </Section>
 
@@ -302,13 +352,21 @@ export function SettingsPanel() {
             <Num label="Desvio (σ)" value={bollinger.stdDev} min={0.5} max={4} step={0.1} onChange={(n) => setBollinger({ ...bollinger, stdDev: n })} />
           </div>
           <Rule />
-          <div className="grid grid-cols-3 gap-2 text-[10px]">
-            {([['showUpper', 'Superior'], ['showMiddle', 'Média'], ['showLower', 'Inferior']] as const).map(([key, label]) => (
-              <div key={key} className="flex flex-col items-center gap-1 rounded border border-zinc-800 bg-black/50 p-2">
-                <span className="text-zinc-500">{label}</span>
+          <div className="space-y-2">
+            {([
+              ['showUpper', 'upper', 'Superior'] as const,
+              ['showMiddle', 'middle', 'Média'] as const,
+              ['showLower', 'lower', 'Inferior'] as const,
+            ]).map(([toggleKey, colorKey, label]) => (
+              <div key={toggleKey} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
+                <ColorDot
+                  label={label}
+                  color={bollinger.colors[colorKey]}
+                  onChange={(c) => setBollinger({ ...bollinger, colors: { ...bollinger.colors, [colorKey]: c } })}
+                />
                 <Switch
-                  checked={bollinger[key]}
-                  onCheckedChange={(c) => setBollinger({ ...bollinger, [key]: c })}
+                  checked={bollinger[toggleKey]}
+                  onCheckedChange={(c) => setBollinger({ ...bollinger, [toggleKey]: c })}
                 />
               </div>
             ))}

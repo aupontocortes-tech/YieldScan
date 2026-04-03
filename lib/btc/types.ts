@@ -15,6 +15,7 @@ export type RsiSettings = {
   oversold: number
   overbought: number
   showLevels: boolean
+  colors: { line: string; oversold: string; overbought: string }
 }
 
 export type MacdSettings = {
@@ -22,6 +23,7 @@ export type MacdSettings = {
   fast: number
   slow: number
   signal: number
+  colors: { line: string; signal: string }
 }
 
 export type StochSettings = {
@@ -29,6 +31,7 @@ export type StochSettings = {
   kPeriod: number
   dPeriod: number
   smooth: number
+  colors: { k: string; d: string }
 }
 
 export type BollingerSettings = {
@@ -38,6 +41,7 @@ export type BollingerSettings = {
   showUpper: boolean
   showMiddle: boolean
   showLower: boolean
+  colors: { upper: string; middle: string; lower: string }
 }
 
 export type ZonesSettings = {

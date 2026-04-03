@@ -131,13 +131,13 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     if (bbSeries) {
       const bOpts = { priceLineVisible: false, lastValueVisible: false }
       if (bbCfg.showUpper)
-        cMain.addSeries(LineSeries, { color: BTC_CHART_THEME.bbUpper, lineWidth: 1, lineStyle: LineStyle.Dotted, ...bOpts })
+        cMain.addSeries(LineSeries, { color: bbCfg.colors.upper, lineWidth: 1, lineStyle: LineStyle.Dotted, ...bOpts })
           .setData(bars.map((b, i) => ({ time: b.time as Time, value: bbSeries.upper[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
       if (bbCfg.showMiddle)
-        cMain.addSeries(LineSeries, { color: BTC_CHART_THEME.bbMiddle, lineWidth: 1, ...bOpts })
+        cMain.addSeries(LineSeries, { color: bbCfg.colors.middle, lineWidth: 1, ...bOpts })
           .setData(bars.map((b, i) => ({ time: b.time as Time, value: bbSeries.middle[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
       if (bbCfg.showLower)
-        cMain.addSeries(LineSeries, { color: BTC_CHART_THEME.bbLower, lineWidth: 1, lineStyle: LineStyle.Dotted, ...bOpts })
+        cMain.addSeries(LineSeries, { color: bbCfg.colors.lower, lineWidth: 1, lineStyle: LineStyle.Dotted, ...bOpts })
           .setData(bars.map((b, i) => ({ time: b.time as Time, value: bbSeries.lower[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
     }
 
@@ -180,12 +180,12 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     if (rsiCfg.enabled && rsiSeries) {
       const cRsi = createChart(elR, { ...baseLayout(w, 96) })
       charts.push(cRsi)
-      const rsiLine = cRsi.addSeries(LineSeries, { color: GOLD, lineWidth: 2, priceLineVisible: false })
+      const rsiLine = cRsi.addSeries(LineSeries, { color: rsiCfg.colors.line, lineWidth: 2, priceLineVisible: false })
       rsiLine.setData(bars.map((b, i) => ({ time: b.time as Time, value: rsiSeries[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
       cRsi.priceScale('right').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
       if (rsiCfg.showLevels) {
-        rsiLine.createPriceLine({ price: rsiCfg.oversold, color: BTC_CHART_THEME.rsiOversoldLine, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: String(rsiCfg.oversold) })
-        rsiLine.createPriceLine({ price: rsiCfg.overbought, color: BTC_CHART_THEME.rsiOverboughtLine, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: String(rsiCfg.overbought) })
+        rsiLine.createPriceLine({ price: rsiCfg.oversold, color: rsiCfg.colors.oversold, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: String(rsiCfg.oversold) })
+        rsiLine.createPriceLine({ price: rsiCfg.overbought, color: rsiCfg.colors.overbought, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: String(rsiCfg.overbought) })
       }
     }
 
@@ -195,9 +195,9 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
       charts.push(cMacd)
       cMacd.addSeries(HistogramSeries, { color: BTC_CHART_THEME.goldDim, priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } })
         .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.hist[i] ?? 0, color: (macdOut.hist[i] ?? 0) >= 0 ? BTC_CHART_THEME.macdHistogramPos : BTC_CHART_THEME.macdHistogramNeg })))
-      cMacd.addSeries(LineSeries, { color: GOLD, lineWidth: 2, priceLineVisible: false })
+      cMacd.addSeries(LineSeries, { color: macdCfg.colors.line, lineWidth: 2, priceLineVisible: false })
         .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.line[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-      cMacd.addSeries(LineSeries, { color: BTC_CHART_THEME.macdSignal, lineWidth: 1, priceLineVisible: false })
+      cMacd.addSeries(LineSeries, { color: macdCfg.colors.signal, lineWidth: 1, priceLineVisible: false })
         .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.signal[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
     }
 
@@ -205,9 +205,9 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     if (stochCfg.enabled && stochOut) {
       const cStoch = createChart(elS, { ...baseLayout(w, 96) })
       charts.push(cStoch)
-      cStoch.addSeries(LineSeries, { color: GOLD, lineWidth: 2, priceLineVisible: false })
+      cStoch.addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: 2, priceLineVisible: false })
         .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.k[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-      cStoch.addSeries(LineSeries, { color: BTC_CHART_THEME.stochD, lineWidth: 1, priceLineVisible: false })
+      cStoch.addSeries(LineSeries, { color: stochCfg.colors.d, lineWidth: 1, priceLineVisible: false })
         .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.d[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
     }
 
