@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { NewsSpeakButton } from '@/components/news/news-speak-button'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
@@ -100,7 +101,7 @@ function NewsCardSkeleton() {
 }
 
 /* ── NewsCard: imagem quadrada + texto; sem imagem = só texto ───────────── */
-function NewsCard({ n }: { n: NoticiaProcessada }) {
+function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const hasImg = Boolean(n.imagemUrl && !imgErr)
@@ -143,40 +144,52 @@ function NewsCard({ n }: { n: NoticiaProcessada }) {
   )
 
   return (
-    <a
-      href={hasLink ? n.link : undefined}
-      target={hasLink ? '_blank' : undefined}
-      rel={hasLink ? 'noopener noreferrer' : undefined}
+    <div
       className={cn(
-        'group flex flex-col overflow-hidden rounded-xl border border-border/50 bg-card/85',
-        'transition-all duration-200 hover:border-yellow-500/35 hover:shadow-lg',
-        hasLink ? 'cursor-pointer' : 'cursor-default'
+        'group relative flex flex-col overflow-hidden rounded-xl border border-border/50 bg-card/85',
+        'transition-all duration-200 hover:border-yellow-500/35 hover:shadow-lg'
       )}
     >
-      {hasImg ? (
-        <>
-          <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted/30">
-            <img
-              src={n.imagemUrl!}
-              alt=""
-              loading="lazy"
-              className={cn(
-                'h-full w-full object-cover transition-opacity duration-500',
-                imgLoaded ? 'opacity-100' : 'opacity-0'
+      <a
+        href={hasLink ? n.link : undefined}
+        target={hasLink ? '_blank' : undefined}
+        rel={hasLink ? 'noopener noreferrer' : undefined}
+        className={cn(
+          'flex min-h-0 flex-1 flex-col outline-none',
+          hasLink ? 'cursor-pointer' : 'cursor-default'
+        )}
+      >
+        {hasImg ? (
+          <>
+            <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted/30">
+              <img
+                src={n.imagemUrl!}
+                alt=""
+                loading="lazy"
+                className={cn(
+                  'h-full w-full object-cover transition-opacity duration-500',
+                  imgLoaded ? 'opacity-100' : 'opacity-0'
+                )}
+                onLoad={() => setImgLoaded(true)}
+                onError={() => setImgErr(true)}
+              />
+              {!imgLoaded && !imgErr && (
+                <div className="absolute inset-0 animate-pulse bg-muted/50" aria-hidden />
               )}
-              onLoad={() => setImgLoaded(true)}
-              onError={() => setImgErr(true)}
-            />
-            {!imgLoaded && !imgErr && (
-              <div className="absolute inset-0 animate-pulse bg-muted/50" aria-hidden />
-            )}
-          </div>
-          <div className="flex flex-1 flex-col p-4">{texto}</div>
-        </>
-      ) : (
-        <div className="flex flex-1 flex-col p-4 pt-5">{texto}</div>
-      )}
-    </a>
+            </div>
+            <div className="flex flex-1 flex-col p-4 pb-10">{texto}</div>
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col p-4 pb-10 pt-5">{texto}</div>
+        )}
+      </a>
+      <NewsSpeakButton
+        speechId={speechId}
+        title={n.titulo}
+        description={n.resumo}
+        className="absolute bottom-3 right-3"
+      />
+    </div>
   )
 }
 
@@ -320,7 +333,7 @@ export function DashbuddyNews() {
       {!isLoading && feedFiltrado.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {feedFiltrado.map((item) => (
-            <NewsCard key={item.id} n={item.dados} />
+            <NewsCard key={item.id} speechId={item.id} n={item.dados} />
           ))}
         </div>
       )}
