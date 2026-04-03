@@ -8,6 +8,7 @@ import type {
   MacdSettings,
   RsiSettings,
   StochSettings,
+  ZonesSettings,
 } from '@/lib/btc/types'
 
 const DEFAULT_MAS: MaConfig[] = [
@@ -18,14 +19,15 @@ const DEFAULT_MAS: MaConfig[] = [
 ]
 
 const DEFAULT_RSI: RsiSettings = {
+  enabled: true,
   period: 14,
   oversold: 30,
   overbought: 70,
   showLevels: true,
 }
 
-const DEFAULT_MACD: MacdSettings = { fast: 12, slow: 26, signal: 9 }
-const DEFAULT_STOCH: StochSettings = { kPeriod: 14, dPeriod: 3, smooth: 3 }
+const DEFAULT_MACD: MacdSettings = { enabled: true, fast: 12, slow: 26, signal: 9 }
+const DEFAULT_STOCH: StochSettings = { enabled: true, kPeriod: 14, dPeriod: 3, smooth: 3 }
 const DEFAULT_BOLLINGER: BollingerSettings = {
   enabled: true,
   period: 20,
@@ -33,6 +35,12 @@ const DEFAULT_BOLLINGER: BollingerSettings = {
   showUpper: true,
   showMiddle: true,
   showLower: true,
+}
+const DEFAULT_ZONES: ZonesSettings = {
+  enabled: true,
+  showMaZones: true,
+  showSupportResistance: true,
+  showSmartMultipliers: true,
 }
 
 type Ctx = {
@@ -51,6 +59,8 @@ type Ctx = {
   setStoch: (s: StochSettings) => void
   bollinger: BollingerSettings
   setBollinger: (b: BollingerSettings) => void
+  zones: ZonesSettings
+  setZones: (z: ZonesSettings) => void
   resetDefaults: () => void
 }
 
@@ -69,6 +79,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [macd, setMacd] = useState<MacdSettings>(() => ({ ...DEFAULT_MACD }))
   const [stoch, setStoch] = useState<StochSettings>(() => ({ ...DEFAULT_STOCH }))
   const [bollinger, setBollinger] = useState<BollingerSettings>(() => ({ ...DEFAULT_BOLLINGER }))
+  const [zones, setZones] = useState<ZonesSettings>(() => ({ ...DEFAULT_ZONES }))
 
   const addMa = useCallback(() => {
     setMas((prev) => [...prev, { id: newMaId(), period: 20, type: 'EMA', color: '#D4AF37' }])
@@ -89,6 +100,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setMacd({ ...DEFAULT_MACD })
     setStoch({ ...DEFAULT_STOCH })
     setBollinger({ ...DEFAULT_BOLLINGER })
+    setZones({ ...DEFAULT_ZONES })
   }, [])
 
   const value = useMemo(
@@ -108,9 +120,11 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setStoch,
       bollinger,
       setBollinger,
+      zones,
+      setZones,
       resetDefaults,
     }),
-    [timeframe, mas, rsi, macd, stoch, bollinger, addMa, updateMa, removeMa, resetDefaults]
+    [timeframe, mas, rsi, macd, stoch, bollinger, zones, addMa, updateMa, removeMa, resetDefaults]
   )
 
   return <BtcSettingsContext.Provider value={value}>{children}</BtcSettingsContext.Provider>

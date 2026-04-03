@@ -10,6 +10,7 @@ export type MaConfig = {
 }
 
 export type RsiSettings = {
+  enabled: boolean
   period: number
   oversold: number
   overbought: number
@@ -17,12 +18,14 @@ export type RsiSettings = {
 }
 
 export type MacdSettings = {
+  enabled: boolean
   fast: number
   slow: number
   signal: number
 }
 
 export type StochSettings = {
+  enabled: boolean
   kPeriod: number
   dPeriod: number
   smooth: number
@@ -35,6 +38,13 @@ export type BollingerSettings = {
   showUpper: boolean
   showMiddle: boolean
   showLower: boolean
+}
+
+export type ZonesSettings = {
+  enabled: boolean
+  showMaZones: boolean
+  showSupportResistance: boolean
+  showSmartMultipliers: boolean
 }
 
 export type OhlcvBar = {

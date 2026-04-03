@@ -1,6 +1,3 @@
-/**
- * Cores alinhadas com `BtcChartsSuite` — usar nas legendas do painel de definições.
- */
 export const BTC_CHART_THEME = {
   gold: '#D4AF37',
   goldDim: 'rgba(212, 175, 55, 0.35)',
@@ -18,4 +15,14 @@ export const BTC_CHART_THEME = {
   bbUpper: '#94a3b8',
   bbMiddle: 'rgba(212, 175, 55, 0.65)',
   bbLower: '#64748b',
+  // Zones
+  zoneExtremeTop: '#ef4444',
+  zoneWarning: '#f97316',
+  zoneFairValue: '#D4AF37',
+  zoneDiscount: '#22c55e',
+  zoneExtremeBottom: '#16a34a',
+  zoneSupportResistance: '#64748b',
+  zoneMa50: '#38bdf8',
+  zoneMa100: '#818cf8',
+  zoneMa200: '#4ade80',
 } as const
