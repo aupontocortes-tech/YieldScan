@@ -49,7 +49,7 @@ const montarNoticiasEmCache = unstable_cache(
     const traduzidas = await Promise.race([
       traduzirNoticiasRapido(processadas),
       new Promise<NoticiaProcessada[]>((resolve) =>
-        setTimeout(() => resolve(processadas), 14_000)
+        setTimeout(() => resolve(processadas), 28_000)
       ),
     ])
     return { ok: true, traduzidas }

@@ -20,31 +20,38 @@ export async function traduzirParaPortugues(
   if (!t) return texto
   if (langDe.startsWith('pt')) return texto
 
-  const params = new URLSearchParams({
-    q: t.slice(0, 480),
-    langpair: `${langDe}|pt-BR`,
-  })
-  const email = process.env.MYMEMORY_EMAIL?.trim()
-  if (email) params.set('de', email)
+  /** Idioma desconhecido: MyMemory autodetecta a origem → pt-BR */
+  const langpair =
+    langDe === 'auto' ? 'auto|pt-BR' : `${langDe}|pt-BR`
 
-  try {
+  async function pedir(pair: string): Promise<string | null> {
+    const p = new URLSearchParams({ q: t.slice(0, 480), langpair: pair })
+    const email = process.env.MYMEMORY_EMAIL?.trim()
+    if (email) p.set('de', email)
     const controller = new AbortController()
-    /* Pedidos em lote na API de notícias: timeout mais curto evita fila gigante. */
     const timer = setTimeout(() => controller.abort(), 3_500)
     try {
-      const res = await fetch(`${MYMEMORY_URL}?${params}`, {
+      const res = await fetch(`${MYMEMORY_URL}?${p}`, {
         cache: 'no-store',
         signal: controller.signal,
       })
-      if (!res.ok) return texto
+      if (!res.ok) return null
       const data = (await res.json()) as {
         responseData?: { translatedText?: unknown }
       }
       const traduzido = data?.responseData?.translatedText
-      return textoValido(traduzido) ? traduzido : texto
+      return textoValido(traduzido) ? String(traduzido) : null
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  try {
+    let out = await pedir(langpair)
+    if (out == null && langDe === 'auto') {
+      out = await pedir('en|pt-BR')
+    }
+    return out ?? texto
   } catch {
     return texto
   }

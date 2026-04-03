@@ -30,6 +30,16 @@ function getSynth(): SpeechSynthesis | null {
   return window.speechSynthesis ?? null
 }
 
+/** Escolhe voz em português (prioridade pt-BR) para o sintetizador não usar inglês por defeito. */
+function aplicarVozPortugues(syn: SpeechSynthesis, u: SpeechSynthesisUtterance) {
+  const vs = syn.getVoices()
+  const pt =
+    vs.find((v) => /^pt-BR|^pt_BR|^pt-br$/i.test(v.lang)) ??
+    vs.find((v) => v.lang.toLowerCase() === 'pt-br') ??
+    vs.find((v) => v.lang.toLowerCase().startsWith('pt'))
+  if (pt) u.voice = pt
+}
+
 /** Para o que estiver a falar (ex.: ao sair da página). */
 export function cancelNewsSpeech() {
   const syn = getSynth()
@@ -72,7 +82,27 @@ export function toggleNewsSpeech(id: string, title: string, description: string)
   u.onend = done
   u.onerror = done
 
-  syn.speak(u)
+  let iniciou = false
+  const falar = () => {
+    if (iniciou) return
+    iniciou = true
+    aplicarVozPortugues(syn, u)
+    syn.speak(u)
+  }
+
+  if (syn.getVoices().length > 0) {
+    falar()
+  } else {
+    const once = () => {
+      syn.removeEventListener('voiceschanged', once)
+      falar()
+    }
+    syn.addEventListener('voiceschanged', once)
+    window.setTimeout(() => {
+      syn.removeEventListener('voiceschanged', once)
+      falar()
+    }, 500)
+  }
   emit()
 }
 

@@ -1,49 +1,71 @@
 /**
- * Tradução em lote para /api/news — muito mais rápida que um artigo de cada vez.
- * Só os primeiros N não-PT são traduzidos (o resto fica no idioma original).
+ * Tradução em lote para /api/news — títulos e resumos em português (Brasil).
+ *
+ * Regra importante: muitas fontes não enviam `language`; antes isso era tratado
+ * como PT e a notícia ficava em inglês. Agora `null`/vazio → autodetecção (auto).
+ * Texto que já parece português (acentos / palavras comuns) não é reenviado à API.
  */
 
 import type { NoticiaProcessada } from '@/lib/newsdata'
 import { traduzirParaPortugues } from '@/lib/translate'
 
-function normalizarLang(lang: string | null): string {
-  if (!lang) return 'pt'
-  const l = lang.toLowerCase()
+/** Código ISO usado em MyMemory (pt = não traduzir). */
+function codigoOrigem(lang: string | null | undefined): 'pt' | 'en' | 'es' | 'fr' | 'de' | 'auto' {
+  if (!lang || !String(lang).trim()) return 'auto'
+  const l = String(lang).toLowerCase()
   if (l === 'portuguese' || l.startsWith('pt')) return 'pt'
   if (l === 'english' || l.startsWith('en')) return 'en'
   if (l === 'spanish' || l.startsWith('es')) return 'es'
   if (l === 'french' || l.startsWith('fr')) return 'fr'
-  return l.slice(0, 2)
+  if (l === 'german' || l.startsWith('de')) return 'de'
+  return 'auto'
 }
 
-const MAX_TRADUZIR_PADRAO = 24
-const LOTE_PARALELO = 6
+/** Evita traduzir texto que já está claramente em português (ex.: fonte sem metadata). */
+function parecePortugues(texto: string): boolean {
+  const t = texto.trim()
+  if (t.length < 8) return false
+  if (/[ãõáéíóúâêôçÃÕÁÉÍÓÚÂÊÔÇ]/.test(t)) return true
+  return /\b(não|também|será|está|foram|sobre|entre|governo|Brasil|país|hoje|mercado|disse|segundo|após|durante|crise|economia)\b/i.test(
+    t
+  )
+}
+
+const LOTE_PARALELO = 5
 
 export async function traduzirNoticiasRapido(
   processadas: NoticiaProcessada[],
   opts?: { maxTraduzir?: number; loteParalelo?: number }
 ): Promise<NoticiaProcessada[]> {
-  const maxTraduzir = opts?.maxTraduzir ?? MAX_TRADUZIR_PADRAO
+  const maxTraduzir = opts?.maxTraduzir ?? Math.max(processadas.length, 1)
   const lote = opts?.loteParalelo ?? LOTE_PARALELO
   const copy = [...processadas]
 
-  const indicesNaoPt: number[] = []
+  const indicesParaTraduzir: number[] = []
   for (let i = 0; i < copy.length; i++) {
-    if (normalizarLang(copy[i].linguagem) !== 'pt') indicesNaoPt.push(i)
+    const n = copy[i]
+    const origem = codigoOrigem(n.linguagem)
+    if (origem === 'pt') continue
+    const bloco = `${n.titulo}\n${n.resumo}`
+    if (origem === 'auto' && parecePortugues(bloco)) continue
+    indicesParaTraduzir.push(i)
   }
-  const aTraduzir = indicesNaoPt.slice(0, maxTraduzir)
+
+  const aTraduzir = indicesParaTraduzir.slice(0, maxTraduzir)
 
   for (let b = 0; b < aTraduzir.length; b += lote) {
     const chunk = aTraduzir.slice(b, b + lote)
+    if (b > 0) await new Promise((r) => setTimeout(r, 100))
     await Promise.all(
       chunk.map(async (i) => {
         const n = copy[i]
-        const lang = normalizarLang(n.linguagem)
+        const lang = codigoOrigem(n.linguagem)
+        const langPair = lang === 'auto' ? 'auto' : lang
         const [titulo, resumo] = await Promise.all([
-          traduzirParaPortugues(n.titulo, lang),
-          traduzirParaPortugues(n.resumo, lang),
+          traduzirParaPortugues(n.titulo, langPair),
+          traduzirParaPortugues(n.resumo, langPair),
         ])
-        copy[i] = { ...n, titulo, resumo }
+        copy[i] = { ...n, titulo, resumo, linguagem: 'pt' }
       })
     )
   }
