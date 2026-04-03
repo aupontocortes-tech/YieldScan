@@ -28,6 +28,15 @@ export type StochSettings = {
   smooth: number
 }
 
+export type BollingerSettings = {
+  enabled: boolean
+  period: number
+  stdDev: number
+  showUpper: boolean
+  showMiddle: boolean
+  showLower: boolean
+}
+
 export type OhlcvBar = {
   time: number
   open: number

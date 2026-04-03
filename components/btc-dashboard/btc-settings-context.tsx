@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import type {
   BinanceInterval,
+  BollingerSettings,
   MaConfig,
   MacdSettings,
   RsiSettings,
@@ -25,6 +26,14 @@ const DEFAULT_RSI: RsiSettings = {
 
 const DEFAULT_MACD: MacdSettings = { fast: 12, slow: 26, signal: 9 }
 const DEFAULT_STOCH: StochSettings = { kPeriod: 14, dPeriod: 3, smooth: 3 }
+const DEFAULT_BOLLINGER: BollingerSettings = {
+  enabled: true,
+  period: 20,
+  stdDev: 2,
+  showUpper: true,
+  showMiddle: true,
+  showLower: true,
+}
 
 type Ctx = {
   timeframe: BinanceInterval
@@ -40,6 +49,8 @@ type Ctx = {
   setMacd: (m: MacdSettings) => void
   stoch: StochSettings
   setStoch: (s: StochSettings) => void
+  bollinger: BollingerSettings
+  setBollinger: (b: BollingerSettings) => void
   resetDefaults: () => void
 }
 
@@ -57,12 +68,10 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [rsi, setRsi] = useState<RsiSettings>(() => ({ ...DEFAULT_RSI }))
   const [macd, setMacd] = useState<MacdSettings>(() => ({ ...DEFAULT_MACD }))
   const [stoch, setStoch] = useState<StochSettings>(() => ({ ...DEFAULT_STOCH }))
+  const [bollinger, setBollinger] = useState<BollingerSettings>(() => ({ ...DEFAULT_BOLLINGER }))
 
   const addMa = useCallback(() => {
-    setMas((prev) => [
-      ...prev,
-      { id: newMaId(), period: 20, type: 'EMA', color: '#D4AF37' },
-    ])
+    setMas((prev) => [...prev, { id: newMaId(), period: 20, type: 'EMA', color: '#D4AF37' }])
   }, [])
 
   const updateMa = useCallback((id: string, patch: Partial<MaConfig>) => {
@@ -70,7 +79,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const removeMa = useCallback((id: string) => {
-    setMas((prev) => (prev.length <= 1 ? prev : prev.filter((m) => m.id !== id)))
+    setMas((prev) => prev.filter((m) => m.id !== id))
   }, [])
 
   const resetDefaults = useCallback(() => {
@@ -79,6 +88,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setRsi({ ...DEFAULT_RSI })
     setMacd({ ...DEFAULT_MACD })
     setStoch({ ...DEFAULT_STOCH })
+    setBollinger({ ...DEFAULT_BOLLINGER })
   }, [])
 
   const value = useMemo(
@@ -96,9 +106,11 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setMacd,
       stoch,
       setStoch,
+      bollinger,
+      setBollinger,
       resetDefaults,
     }),
-    [timeframe, mas, rsi, macd, stoch, addMa, updateMa, removeMa, resetDefaults]
+    [timeframe, mas, rsi, macd, stoch, bollinger, addMa, updateMa, removeMa, resetDefaults]
   )
 
   return <BtcSettingsContext.Provider value={value}>{children}</BtcSettingsContext.Provider>

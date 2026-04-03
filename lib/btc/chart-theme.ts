@@ -15,4 +15,7 @@ export const BTC_CHART_THEME = {
   macdSignal: '#94a3b8',
   stochK: '#D4AF37',
   stochD: '#a78bfa',
+  bbUpper: '#94a3b8',
+  bbMiddle: 'rgba(212, 175, 55, 0.65)',
+  bbLower: '#64748b',
 } as const

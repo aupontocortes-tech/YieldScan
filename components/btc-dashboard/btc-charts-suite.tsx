@@ -13,7 +13,7 @@ import {
 import type { IChartApi, Time } from 'lightweight-charts'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
-import { macd, movingAverage, rsi, stochastic } from '@/lib/btc/indicators'
+import { bollingerBands, macd, movingAverage, rsi, stochastic } from '@/lib/btc/indicators'
 import type { OhlcvBar } from '@/lib/btc/types'
 
 const { gold: GOLD } = BTC_CHART_THEME
@@ -57,7 +57,7 @@ function syncCharts(charts: IChartApi[]) {
 }
 
 export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
-  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg } = useBtcSettings()
+  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg, bollinger: bbCfg } = useBtcSettings()
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
@@ -67,9 +67,12 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
   const lows = useMemo(() => bars.map((b) => b.low), [bars])
-  const volumes = useMemo(() => bars.map((b) => b.volume), [bars])
 
   const rsiSeries = useMemo(() => rsi(closes, rsiCfg.period), [closes, rsiCfg.period])
+  const bbSeries = useMemo(() => {
+    if (!bbCfg.enabled || closes.length < bbCfg.period) return null
+    return bollingerBands(closes, bbCfg.period, bbCfg.stdDev)
+  }, [closes, bbCfg.enabled, bbCfg.period, bbCfg.stdDev])
   const macdOut = useMemo(
     () => macd(closes, macdCfg.fast, macdCfg.slow, macdCfg.signal),
     [closes, macdCfg.fast, macdCfg.slow, macdCfg.signal]
@@ -127,6 +130,48 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
       })
       s.setData(lineData)
     })
+
+    if (bbSeries) {
+      const lineOpts = { priceLineVisible: false, lastValueVisible: false }
+      if (bbCfg.showUpper) {
+        const u = cMain.addSeries(LineSeries, {
+          color: BTC_CHART_THEME.bbUpper,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          ...lineOpts,
+        })
+        u.setData(
+          bars
+            .map((b, i) => ({ time: b.time as Time, value: bbSeries.upper[i] }))
+            .filter((d): d is { time: Time; value: number } => d.value != null)
+        )
+      }
+      if (bbCfg.showMiddle) {
+        const mid = cMain.addSeries(LineSeries, {
+          color: BTC_CHART_THEME.bbMiddle,
+          lineWidth: 1,
+          ...lineOpts,
+        })
+        mid.setData(
+          bars
+            .map((b, i) => ({ time: b.time as Time, value: bbSeries.middle[i] }))
+            .filter((d): d is { time: Time; value: number } => d.value != null)
+        )
+      }
+      if (bbCfg.showLower) {
+        const lo = cMain.addSeries(LineSeries, {
+          color: BTC_CHART_THEME.bbLower,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          ...lineOpts,
+        })
+        lo.setData(
+          bars
+            .map((b, i) => ({ time: b.time as Time, value: bbSeries.lower[i] }))
+            .filter((d): d is { time: Time; value: number } => d.value != null)
+        )
+      }
+    }
 
     const cRsi = createChart(elR, { ...baseLayout(w, 92) })
     charts.push(cRsi)
@@ -240,7 +285,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
       ro.disconnect()
       charts.forEach((c) => c.remove())
     }
-  }, [bars, closes, mas, rsiCfg, macdCfg, stochCfg, rsiSeries, macdOut, stochOut])
+  }, [bars, closes, mas, rsiCfg, macdCfg, stochCfg, rsiSeries, macdOut, stochOut, bbSeries, bbCfg])
 
   if (bars.length < 10) {
     return (
@@ -257,7 +302,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
       className="flex w-full flex-col gap-0.5 overflow-hidden rounded-xl border border-[#d4af37]/30 bg-[#050505] shadow-[0_0_40px_rgba(212,175,55,0.06)]"
     >
       <div className="border-b border-[#d4af37]/15 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[#d4af37]/80">
-        BTC / USDT · Candlestick + médias
+        BTC / USDT · Candlestick · MAs · Bollinger
       </div>
       <div ref={mainRef} className="w-full" />
       <div className="border-t border-[#d4af37]/10 px-2 py-0.5 text-[10px] text-zinc-500">RSI</div>

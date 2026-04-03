@@ -80,6 +80,8 @@ export function SettingsPanel() {
     setMacd,
     stoch,
     setStoch,
+    bollinger,
+    setBollinger,
     resetDefaults,
   } = useBtcSettings()
 
@@ -185,7 +187,6 @@ export function SettingsPanel() {
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 text-zinc-500 hover:text-red-400"
-                  disabled={mas.length <= 1}
                   onClick={() => removeMa(ma.id)}
                   aria-label="Remover média"
                 >
@@ -362,17 +363,107 @@ export function SettingsPanel() {
 
       <Separator className="bg-[#d4af37]/20" />
 
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold tracking-tight text-white">Bandas de Bollinger</h3>
+            <p className="text-xs text-zinc-500">SMA central ± desvio padrão (volatilidade)</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="bb-on" className="text-[11px] text-zinc-400">
+              Ativar
+            </Label>
+            <Switch
+              id="bb-on"
+              checked={bollinger.enabled}
+              onCheckedChange={(c) => setBollinger({ ...bollinger, enabled: c })}
+            />
+          </div>
+        </div>
+        <WhatIsThis name="Bollinger">
+          A linha do meio é a média móvel simples; as bandas superior e inferior afastam-se conforme a volatilidade
+          recente. Preço perto da banda inferior/superior sugere extremo estatístico relativo — não é sinal mecânico.
+        </WhatIsThis>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-[10px] text-zinc-500">Período (SMA)</Label>
+            <Input
+              type="number"
+              min={5}
+              max={200}
+              className="h-9 border-zinc-700 bg-black font-mono text-xs"
+              value={bollinger.period}
+              onChange={(e) =>
+                setBollinger({
+                  ...bollinger,
+                  period: Math.min(200, Math.max(5, Number(e.target.value) || 20)),
+                })
+              }
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] text-zinc-500">Desvio padrão (σ)</Label>
+            <Input
+              type="number"
+              min={0.5}
+              max={4}
+              step={0.1}
+              className="h-9 border-zinc-700 bg-black font-mono text-xs"
+              value={bollinger.stdDev}
+              onChange={(e) =>
+                setBollinger({
+                  ...bollinger,
+                  stdDev: Math.min(4, Math.max(0.5, Number(e.target.value) || 2)),
+                })
+              }
+            />
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {(
+            [
+              ['showUpper', 'Banda superior', bollinger.showUpper],
+              ['showMiddle', 'Linha média', bollinger.showMiddle],
+              ['showLower', 'Banda inferior', bollinger.showLower],
+            ] as const
+          ).map(([key, label, on]) => (
+            <div key={key} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
+              <Label className="text-xs text-zinc-400">{label}</Label>
+              <Switch
+                checked={on}
+                onCheckedChange={(c) =>
+                  setBollinger((prev) => ({
+                    ...prev,
+                    [key]: c,
+                  }))
+                }
+              />
+            </div>
+          ))}
+        </div>
+        <ColorLegend
+          items={[
+            { color: BTC_CHART_THEME.bbUpper, label: 'Superior (tracejada)' },
+            { color: BTC_CHART_THEME.bbMiddle, label: 'Média' },
+            { color: BTC_CHART_THEME.bbLower, label: 'Inferior (tracejada)' },
+          ]}
+        />
+      </div>
+
+      <Separator className="bg-[#d4af37]/20" />
+
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
         <p className="text-[11px] font-medium text-zinc-400">Indicadores nesta página</p>
         <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] text-zinc-500">
-          <li>Velas OHLC (open, high, low, close) no painel principal</li>
-          <li>Várias médias móveis (SMA/EMA) configuráveis</li>
-          <li>RSI com níveis opcionais</li>
+          <li>Velas OHLC no painel principal</li>
+          <li>Médias móveis dinâmicas (SMA/EMA), adicionar/remover à vontade</li>
+          <li>RSI com níveis configuráveis</li>
           <li>MACD (linha, sinal, histograma)</li>
           <li>Estocástico (%K / %D)</li>
+          <li>Bandas de Bollinger (superior, média, inferior)</li>
         </ul>
         <p className="mt-2 text-[10px] leading-relaxed text-zinc-600">
-          Não estão incluídos (por agora): Bandas de Bollinger, VWAP, Fibonacci, perfil de volume, Ichimoku, etc.
+          Fora de âmbito (por agora): VWAP, Fibonacci, perfil de volume, Ichimoku, ordens em tempo real.
         </p>
       </div>
 

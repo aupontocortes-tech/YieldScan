@@ -162,3 +162,32 @@ export function movingAverage(
 ): (number | null)[] {
   return type === 'SMA' ? sma(closes, period) : ema(closes, period)
 }
+
+/** Bollinger Bands: middle = SMA(period); band width = stdDev × population stdev of closes. */
+export function bollingerBands(
+  closes: number[],
+  period: number,
+  stdDevMult: number
+): { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] } {
+  const n = closes.length
+  const middle = sma(closes, period)
+  const upper: (number | null)[] = Array(n).fill(null)
+  const lower: (number | null)[] = Array(n).fill(null)
+  if (period < 1 || stdDevMult <= 0) {
+    return { upper, middle, lower }
+  }
+  for (let i = period - 1; i < n; i++) {
+    const m = middle[i]
+    if (m == null) continue
+    let sumSq = 0
+    for (let j = 0; j < period; j++) {
+      const d = closes[i - j] - m
+      sumSq += d * d
+    }
+    const variance = sumSq / period
+    const sd = Math.sqrt(Math.max(variance, 0))
+    upper[i] = m + stdDevMult * sd
+    lower[i] = m - stdDevMult * sd
+  }
+  return { upper, middle, lower }
+}
