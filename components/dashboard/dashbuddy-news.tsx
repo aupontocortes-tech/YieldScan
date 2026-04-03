@@ -194,7 +194,8 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
         speechId={speechId}
         title={n.titulo}
         description={n.resumo}
-        className="absolute bottom-3 right-3"
+        // Botão TTS mais visível e centralizado na base do card
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 h-9 w-9 text-[17px]"
       />
     </div>
   )
