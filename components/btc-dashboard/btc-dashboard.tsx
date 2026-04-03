@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fetchBtcKlines } from '@/lib/btc/binance'
 import { runSignalEngine } from '@/lib/btc/signal-engine'
-import { BINANCE_INTERVALS } from '@/lib/btc/types'
+import { TIMEFRAME_PRESETS } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
 import { BarChart2, RefreshCw, Settings2 } from 'lucide-react'
 
@@ -20,8 +20,8 @@ export function BtcDashboard() {
   const { timeframe, setTimeframe, rsi, bollinger } = useBtcSettings()
 
   const { data: bars = [], isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['btc-klines', timeframe],
-    queryFn: () => fetchBtcKlines(timeframe, 500),
+    queryKey: ['btc-klines', timeframe.id],
+    queryFn: () => fetchBtcKlines(timeframe.interval, timeframe.limit),
     staleTime: 30_000,
     refetchInterval: 60_000,
   })
@@ -57,22 +57,30 @@ export function BtcDashboard() {
           </div>
 
           {/* Middle: timeframes */}
-          <div className="flex flex-wrap gap-0.5 rounded-lg border border-[#d4af37]/20 bg-black/60 p-0.5">
-            {BINANCE_INTERVALS.map((x) => (
-              <button
-                key={x.value}
-                type="button"
-                onClick={() => setTimeframe(x.value)}
-                className={cn(
-                  'rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
-                  timeframe === x.value
-                    ? 'bg-[#d4af37] text-black'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                )}
-              >
-                {x.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-[#d4af37]/20 bg-black/60 p-0.5">
+            {TIMEFRAME_PRESETS.map((x, i) => {
+              const prev = TIMEFRAME_PRESETS[i - 1]
+              const showSep = prev && prev.group !== x.group
+              return (
+                <span key={x.id} className="flex items-center">
+                  {showSep && (
+                    <span className="mx-1 h-4 w-px shrink-0 bg-zinc-700" aria-hidden />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setTimeframe(x)}
+                    className={cn(
+                      'rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
+                      timeframe.id === x.id
+                        ? 'bg-[#d4af37] text-black'
+                        : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                    )}
+                  >
+                    {x.label}
+                  </button>
+                </span>
+              )
+            })}
           </div>
 
           {/* Right: refresh + tabs */}

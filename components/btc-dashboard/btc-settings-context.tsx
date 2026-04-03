@@ -2,14 +2,15 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import type {
-  BinanceInterval,
   BollingerSettings,
   MaConfig,
   MacdSettings,
   RsiSettings,
   StochSettings,
+  TimeframePreset,
   ZonesSettings,
 } from '@/lib/btc/types'
+import { TIMEFRAME_PRESETS } from '@/lib/btc/types'
 
 const DEFAULT_MAS: MaConfig[] = [
   { id: 'ma-9', period: 9, type: 'EMA', color: '#D4AF37' },
@@ -44,8 +45,8 @@ const DEFAULT_ZONES: ZonesSettings = {
 }
 
 type Ctx = {
-  timeframe: BinanceInterval
-  setTimeframe: (t: BinanceInterval) => void
+  timeframe: TimeframePreset
+  setTimeframe: (t: TimeframePreset) => void
   mas: MaConfig[]
   setMas: (m: MaConfig[]) => void
   addMa: () => void
@@ -73,7 +74,9 @@ function newMaId() {
 }
 
 export function BtcSettingsProvider({ children }: { children: ReactNode }) {
-  const [timeframe, setTimeframe] = useState<BinanceInterval>('1h')
+  const [timeframe, setTimeframe] = useState<TimeframePreset>(
+    () => TIMEFRAME_PRESETS.find((t) => t.id === '1h') ?? TIMEFRAME_PRESETS[3]
+  )
   const [mas, setMas] = useState<MaConfig[]>(() => DEFAULT_MAS.map((m) => ({ ...m })))
   const [rsi, setRsi] = useState<RsiSettings>(() => ({ ...DEFAULT_RSI }))
   const [macd, setMacd] = useState<MacdSettings>(() => ({ ...DEFAULT_MACD }))
@@ -94,7 +97,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetDefaults = useCallback(() => {
-    setTimeframe('1h')
+    setTimeframe(TIMEFRAME_PRESETS.find((t) => t.id === '1h') ?? TIMEFRAME_PRESETS[3])
     setMas(DEFAULT_MAS.map((m) => ({ ...m })))
     setRsi({ ...DEFAULT_RSI })
     setMacd({ ...DEFAULT_MACD })

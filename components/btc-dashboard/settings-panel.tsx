@@ -7,7 +7,14 @@ import { Button } from '@/components/ui/button'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import type { MaType } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
+import { cn } from '@/lib/utils'
 import { Plus, Trash2, RotateCcw } from 'lucide-react'
+
+const MA_PALETTE = [
+  '#D4AF37', '#ef4444', '#22c55e', '#38bdf8',
+  '#a855f7', '#f97316', '#ec4899', '#fafafa',
+  '#78716c', '#6366f1', '#14b8a6', '#facc15',
+]
 
 // ── Section card wrapper ────────────────────────────────────────────────────
 function Section({
@@ -100,59 +107,101 @@ export function SettingsPanel() {
       </div>
 
       {/* ── Moving Averages ─────────────────────────────────────── */}
-      <Section title="Moving Averages" subtitle="Médias móveis sobre o preço de fecho">
-        <div className="space-y-2">
+      <Section title="Moving Averages" subtitle="Médias móveis sobre o preço de fecho — clica nas bolinhas para mudar a cor">
+        <div className="space-y-3">
           {mas.map((ma) => (
-            <div key={ma.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-black/50 px-3 py-2.5">
-              {/* Color swatch + picker */}
-              <div className="relative flex shrink-0 items-center">
-                <span className="mr-1 h-3.5 w-1 rounded-full" style={{ backgroundColor: ma.color }} />
-                <input
-                  type="color"
-                  value={ma.color}
-                  onChange={(e) => updateMa(ma.id, { color: e.target.value })}
-                  title="Cor no gráfico"
-                  className="h-7 w-8 cursor-pointer rounded border-0 bg-transparent p-0 opacity-0 absolute inset-0"
-                />
-                <span className="pointer-events-none h-7 w-8 rounded border border-zinc-700 text-[9px]" style={{ backgroundColor: ma.color }} />
+            <div key={ma.id} className="rounded-lg border border-zinc-800 bg-black/50 px-3 py-2.5 space-y-2.5">
+              {/* Row 1: type + period + remove */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Color bar indicator */}
+                <span className="h-5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: ma.color }} />
+                <span className="min-w-[52px] font-mono text-[11px] text-zinc-400">{ma.type} {ma.period}</span>
+
+                {/* Type toggle */}
+                <div className="flex overflow-hidden rounded-md border border-zinc-700">
+                  {(['SMA', 'EMA'] as MaType[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => updateMa(ma.id, { type: t })}
+                      className={`px-2.5 py-1 text-[10px] font-mono font-medium transition-colors ${ma.type === t ? 'bg-[#d4af37] text-black' : 'text-zinc-400 hover:bg-zinc-800'}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Period */}
+                <div className="flex items-center gap-1.5">
+                  <Label className="whitespace-nowrap text-[10px] text-zinc-500">Período</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={ma.period}
+                    onChange={(e) => updateMa(ma.id, { period: Math.min(500, Math.max(1, Number(e.target.value) || 1)) })}
+                    className="h-8 w-16 border-zinc-700 bg-black font-mono text-xs"
+                  />
+                </div>
+
+                {/* Remove */}
+                <button
+                  type="button"
+                  onClick={() => removeMa(ma.id)}
+                  className="ml-auto text-zinc-600 transition-colors hover:text-red-400"
+                  title="Remover"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
 
-              {/* Type toggle */}
-              <div className="flex rounded-md border border-zinc-700 overflow-hidden">
-                {(['SMA', 'EMA'] as MaType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => updateMa(ma.id, { type: t })}
-                    className={`px-2.5 py-1 text-[10px] font-mono font-medium transition-colors ${ma.type === t ? 'bg-[#d4af37] text-black' : 'text-zinc-400 hover:bg-zinc-800'}`}
+              {/* Row 2: Color palette */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="shrink-0 text-[10px] text-zinc-500">Cor:</span>
+                {MA_PALETTE.map((c) => {
+                  const active = ma.color.toLowerCase() === c.toLowerCase()
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => updateMa(ma.id, { color: c })}
+                      title={c}
+                      className={cn(
+                        'h-5 w-5 shrink-0 rounded-full border transition-all hover:scale-125',
+                        active ? 'border-white scale-110 shadow-sm shadow-white/30' : 'border-zinc-700/60'
+                      )}
+                      style={{ backgroundColor: c }}
+                    />
+                  )
+                })}
+                {/* Custom color picker */}
+                <label
+                  className="relative ml-0.5 cursor-pointer"
+                  title="Cor personalizada — clica para abrir o seletor"
+                >
+                  <span
+                    className={cn(
+                      'flex h-5 w-7 items-center justify-center rounded border text-[9px] font-bold transition-colors',
+                      MA_PALETTE.some((c) => c.toLowerCase() === ma.color.toLowerCase())
+                        ? 'border-dashed border-zinc-600 text-zinc-500 hover:border-zinc-400'
+                        : 'border-solid border-white/40'
+                    )}
+                    style={{
+                      backgroundColor: MA_PALETTE.some((c) => c.toLowerCase() === ma.color.toLowerCase())
+                        ? undefined
+                        : ma.color,
+                    }}
                   >
-                    {t}
-                  </button>
-                ))}
+                    {MA_PALETTE.some((c) => c.toLowerCase() === ma.color.toLowerCase()) ? '+COR' : '✎'}
+                  </span>
+                  <input
+                    type="color"
+                    value={ma.color}
+                    onChange={(e) => updateMa(ma.id, { color: e.target.value })}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                </label>
               </div>
-
-              {/* Period */}
-              <div className="flex items-center gap-1.5">
-                <Label className="text-[10px] text-zinc-500 whitespace-nowrap">Período</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={ma.period}
-                  onChange={(e) => updateMa(ma.id, { period: Math.min(500, Math.max(1, Number(e.target.value) || 1)) })}
-                  className="h-8 w-16 border-zinc-700 bg-black font-mono text-xs"
-                />
-              </div>
-
-              {/* Remove */}
-              <button
-                type="button"
-                onClick={() => removeMa(ma.id)}
-                className="ml-auto text-zinc-600 hover:text-red-400 transition-colors"
-                title="Remover"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
             </div>
           ))}
         </div>
