@@ -24,14 +24,13 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { openYieldscanSqlite, kvGetJson } from '@/lib/client-db/sqlite-core'
+import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import {
   effectiveDisplayFiatForCoin,
   formatMercadoCap,
   formatMercadoFiatAmount,
-  parseMercadoPrefsRecord,
   readMercadoDisplayPrefs,
   resolveMercadoDisplay,
   writeMercadoDisplayPrefs,
@@ -45,6 +44,7 @@ import {
   DEFAULT_MARKET_HIGHLIGHT_IDS,
   MAX_MARKET_HIGHLIGHTS,
   sanitizeHighlightIds,
+  readStoredHighlightIds,
   writeStoredHighlightIds,
 } from '@/lib/mercado-highlight-ids'
 import { cn } from '@/lib/utils'
@@ -256,7 +256,9 @@ function parseOverrideTexts(texts: OverrideTextDraft): MercadoPriceOverrides {
 }
 
 export function DashbuddyCryptoMarket() {
-  const [highlightIds, setHighlightIds] = useState<string[]>(() => [...DEFAULT_MARKET_HIGHLIGHT_IDS])
+  const [highlightIds, setHighlightIds] = useState<string[]>(
+    () => readStoredHighlightIds() ?? [...DEFAULT_MARKET_HIGHLIGHT_IDS]
+  )
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [draftSlots, setDraftSlots] = useState<string[]>(() => [...DEFAULT_MARKET_HIGHLIGHT_IDS])
   const [displayPrefs, setDisplayPrefs] = useState(() => readMercadoDisplayPrefs())
@@ -266,14 +268,11 @@ export function DashbuddyCryptoMarket() {
 
   useEffect(() => {
     void openYieldscanSqlite().then(() => {
-      const hi = kvGetJson<string[]>('mercado_highlights_v1')
-      if (Array.isArray(hi) && hi.length) {
-        setHighlightIds(sanitizeHighlightIds(hi.map(String)))
-      }
-      const md = kvGetJson<Record<string, unknown>>('mercado_display_v1')
-      if (md && typeof md === 'object' && !Array.isArray(md)) {
-        setDisplayPrefs(parseMercadoPrefsRecord(md))
-      }
+      // Carrega do SQLite quando disponível; caso o IDB ainda esteja vazio/indisponível,
+      // o helper já faz fallback para localStorage.
+      const hi = readStoredHighlightIds()
+      if (hi && hi.length) setHighlightIds(hi)
+      setDisplayPrefs(readMercadoDisplayPrefs())
     })
   }, [])
 
@@ -283,6 +282,8 @@ export function DashbuddyCryptoMarket() {
     queryKey: ['crypto-market', highlightsCacheKey],
     queryFn: () => fetchMercado(highlightIds),
     staleTime: 55_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
     gcTime: 120_000,
     retry: 1,
   })

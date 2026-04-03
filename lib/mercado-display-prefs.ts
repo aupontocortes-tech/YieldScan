@@ -98,12 +98,15 @@ export function writeMercadoDisplayPrefs(prefs: MercadoDisplayPrefs): void {
     displayFiatByCoinId: prefs.displayFiatByCoinId,
     priceOverrides: prefs.priceOverrides,
   }
-  kvSetJson(KV_KEY, payload)
+
+  // Fallback imediato: evita “não fica salvo” se o IndexedDB/SQLite falhar.
   try {
-    window.localStorage.removeItem(STORAGE_KEY)
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
   } catch {
     /* ignore */
   }
+
+  kvSetJson(KV_KEY, payload)
 }
 
 export type ResolvedMercadoQuote = {

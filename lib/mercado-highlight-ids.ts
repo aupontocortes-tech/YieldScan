@@ -112,12 +112,17 @@ export function readStoredHighlightIds(): string[] | null {
 
 export function writeStoredHighlightIds(ids: string[]): void {
   const next = sanitizeHighlightIds(ids)
-  kvSetJson(KV_KEY, next)
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    /* ignore */
+  // Fallback imediato: se por algum motivo o SQLite/IDB não estiver disponível,
+  // pelo menos a UI continua persistindo no localStorage.
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      /* ignore */
+    }
   }
+
+  kvSetJson(KV_KEY, next)
 }
 
 export function clearStoredHighlightIds(): void {
