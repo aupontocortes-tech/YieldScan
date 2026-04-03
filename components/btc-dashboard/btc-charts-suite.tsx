@@ -97,7 +97,8 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     const elR = rsiRef.current
     const elMacd = macdRef.current
     const elS = stochRef.current
-    if (!wrap || !elM || !elR || !elMacd || !elS || bars.length < 10) return
+    // Só exigimos o gráfico principal — refs de RSI/MACD/Stoch não existem quando o indicador está desligado
+    if (!wrap || !elM || bars.length < 10) return
 
     const w = Math.max(wrap.clientWidth, 200)
     const charts: ReturnType<typeof createChart>[] = []
@@ -176,7 +177,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     }
 
     // ── RSI chart ────────────────────────────────────────
-    if (rsiCfg.enabled && rsiSeries) {
+    if (rsiCfg.enabled && rsiSeries && elR) {
       const cRsi = createChart(elR, { ...baseLayout(w, 96) })
       charts.push(cRsi)
       const rsiLine = cRsi.addSeries(LineSeries, { color: rsiCfg.colors.line, lineWidth: 2, priceLineVisible: false })
@@ -189,7 +190,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     }
 
     // ── MACD chart ───────────────────────────────────────
-    if (macdCfg.enabled && macdOut) {
+    if (macdCfg.enabled && macdOut && elMacd) {
       const cMacd = createChart(elMacd, { ...baseLayout(w, 112) })
       charts.push(cMacd)
       cMacd.addSeries(HistogramSeries, { color: BTC_CHART_THEME.goldDim, priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } })
@@ -201,7 +202,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     }
 
     // ── Stochastic chart ─────────────────────────────────
-    if (stochCfg.enabled && stochOut) {
+    if (stochCfg.enabled && stochOut && elS) {
       const cStoch = createChart(elS, { ...baseLayout(w, 96) })
       charts.push(cStoch)
       cStoch.addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: 2, priceLineVisible: false })
