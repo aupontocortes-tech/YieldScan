@@ -79,11 +79,14 @@ export function BtcDashboard() {
                   Settings
                 </Button>
               </SheetTrigger>
-              <SheetContent className="w-full border-[#d4af37]/25 bg-[#0a0a0a] sm:max-w-md">
-                <SheetHeader>
-                  <SheetTitle className="text-[#d4af37]">Indicator settings</SheetTitle>
+              <SheetContent className="flex h-full max-h-[100dvh] w-full flex-col gap-0 overflow-hidden border-[#d4af37]/25 bg-[#0a0a0a] p-0 sm:max-w-md">
+                <SheetHeader className="shrink-0 space-y-1 border-b border-[#d4af37]/20 px-6 pb-4 pr-14 pt-14 text-left">
+                  <SheetTitle className="text-lg text-[#d4af37]">Definições do gráfico</SheetTitle>
+                  <p className="text-xs font-normal text-zinc-500">
+                    Indicadores Bitcoin · faz scroll para ver tudo
+                  </p>
                 </SheetHeader>
-                <div className="mt-4">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 py-4 [-webkit-overflow-scrolling:touch]">
                   <SettingsPanel />
                 </div>
               </SheetContent>

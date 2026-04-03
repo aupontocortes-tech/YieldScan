@@ -12,11 +12,11 @@ import {
 } from 'lightweight-charts'
 import type { IChartApi, Time } from 'lightweight-charts'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
+import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { macd, movingAverage, rsi, stochastic } from '@/lib/btc/indicators'
 import type { OhlcvBar } from '@/lib/btc/types'
 
-const GOLD = '#D4AF37'
-const GOLD_DIM = 'rgba(212, 175, 55, 0.35)'
+const { gold: GOLD } = BTC_CHART_THEME
 const BG = '#050505'
 const GRID = '#1c1917'
 const TEXT = '#a1a1aa'
@@ -97,11 +97,11 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
 
     const candle = cMain.addSeries(CandlestickSeries, {
       upColor: GOLD,
-      downColor: '#991b1b',
+      downColor: BTC_CHART_THEME.candleDown,
       borderUpColor: GOLD,
-      borderDownColor: '#991b1b',
+      borderDownColor: BTC_CHART_THEME.candleDown,
       wickUpColor: GOLD,
-      wickDownColor: '#b91c1c',
+      wickDownColor: BTC_CHART_THEME.candleDownWick,
     })
     candle.setData(
       bars.map((b) => ({
@@ -144,7 +144,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     if (rsiCfg.showLevels) {
       rsiLine.createPriceLine({
         price: rsiCfg.oversold,
-        color: '#22c55e',
+        color: BTC_CHART_THEME.rsiOversoldLine,
         lineWidth: 1,
         lineStyle: LineStyle.Dotted,
         axisLabelVisible: true,
@@ -152,7 +152,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
       })
       rsiLine.createPriceLine({
         price: rsiCfg.overbought,
-        color: '#ef4444',
+        color: BTC_CHART_THEME.rsiOverboughtLine,
         lineWidth: 1,
         lineStyle: LineStyle.Dotted,
         axisLabelVisible: true,
@@ -163,7 +163,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     const cMacd = createChart(elMacd, { ...baseLayout(w, 112) })
     charts.push(cMacd)
     const hist = cMacd.addSeries(HistogramSeries, {
-      color: GOLD_DIM,
+      color: BTC_CHART_THEME.goldDim,
       priceFormat: { type: 'price', precision: 4, minMove: 0.0001 },
     })
     hist.setData(
@@ -172,7 +172,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
         return {
           time: b.time as Time,
           value: v ?? 0,
-          color: (v ?? 0) >= 0 ? 'rgba(212,175,55,0.45)' : 'rgba(239,68,68,0.4)',
+          color: (v ?? 0) >= 0 ? BTC_CHART_THEME.macdHistogramPos : BTC_CHART_THEME.macdHistogramNeg,
         }
       })
     )
@@ -187,7 +187,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
         .filter((d): d is { time: Time; value: number } => d.value != null)
     )
     const sigL = cMacd.addSeries(LineSeries, {
-      color: '#94a3b8',
+      color: BTC_CHART_THEME.macdSignal,
       lineWidth: 1,
       priceLineVisible: false,
     })
@@ -210,7 +210,7 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
         .filter((d): d is { time: Time; value: number } => d.value != null)
     )
     const dL = cStoch.addSeries(LineSeries, {
-      color: '#a78bfa',
+      color: BTC_CHART_THEME.stochD,
       lineWidth: 1,
       priceLineVisible: false,
     })
