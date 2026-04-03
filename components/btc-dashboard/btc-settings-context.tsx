@@ -1,6 +1,16 @@
 'use client'
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import type {
   BollingerSettings,
   CandlestickSettings,
@@ -65,6 +75,33 @@ const DEFAULT_CANDLES: CandlestickSettings = {
   colors: { up: '#D4AF37', down: '#991b1b', wickDown: '#b91c1c' },
 }
 
+const BTC_KV = 'btc_dashboard_v1' as const
+
+type BtcPersistV1 = {
+  v: 1
+  timeframeId: string
+  mas: MaConfig[]
+  rsi: RsiSettings
+  macd: MacdSettings
+  stoch: StochSettings
+  bollinger: BollingerSettings
+  zones: ZonesSettings
+  candles: CandlestickSettings
+}
+
+function validMasList(x: unknown): x is MaConfig[] {
+  if (!Array.isArray(x) || x.length < 1) return false
+  return x.every(
+    (m) =>
+      m &&
+      typeof m === 'object' &&
+      typeof (m as MaConfig).id === 'string' &&
+      typeof (m as MaConfig).period === 'number' &&
+      ((m as MaConfig).type === 'SMA' || (m as MaConfig).type === 'EMA') &&
+      typeof (m as MaConfig).color === 'string'
+  )
+}
+
 type Ctx = {
   timeframe: TimeframePreset
   setTimeframe: (t: TimeframePreset) => void
@@ -107,6 +144,89 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [bollinger, setBollinger] = useState<BollingerSettings>(() => ({ ...DEFAULT_BOLLINGER }))
   const [zones, setZones] = useState<ZonesSettings>(() => ({ ...DEFAULT_ZONES }))
   const [candles, setCandles] = useState<CandlestickSettings>(() => ({ ...DEFAULT_CANDLES }))
+  const [hydrated, setHydrated] = useState(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    let cancel = false
+    void openYieldscanSqlite().then(() => {
+      if (cancel) return
+      const s = kvGetJson<BtcPersistV1>(BTC_KV)
+      if (s?.v === 1) {
+        const tf = TIMEFRAME_PRESETS.find((t) => t.id === s.timeframeId)
+        if (tf) setTimeframe(tf)
+        if (validMasList(s.mas)) setMas(s.mas.map((m) => ({ ...m })))
+        if (s.rsi && typeof s.rsi === 'object') {
+          const r = s.rsi as RsiSettings
+          setRsi({
+            ...DEFAULT_RSI,
+            ...r,
+            colors: { ...DEFAULT_RSI.colors, ...r.colors },
+          })
+        }
+        if (s.macd && typeof s.macd === 'object') {
+          const m = s.macd as MacdSettings
+          setMacd({
+            ...DEFAULT_MACD,
+            ...m,
+            colors: { ...DEFAULT_MACD.colors, ...m.colors },
+          })
+        }
+        if (s.stoch && typeof s.stoch === 'object') {
+          const st = s.stoch as StochSettings
+          setStoch({
+            ...DEFAULT_STOCH,
+            ...st,
+            colors: { ...DEFAULT_STOCH.colors, ...st.colors },
+          })
+        }
+        if (s.bollinger && typeof s.bollinger === 'object') {
+          const b = s.bollinger as BollingerSettings
+          setBollinger({
+            ...DEFAULT_BOLLINGER,
+            ...b,
+            colors: { ...DEFAULT_BOLLINGER.colors, ...b.colors },
+          })
+        }
+        if (s.zones && typeof s.zones === 'object') setZones({ ...DEFAULT_ZONES, ...s.zones })
+        if (s.candles && typeof s.candles === 'object') {
+          const c = s.candles as CandlestickSettings
+          setCandles({
+            ...DEFAULT_CANDLES,
+            ...c,
+            colors: { ...DEFAULT_CANDLES.colors, ...c.colors },
+          })
+        }
+      }
+      setHydrated(true)
+    })
+    return () => {
+      cancel = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null
+      const snap: BtcPersistV1 = {
+        v: 1,
+        timeframeId: timeframe.id,
+        mas,
+        rsi,
+        macd,
+        stoch,
+        bollinger,
+        zones,
+        candles,
+      }
+      kvSetJson(BTC_KV, snap)
+    }, 450)
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [hydrated, timeframe.id, mas, rsi, macd, stoch, bollinger, zones, candles])
 
   const addMa = useCallback(() => {
     setMas((prev) => [...prev, { id: newMaId(), period: 20, type: 'EMA', color: '#D4AF37' }])
@@ -154,7 +274,20 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setCandles,
       resetDefaults,
     }),
-    [timeframe, mas, rsi, macd, stoch, bollinger, zones, candles, addMa, updateMa, removeMa, resetDefaults]
+    [
+      timeframe,
+      mas,
+      rsi,
+      macd,
+      stoch,
+      bollinger,
+      zones,
+      candles,
+      addMa,
+      updateMa,
+      removeMa,
+      resetDefaults,
+    ]
   )
 
   return <BtcSettingsContext.Provider value={value}>{children}</BtcSettingsContext.Provider>

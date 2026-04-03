@@ -24,12 +24,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { openYieldscanSqlite, kvGetJson } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import {
   effectiveDisplayFiatForCoin,
   formatMercadoCap,
   formatMercadoFiatAmount,
+  parseMercadoPrefsRecord,
   readMercadoDisplayPrefs,
   resolveMercadoDisplay,
   writeMercadoDisplayPrefs,
@@ -42,7 +44,6 @@ import {
   clearStoredHighlightIds,
   DEFAULT_MARKET_HIGHLIGHT_IDS,
   MAX_MARKET_HIGHLIGHTS,
-  readStoredHighlightIds,
   sanitizeHighlightIds,
   writeStoredHighlightIds,
 } from '@/lib/mercado-highlight-ids'
@@ -264,12 +265,16 @@ export function DashbuddyCryptoMarket() {
   const [draftOverrideText, setDraftOverrideText] = useState<OverrideTextDraft>({})
 
   useEffect(() => {
-    const stored = readStoredHighlightIds()
-    if (stored?.length) setHighlightIds(stored)
-  }, [])
-
-  useEffect(() => {
-    setDisplayPrefs(readMercadoDisplayPrefs())
+    void openYieldscanSqlite().then(() => {
+      const hi = kvGetJson<string[]>('mercado_highlights_v1')
+      if (Array.isArray(hi) && hi.length) {
+        setHighlightIds(sanitizeHighlightIds(hi.map(String)))
+      }
+      const md = kvGetJson<Record<string, unknown>>('mercado_display_v1')
+      if (md && typeof md === 'object' && !Array.isArray(md)) {
+        setDisplayPrefs(parseMercadoPrefsRecord(md))
+      }
+    })
   }, [])
 
   const highlightsCacheKey = highlightIds.join('|')

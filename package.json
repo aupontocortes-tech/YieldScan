@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs"
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const s=p.join('node_modules','sql.js','dist','sql-wasm.wasm'),d=p.join('public','sql-wasm.wasm');if(fs.existsSync(s)){fs.mkdirSync('public',{recursive:true});fs.copyFileSync(s,d);}\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -59,6 +60,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
     "sonner": "^1.7.1",
+    "sql.js": "^1.14.1",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
     "zod": "^3.24.1"

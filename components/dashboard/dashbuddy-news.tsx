@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NewsSpeakButton } from '@/components/news/news-speak-button'
+import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
@@ -36,6 +37,12 @@ const FILTROS = [
 ] as const
 
 type Filtro = (typeof FILTROS)[number]['value']
+
+const NEWS_FILTRO_KV = 'news_filtro_v1' as const
+
+function isFiltroGuard(v: unknown): v is Filtro {
+  return typeof v === 'string' && FILTROS.some((f) => f.value === v)
+}
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 function formatarData(pub: string | null): string {
@@ -196,6 +203,20 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 export function DashbuddyNews() {
   const [filtro, setFiltro] = useState<Filtro>('todos')
+  const [filtroHydrated, setFiltroHydrated] = useState(false)
+
+  useEffect(() => {
+    void openYieldscanSqlite().then(() => {
+      const v = kvGetJson<unknown>(NEWS_FILTRO_KV)
+      if (isFiltroGuard(v)) setFiltro(v)
+      setFiltroHydrated(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!filtroHydrated) return
+    kvSetJson(NEWS_FILTRO_KV, filtro)
+  }, [filtro, filtroHydrated])
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['dashbuddy-news'],

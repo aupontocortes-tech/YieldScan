@@ -1,7 +1,9 @@
 /**
  * IDs CoinGecko (slug) para os cartões grandes do mercado.
- * Preferências guardadas só no browser (localStorage).
+ * Preferências no SQLite local (IndexedDB); migração a partir de localStorage.
  */
+
+import { isYieldscanSqliteOpen, kvDelete, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
 
 export const DEFAULT_MARKET_HIGHLIGHT_IDS = [
   'bitcoin',
@@ -14,6 +16,7 @@ export const DEFAULT_MARKET_HIGHLIGHT_IDS = [
 export const MAX_MARKET_HIGHLIGHTS = 12
 
 const STORAGE_KEY = 'yieldscan-mercado-highlight-ids'
+const KV_KEY = 'mercado_highlights_v1'
 
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/
 
@@ -92,6 +95,10 @@ export function parseHighlightsQueryParam(param: string | null): string[] {
 
 export function readStoredHighlightIds(): string[] | null {
   if (typeof window === 'undefined') return null
+  if (isYieldscanSqliteOpen()) {
+    const parsed = kvGetJson<unknown>(KV_KEY)
+    if (Array.isArray(parsed)) return sanitizeHighlightIds(parsed.map(String))
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
@@ -105,9 +112,19 @@ export function readStoredHighlightIds(): string[] | null {
 
 export function writeStoredHighlightIds(ids: string[]): void {
   const next = sanitizeHighlightIds(ids)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  kvSetJson(KV_KEY, next)
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
 }
 
 export function clearStoredHighlightIds(): void {
-  localStorage.removeItem(STORAGE_KEY)
+  kvDelete(KV_KEY)
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
 }

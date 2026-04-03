@@ -1,12 +1,15 @@
 /**
  * Preferências locais do bloco Mercado: moeda de exibição e preços manuais por ativo.
+ * Persistência: SQLite (sql.js) no IndexedDB; migração única a partir de localStorage.
  */
 
+import { isYieldscanSqliteOpen, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MercadoFiat } from '@/lib/coingecko-market'
 
 export type MercadoDisplayFiat = MercadoFiat
 
 const STORAGE_KEY = 'yieldscan-mercado-display-v1'
+const KV_KEY = 'mercado_display_v1'
 
 export type MercadoPriceOverrides = Record<string, Partial<Record<MercadoDisplayFiat, number>>>
 
@@ -19,11 +22,13 @@ export type MercadoDisplayPrefs = {
   priceOverrides: MercadoPriceOverrides
 }
 
-const DEFAULT_PREFS: MercadoDisplayPrefs = {
+export const DEFAULT_MERCADO_DISPLAY_PREFS: MercadoDisplayPrefs = {
   displayFiat: 'usd',
   displayFiatByCoinId: {},
   priceOverrides: {},
 }
+
+const DEFAULT_PREFS = DEFAULT_MERCADO_DISPLAY_PREFS
 
 function isDisplayFiat(v: unknown): v is MercadoDisplayFiat {
   return v === 'usd' || v === 'brl' || v === 'eur'
@@ -57,20 +62,30 @@ function sanitizeFiatByCoin(raw: unknown): MercadoDisplayFiatByCoin {
   return out
 }
 
+export function parseMercadoPrefsRecord(j: Record<string, unknown>): MercadoDisplayPrefs {
+  const displayFiat = isDisplayFiat(j.displayFiat) ? j.displayFiat : DEFAULT_PREFS.displayFiat
+  return {
+    displayFiat,
+    displayFiatByCoinId: sanitizeFiatByCoin(j.displayFiatByCoinId),
+    priceOverrides: sanitizeOverrides(j.priceOverrides),
+  }
+}
+
 export function readMercadoDisplayPrefs(): MercadoDisplayPrefs {
   if (typeof window === 'undefined') {
     return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
+  }
+  if (isYieldscanSqliteOpen()) {
+    const j = kvGetJson<Record<string, unknown>>(KV_KEY)
+    if (j && typeof j === 'object' && !Array.isArray(j)) {
+      return parseMercadoPrefsRecord(j)
+    }
   }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
     const j = JSON.parse(raw) as Record<string, unknown>
-    const displayFiat = isDisplayFiat(j.displayFiat) ? j.displayFiat : DEFAULT_PREFS.displayFiat
-    return {
-      displayFiat,
-      displayFiatByCoinId: sanitizeFiatByCoin(j.displayFiatByCoinId),
-      priceOverrides: sanitizeOverrides(j.priceOverrides),
-    }
+    return parseMercadoPrefsRecord(j)
   } catch {
     return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
   }
@@ -78,17 +93,16 @@ export function readMercadoDisplayPrefs(): MercadoDisplayPrefs {
 
 export function writeMercadoDisplayPrefs(prefs: MercadoDisplayPrefs): void {
   if (typeof window === 'undefined') return
+  const payload = {
+    displayFiat: prefs.displayFiat,
+    displayFiatByCoinId: prefs.displayFiatByCoinId,
+    priceOverrides: prefs.priceOverrides,
+  }
+  kvSetJson(KV_KEY, payload)
   try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        displayFiat: prefs.displayFiat,
-        displayFiatByCoinId: prefs.displayFiatByCoinId,
-        priceOverrides: prefs.priceOverrides,
-      })
-    )
+    window.localStorage.removeItem(STORAGE_KEY)
   } catch {
-    /* ignore quota */
+    /* ignore */
   }
 }
 

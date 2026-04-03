@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AdvancedMetricsPanel } from '@/components/btc-dashboard/advanced-metrics-panel'
 import { BtcChartsSuite } from '@/components/btc-dashboard/btc-charts-suite'
@@ -13,11 +13,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fetchBtcKlines } from '@/lib/btc/binance'
 import { runSignalEngine } from '@/lib/btc/signal-engine'
+import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { TIMEFRAME_PRESETS, type TimeframePreset } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
 import { BarChart2, ChevronDown, RefreshCw, Settings2, Star } from 'lucide-react'
 
 const DEFAULT_PINNED = ['1h', '4h', '1d', '1w', '1M']
+
+const PINNED_KV = 'btc_pinned_tf_v1' as const
 
 const TF_GROUPS: { label: string; presets: TimeframePreset[] }[] = [
   { label: 'Intraday',            presets: TIMEFRAME_PRESETS.filter((t) => t.group === 'intra') },
@@ -28,8 +31,30 @@ const TF_GROUPS: { label: string; presets: TimeframePreset[] }[] = [
 export function BtcDashboard() {
   const { timeframe, setTimeframe, rsi, bollinger } = useBtcSettings()
   const [pinned, setPinned] = useState<string[]>(DEFAULT_PINNED)
+  const [pinsHydrated, setPinsHydrated] = useState(false)
   const [editing, setEditing] = useState(false)
   const [popoverOpen, setPopoverOpen] = useState(false)
+
+  useEffect(() => {
+    let cancel = false
+    void openYieldscanSqlite().then(() => {
+      if (cancel) return
+      const raw = kvGetJson<string[]>(PINNED_KV)
+      if (Array.isArray(raw) && raw.length >= 1) {
+        const valid = raw.filter((id) => TIMEFRAME_PRESETS.some((t) => t.id === id))
+        if (valid.length >= 1) setPinned(valid)
+      }
+      setPinsHydrated(true)
+    })
+    return () => {
+      cancel = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!pinsHydrated) return
+    kvSetJson(PINNED_KV, pinned)
+  }, [pinned, pinsHydrated])
 
   const pinnedPresets = TIMEFRAME_PRESETS.filter((t) => pinned.includes(t.id))
   const activeInPinned = pinnedPresets.some((t) => t.id === timeframe.id)
