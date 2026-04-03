@@ -6,9 +6,25 @@ export async function fetchBtcKlines(
 ): Promise<OhlcvBar[]> {
   const q = new URLSearchParams({ interval, limit: String(limit) })
   const res = await fetch(`/api/btc-klines?${q}`)
-  if (!res.ok) throw new Error('Klines request failed')
-  const raw = (await res.json()) as unknown
-  if (!Array.isArray(raw)) throw new Error('Invalid klines')
+  let body: unknown
+  try {
+    body = await res.json()
+  } catch {
+    body = null
+  }
+  if (!res.ok) {
+    const msg =
+      body &&
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      typeof (body as { error: unknown }).error === 'string'
+        ? (body as { error: string }).error
+        : `Pedido falhou (${res.status})`
+    throw new Error(msg)
+  }
+  const raw = body
+  if (!Array.isArray(raw)) throw new Error('Resposta inválida do servidor (não são velas).')
   return parseBinanceKlines(raw)
 }
 

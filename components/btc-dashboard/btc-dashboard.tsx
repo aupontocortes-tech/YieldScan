@@ -18,7 +18,7 @@ import { RefreshCw, Settings2 } from 'lucide-react'
 export function BtcDashboard() {
   const { timeframe, setTimeframe, rsi } = useBtcSettings()
 
-  const { data: bars = [], isLoading, isError, refetch, isFetching } = useQuery({
+  const { data: bars = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['btc-klines', timeframe],
     queryFn: () => fetchBtcKlines(timeframe, 500),
     staleTime: 30_000,
@@ -111,7 +111,10 @@ export function BtcDashboard() {
 
         {isError && (
           <div className="rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-200">
-            Não foi possível carregar as velas. Tenta novamente.
+            <p>Não foi possível carregar as velas. Tenta novamente ou muda o intervalo.</p>
+            {error instanceof Error && error.message ? (
+              <p className="mt-2 text-xs text-red-300/80">{error.message}</p>
+            ) : null}
           </div>
         )}
 
