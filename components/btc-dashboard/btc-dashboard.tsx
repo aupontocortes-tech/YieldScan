@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AdvancedMetricsPanel } from '@/components/btc-dashboard/advanced-metrics-panel'
 import { BtcChartsSuite } from '@/components/btc-dashboard/btc-charts-suite'
@@ -9,15 +9,45 @@ import { MarketCard } from '@/components/btc-dashboard/market-card'
 import { SettingsPanel } from '@/components/btc-dashboard/settings-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fetchBtcKlines } from '@/lib/btc/binance'
 import { runSignalEngine } from '@/lib/btc/signal-engine'
-import { TIMEFRAME_PRESETS } from '@/lib/btc/types'
+import { TIMEFRAME_PRESETS, type TimeframePreset } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
-import { BarChart2, RefreshCw, Settings2 } from 'lucide-react'
+import { BarChart2, ChevronDown, RefreshCw, Settings2, Star } from 'lucide-react'
+
+const DEFAULT_PINNED = ['1h', '4h', '1d', '1w', '1M']
+
+const TF_GROUPS: { label: string; presets: TimeframePreset[] }[] = [
+  { label: 'Intraday',            presets: TIMEFRAME_PRESETS.filter((t) => t.group === 'intra') },
+  { label: 'Diário / Semanal',   presets: TIMEFRAME_PRESETS.filter((t) => t.group === 'swing') },
+  { label: 'Períodos',           presets: TIMEFRAME_PRESETS.filter((t) => t.group === 'periodo') },
+]
 
 export function BtcDashboard() {
   const { timeframe, setTimeframe, rsi, bollinger } = useBtcSettings()
+  const [pinned, setPinned] = useState<string[]>(DEFAULT_PINNED)
+  const [editing, setEditing] = useState(false)
+  const [popoverOpen, setPopoverOpen] = useState(false)
+
+  const pinnedPresets = TIMEFRAME_PRESETS.filter((t) => pinned.includes(t.id))
+  const activeInPinned = pinnedPresets.some((t) => t.id === timeframe.id)
+
+  function togglePin(id: string) {
+    setPinned((prev) =>
+      prev.includes(id)
+        ? prev.length > 1
+          ? prev.filter((i) => i !== id)
+          : prev
+        : [...prev, id]
+    )
+  }
+
+  function pickTimeframe(x: TimeframePreset) {
+    setTimeframe(x)
+    if (!editing) setPopoverOpen(false)
+  }
 
   const { data: bars = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['btc-klines', timeframe.id],
@@ -56,31 +86,127 @@ export function BtcDashboard() {
             </span>
           </div>
 
-          {/* Middle: timeframes */}
-          <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-[#d4af37]/20 bg-black/60 p-0.5">
-            {TIMEFRAME_PRESETS.map((x, i) => {
-              const prev = TIMEFRAME_PRESETS[i - 1]
-              const showSep = prev && prev.group !== x.group
-              return (
-                <span key={x.id} className="flex items-center">
-                  {showSep && (
-                    <span className="mx-1 h-4 w-px shrink-0 bg-zinc-700" aria-hidden />
+          {/* Middle: timeframes – pinned favourites + "Mais" popover */}
+          <div className="flex items-center gap-0.5 rounded-lg border border-[#d4af37]/20 bg-black/60 p-0.5">
+            {/* Pinned quick buttons */}
+            {pinnedPresets.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                onClick={() => pickTimeframe(x)}
+                className={cn(
+                  'rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
+                  timeframe.id === x.id
+                    ? 'bg-[#d4af37] text-black'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                )}
+              >
+                {x.label}
+              </button>
+            ))}
+
+            {/* If the active preset is not pinned, show it as a ghost pill */}
+            {!activeInPinned && (
+              <button
+                type="button"
+                onClick={() => setPopoverOpen(true)}
+                className="rounded-md bg-[#d4af37] px-2 py-1.5 text-[11px] font-medium text-black"
+              >
+                {timeframe.label}
+              </button>
+            )}
+
+            {/* Separator */}
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-zinc-700" aria-hidden />
+
+            {/* Mais button */}
+            <Popover open={popoverOpen} onOpenChange={(o) => { setPopoverOpen(o); if (!o) setEditing(false) }}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex items-center gap-0.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
+                    popoverOpen
+                      ? 'bg-zinc-800 text-[#d4af37]'
+                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
                   )}
+                >
+                  Mais <ChevronDown className={cn('h-3 w-3 transition-transform', popoverOpen && 'rotate-180')} />
+                </button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                align="center"
+                sideOffset={6}
+                className="w-72 border-[#d4af37]/20 bg-[#0d0d0d] p-0 shadow-xl shadow-black/60"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
+                  <span className="text-sm font-semibold text-white">Intervalos</span>
                   <button
                     type="button"
-                    onClick={() => setTimeframe(x)}
+                    onClick={() => setEditing((e) => !e)}
                     className={cn(
-                      'rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors',
-                      timeframe.id === x.id
-                        ? 'bg-[#d4af37] text-black'
-                        : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                      'text-xs font-medium transition-colors',
+                      editing ? 'text-[#d4af37]' : 'text-zinc-400 hover:text-white'
                     )}
                   >
-                    {x.label}
+                    {editing ? 'Concluir' : 'Editar'}
                   </button>
-                </span>
-              )
-            })}
+                </div>
+
+                {/* Groups */}
+                <div className="space-y-3 p-4">
+                  {TF_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
+                        {group.label}
+                      </p>
+                      <div className="grid grid-cols-4 gap-1">
+                        {group.presets.map((x) => {
+                          const isPinned = pinned.includes(x.id)
+                          const isActive = timeframe.id === x.id
+                          return (
+                            <button
+                              key={x.id}
+                              type="button"
+                              onClick={() => editing ? togglePin(x.id) : pickTimeframe(x)}
+                              className={cn(
+                                'relative flex items-center justify-center rounded-lg py-2 text-[11px] font-medium transition-all',
+                                isActive && !editing
+                                  ? 'bg-[#d4af37] text-black'
+                                  : isPinned && editing
+                                    ? 'border border-[#d4af37]/60 bg-[#d4af37]/10 text-[#d4af37]'
+                                    : 'border border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800'
+                              )}
+                            >
+                              {editing && (
+                                <Star
+                                  className={cn(
+                                    'absolute right-1 top-1 h-2.5 w-2.5 transition-colors',
+                                    isPinned ? 'fill-[#d4af37] text-[#d4af37]' : 'text-zinc-700'
+                                  )}
+                                />
+                              )}
+                              {x.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer hint */}
+                <div className="border-t border-zinc-800 px-4 py-2.5">
+                  <p className="text-[10px] text-zinc-600">
+                    {editing
+                      ? 'Toca numa estrela ★ para fixar/desafixar da barra rápida.'
+                      : 'Toca em "Editar" para escolher os teus intervalos favoritos.'}
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Right: refresh + tabs */}
