@@ -34,6 +34,7 @@ const FILTROS = [
   { label: 'Cripto', value: 'CRIPTO' },
   { label: 'Geopolítica', value: 'GEOPOLÍTICA' },
   { label: 'Macro', value: 'MACRO' },
+  { label: 'IA', value: 'IA' },
 ] as const
 
 type Filtro = (typeof FILTROS)[number]['value']
@@ -84,12 +85,14 @@ const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300',
   GEOPOLÍTICA: 'border-amber-400/40 bg-amber-500/15 text-amber-300',
   MACRO: 'border-yellow-400/40 bg-yellow-500/15 text-yellow-300',
+  IA: 'border-violet-500/40 bg-violet-500/15 text-violet-300',
 }
 
 const LABEL_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'Cripto',
   GEOPOLÍTICA: 'Geopolítica',
   MACRO: 'Macro',
+  IA: 'IA',
 }
 
 /* ── Skeletons ────────────────────────────────────────────────────────────── */

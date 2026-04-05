@@ -15,7 +15,7 @@ export const NEWSDATA_NEWS_URL = 'https://newsdata.io/api/1/news'
 export interface InsightNoticia {
   titulo: string
   resumo: string
-  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO'
+  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO' | 'IA'
   impacto: 'POSITIVO' | 'NEGATIVO' | 'NEUTRO'
   ativos: Array<'BTC' | 'ETH' | 'ALTCOINS' | 'MERCADO GLOBAL'>
   confianca: 'ALTA' | 'MÉDIA' | 'BAIXA'
@@ -51,6 +51,8 @@ export interface NewsDataArticle {
    * (a API já filtrou por termos cripto; sem isto, muitos caíam em «Macro» só pela palavra «mercado»).
    */
   _yieldscanCryptoQuery?: boolean
+  /** Interno: veio da query NewsData só IA — classificar como IA no filtro. */
+  _yieldscanAiQuery?: boolean
 }
 
 export type NewsDataApiResponse =
@@ -73,6 +75,10 @@ const KEYWORDS_Q =
 const KEYWORDS_CRYPTO =
   'bitcoin OR ethereum OR cryptocurrency OR solana OR blockchain OR defi OR stablecoin OR altcoin OR xrp OR ripple OR binance OR coinbase OR web3 OR nft OR memecoin OR halving'
 
+/** Query dedicada IA — mesma API NewsData, fundida no fetch existente. */
+const KEYWORDS_AI =
+  'artificial intelligence OR AI OR machine learning OR OpenAI OR ChatGPT OR generative AI OR LLM OR deep learning OR neural network OR Anthropic OR Claude'
+
 /**
  * Palavras-mínimo para que um artigo seja relevante para o feed.
  * Artigos que não contenham NENHUMA serão descartados.
@@ -84,6 +90,7 @@ const RELEVANCE_WORDS = new Set([
   'gdp','pib','recession','recessão','economy','economia','stock market',
   'mercado','bolsa','dollar','dólar','oil','petróleo','market','mercado',
   'coinbase','binance','solana','xrp','bnb','stablecoin','satoshi',
+  'openai','chatgpt','anthropic','claude','llm','gpt','machine learning','artificial intelligence',
 ])
 
 /** Fontes tratadas como maior credibilidade editorial (heurística conservadora). */
@@ -126,6 +133,9 @@ const RE_MACRO =
   /\b(fed|federal reserve|taxa de juros|interest rate|juros|inflacao|inflation|cpi|pib|gdp|recessao|recession|desemprego|unemployment|tesouro|treasury|banco central|central bank|bce|ecb|boj|macroeconom|politica monetaria|monetary policy|fiscal|selic)\b/i
 const RE_CRYPTO =
   /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
+
+const RE_AI =
+  /\b(artificial intelligence|machine learning|deep learning|neural networks?|generative ai|large language model|openai|chatgpt|anthropic|llm)\b|gpt-4|gpt-5|\bclaude\b|\bgemini\b|\bcopilot\b/i
 
 const RE_POS =
   /\b(approval|approve|aprovado|homologado|adoption|adocao|breakthrough|partnership|parceria|record high|recorde|all-?time high|rally|surge\s+approval|etf\s+approved|launch\s+success|alta\s+forte)\b/i
@@ -197,6 +207,7 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
   const geo = RE_GEO.test(blob)
   const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
+  const ai = RE_AI.test(blob)
   /* Futuros/swaps sobre cripto (ex. Índia Gen Z + futures) */
   const futuroCripto =
     /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
@@ -205,6 +216,7 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
    * Cripto tem prioridade quando o texto menciona BTC/ETH/blockchain/etc.
    */
   if (cry || futuroCripto) return 'CRIPTO'
+  if (ai) return 'IA'
   if (geo) return 'GEOPOLÍTICA'
   if (macro) return 'MACRO'
   if (/economy|economic|economia|mercado|finance|financas|financeiro/.test(blob)) return 'MACRO'
@@ -231,11 +243,12 @@ export function analisarTextoMercado(textoBruto: string): {
   const cry = RE_CRYPTO.test(full)
   const geo = RE_GEO.test(full)
   const macro = RE_MACRO.test(full)
+  const ai = RE_AI.test(full)
   const mercadoGeral =
     /\b(economy|economic|economia|mercado|finance|financas|financeiro|stock|stocks|bolsa|nasdaq|sp500|s&p|dollar|dólar|euro|yen|oil|petróleo|gold|ouro|treasury|yield|tariff|trade|banco|bank|ipo|earnings)\b/i.test(
       full
     )
-  const relevanteParaFeed = cry || geo || macro || mercadoGeral
+  const relevanteParaFeed = cry || geo || macro || mercadoGeral || ai
   const categoria = classificarCategoria(full, null)
   const impacto = classificarImpacto(full)
   return { normalizado: full, categoria, impacto, relevanteParaFeed }
@@ -246,7 +259,7 @@ function ativosAfetados(full: string, categoria: InsightNoticia['categoria']): I
   if (RE_BTC.test(full)) out.add('BTC')
   if (RE_ETH.test(full)) out.add('ETH')
   if (RE_ALT.test(full)) out.add('ALTCOINS')
-  if (categoria === 'GEOPOLÍTICA' || categoria === 'MACRO') {
+  if (categoria === 'GEOPOLÍTICA' || categoria === 'MACRO' || categoria === 'IA') {
     out.add('MERCADO GLOBAL')
   }
   if (categoria === 'CRIPTO' && out.size === 0) {
@@ -356,9 +369,10 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
   /* Menos páginas = resposta mais rápida; volume ainda cobre o feed. */
-  const [newsdataGeral, newsdataCripto, cryptopanicResults] = await Promise.all([
+  const [newsdataGeral, newsdataCripto, newsdataAi, cryptopanicResults] = await Promise.all([
     fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
     fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
+    fetchQueryAccumulate(key, KEYWORDS_AI, { maxArticles: 22, maxPages: 3, size: '10' }),
     fetchCryptopanicAsNewsDataArticles(),
   ])
 
@@ -367,9 +381,15 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
     _yieldscanCryptoQuery: true,
   }))
 
+  const newsdataAiMarcados: NewsDataArticle[] = newsdataAi.map((a) => ({
+    ...a,
+    _yieldscanAiQuery: true,
+  }))
+
   /* CryptoPanic primeiro: é a API dedicada a cripto; em duplicado de URL, mantém-se o post dela. */
   const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
-  const results = mergeArticlesDedupe(cryptopanicResults, mergedNd)
+  const mergedNdComIa = mergeArticlesDedupe(mergedNd, newsdataAiMarcados)
+  const results = mergeArticlesDedupe(cryptopanicResults, mergedNdComIa)
   if (results.length === 0) return { results: [], erro: 'sem_artigos' }
   return { results }
 }
@@ -393,7 +413,9 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
       ? 'CRIPTO'
       : typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-')
         ? 'CRIPTO'
-        : classificarCategoria(fullLower, article.category ?? null)
+        : article._yieldscanAiQuery === true
+          ? 'IA'
+          : classificarCategoria(fullLower, article.category ?? null)
   let resumo = notaGeopoliticaCrypto(categoria, resumoBase || title)
 
   const impacto = classificarImpacto(fullLower)
@@ -421,6 +443,7 @@ const LIMITE_POR_CATEGORIA: Record<InsightNoticia['categoria'], number> = {
   CRIPTO: 40,
   GEOPOLÍTICA: 16,
   MACRO: 16,
+  IA: 16,
 }
 
 export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
@@ -438,6 +461,7 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     const ehRelevante =
       fromCryptopanic ||
       a._yieldscanCryptoQuery === true ||
+      a._yieldscanAiQuery === true ||
       [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
     if (!ehRelevante) continue
     const p = processarNoticia(a)
