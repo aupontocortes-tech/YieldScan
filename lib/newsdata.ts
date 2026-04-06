@@ -21,7 +21,7 @@ export const NEWSDATA_NEWS_URL = 'https://newsdata.io/api/1/news'
 export interface InsightNoticia {
   titulo: string
   resumo: string
-  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'POLÍTICA' | 'MACRO' | 'IA'
+  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO' | 'ECONOMIA' | 'IA'
   impacto: 'POSITIVO' | 'NEGATIVO' | 'NEUTRO'
   ativos: Array<'BTC' | 'ETH' | 'ALTCOINS' | 'MERCADO GLOBAL'>
   confianca: 'ALTA' | 'MÉDIA' | 'BAIXA'
@@ -142,7 +142,7 @@ function normalizarTextoMatch(s: string): string {
 
 /**
  * Relações internacionais, conflito, defesa, sanções entre Estados — sem eleições/congresso
- * (isso vai para POLÍTICA: são processos internos).
+ * (processos legislativos/domésticos entram em Macro com o restante tema mercado).
  */
 const RE_GEOPOLITICA =
   /\b(ucrania|ukraine|russia|russian|putin|zelensk|china|chines|beijing|taiwan|taipei|estreito|iran|irao|\bira\b|israel|gaza|palestin|hamas|hezbollah|siria|syria|yemen|iemen|iraque|iraq|afeganistao|afghanistan|taliban|coreia do norte|north korea|arma(s)? nuclear|otan|nato|guerra|war|invasao|invasion|conflito|conflict|militar|military|pentagon|ministr(o|a) da defesa|defense secretary|sancoes|sanction|embargo|geopolit|oriente medio|middle east|mar vermelho|red sea|estreito|strait|opec\b|refugiad|embaixa(da|dor)|espionage|spy\b|golpe de estado\b|coupe d'etat|venezuela|nicaragua|crimeia|crimea|donbas|ceasefire|alto el fuego)\b/i
@@ -233,21 +233,20 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
     /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
 
   const geo = RE_GEOPOLITICA.test(full)
-  const macro = RE_MACRO.test(full) || RE_MACRO_MERCADOS.test(full)
+  const policyMacro = RE_MACRO.test(full)
+  const mercados = RE_MACRO_MERCADOS.test(full)
   const pol = RE_POLITICA.test(full)
+  const gov = /\b(governo|government|presidente\b|president\b|ministr|prime minister|premier\b)\b/i.test(full)
 
   /**
    * Cripto tem prioridade quando o texto menciona BTC/ETH/blockchain/etc.
-   * Ordem: cripto → geopolítica internacional → macro (dados/mercados/inst. econ.) → política institucional.
+   * Ordem: cripto → geopolítica → macro (juros, inflação, BC, orçamento, eleições/congresso) → economia (bolsas, empresas, commodities negociadas).
    * IA só em `processarNoticia` com `_yieldscanAiQuery` (feeds/queries IA + enrich).
-   * Não usar «economia|mercado» sozinhos: punham quase tudo em Macro.
    */
   if (cry || futuroCripto) return 'CRIPTO'
   if (geo) return 'GEOPOLÍTICA'
-  if (macro) return 'MACRO'
-  if (pol) return 'POLÍTICA'
-  if (/\b(governo|government|presidente\b|president\b|ministr|prime minister|premier\b)\b/i.test(full))
-    return 'POLÍTICA'
+  if (policyMacro || pol || gov) return 'MACRO'
+  if (mercados) return 'ECONOMIA'
   return 'MACRO'
 }
 
@@ -259,7 +258,7 @@ function classificarImpacto(full: string): InsightNoticia['impacto'] {
 
 /**
  * Análise de texto livre com as mesmas regras de categoria/impacto das notícias.
- * `relevanteParaFeed`: cripto, macro, geopolítica ou mercado em geral.
+ * `relevanteParaFeed`: cripto, macro, economia, geopolítica ou mercado em geral.
  */
 export function analisarTextoMercado(textoBruto: string): {
   normalizado: string
@@ -290,8 +289,8 @@ function ativosAfetados(full: string, categoria: InsightNoticia['categoria']): I
   if (RE_ALT.test(full)) out.add('ALTCOINS')
   if (
     categoria === 'GEOPOLÍTICA' ||
-    categoria === 'POLÍTICA' ||
     categoria === 'MACRO' ||
+    categoria === 'ECONOMIA' ||
     categoria === 'IA'
   ) {
     out.add('MERCADO GLOBAL')
@@ -513,8 +512,8 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
 const LIMITE_POR_CATEGORIA: Record<InsightNoticia['categoria'], number> = {
   CRIPTO: 40,
   GEOPOLÍTICA: 14,
-  POLÍTICA: 14,
   MACRO: 16,
+  ECONOMIA: 16,
   IA: 28,
 }
 

@@ -33,14 +33,14 @@ const FILTROS = [
   { label: 'Todos', value: 'todos' },
   { label: 'Cripto', value: 'CRIPTO' },
   { label: 'Geopolítica', value: 'GEOPOLÍTICA' },
-  { label: 'Política', value: 'POLÍTICA' },
   { label: 'Macro', value: 'MACRO' },
+  { label: 'Economia', value: 'ECONOMIA' },
   { label: 'IA', value: 'IA' },
 ] as const
 
 type Filtro = (typeof FILTROS)[number]['value']
 
-const NEWS_FILTRO_KV = 'news_filtro_v1' as const
+const NEWS_FILTRO_KV = 'news_filtro_v2' as const
 
 function isFiltroGuard(v: unknown): v is Filtro {
   return typeof v === 'string' && FILTROS.some((f) => f.value === v)
@@ -85,16 +85,16 @@ const LABEL_IMPACTO: Record<InsightNoticia['impacto'], string> = {
 const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300',
   GEOPOLÍTICA: 'border-amber-400/40 bg-amber-500/15 text-amber-300',
-  POLÍTICA: 'border-sky-500/40 bg-sky-500/15 text-sky-300',
   MACRO: 'border-yellow-400/40 bg-yellow-500/15 text-yellow-300',
+  ECONOMIA: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
   IA: 'border-violet-500/40 bg-violet-500/15 text-violet-300',
 }
 
 const LABEL_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'Cripto',
   GEOPOLÍTICA: 'Geopolítica',
-  POLÍTICA: 'Política',
   MACRO: 'Macro',
+  ECONOMIA: 'Economia',
   IA: 'IA',
 }
 
@@ -258,7 +258,7 @@ export function DashbuddyNews() {
             <h2 className="text-2xl font-bold tracking-tight">Notícias</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cada filtro mostra só o tema do rótulo: geopolítica (internacional/conflito), política (eleições, Congresso, Judiciário), macro (juros, inflação, mercados). Em «Todos» vês tudo misturado com o ícone certo por notícia. Títulos e resumos em português quando a fonte é noutro idioma; sem imagem na fonte, só texto.
+            Cada filtro mostra só o tema do rótulo: cripto, geopolítica (internacional/conflito), macro (juros, inflação, bancos centrais, política fiscal e processos legislativos com impacto em mercado), economia (bolsas, empresas, commodities) e IA. «Todos» junta todas as notícias. Títulos e resumos em português quando a fonte é noutro idioma; sem imagem na fonte, só texto.
           </p>
         </div>
         <Button
