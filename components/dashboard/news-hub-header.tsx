@@ -17,7 +17,7 @@ const LINKS = [
     href: '/news/noticias',
     label: 'Notícias',
     shortLabel: 'Notícias',
-    description: 'Só notícias cripto — em português quando a fonte é noutro idioma.',
+    description: 'Cripto, geopolítica, macroeconomia e IA — em português quando a fonte é noutro idioma.',
     icon: Newspaper,
   },
 ] as const
