@@ -7,6 +7,7 @@
  * Notícias cripto extra: CryptoPanic (Developer API v2) — CRYPTOPANIC_AUTH_TOKEN.
  */
 
+import { fetchAiNewsFromRssFeeds } from '@/lib/ai-news-rss'
 import {
   fetchCryptopanicAsNewsDataArticles,
   mergeArticlesDedupe,
@@ -405,16 +406,20 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
   /* Menos páginas = resposta mais rápida; volume ainda cobre o feed. */
-  const [newsdataGeral, newsdataCripto, newsdataAi, newsdataAiAlt, cryptopanicResults] =
+  const [newsdataGeral, newsdataCripto, newsdataAi, newsdataAiAlt, cryptopanicResults, rssAiArticles] =
     await Promise.all([
       fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
       fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
       fetchQueryAccumulate(key, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
       fetchQueryAccumulate(key, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
       fetchCryptopanicAsNewsDataArticles(),
+      fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
     ])
 
-  const newsdataAiMerged = mergeArticlesDedupe(newsdataAi, newsdataAiAlt)
+  const newsdataAiMerged = mergeArticlesDedupe(
+    mergeArticlesDedupe(newsdataAi, newsdataAiAlt),
+    rssAiArticles
+  )
 
   const newsdataCriptoMarcados: NewsDataArticle[] = newsdataCripto.map((a) => ({
     ...a,
@@ -484,7 +489,7 @@ const LIMITE_POR_CATEGORIA: Record<InsightNoticia['categoria'], number> = {
   CRIPTO: 40,
   GEOPOLÍTICA: 16,
   MACRO: 16,
-  IA: 16,
+  IA: 28,
 }
 
 export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
