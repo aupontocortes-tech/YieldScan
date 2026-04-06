@@ -216,17 +216,17 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
   const geo = RE_GEO.test(blob)
   const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
-  /* IA só no título/descrição/conteúdo — nunca nas categorias da API (ex.: tag «artificial intelligence» em artigo agrícola). */
-  const ai = textoIndicaFocoInteligenciaArtificial(full)
   /* Futuros/swaps sobre cripto (ex. Índia Gen Z + futures) */
   const futuroCripto =
     /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
 
   /**
    * Cripto tem prioridade quando o texto menciona BTC/ETH/blockchain/etc.
+   * IA não é decidida aqui: a query geral inclui OpenAI/ChatGPT na string de busca,
+   * quase todos os cartões mencionariam «IA» no texto e o filtro IA ficaria igual a Todos.
+   * Categoria IA só em `processarNoticia` quando `_yieldscanAiQuery` (feeds/queries IA + enrich).
    */
   if (cry || futuroCripto) return 'CRIPTO'
-  if (ai) return 'IA'
   if (geo) return 'GEOPOLÍTICA'
   if (macro) return 'MACRO'
   if (/economy|economic|economia|mercado|finance|financas|financeiro/.test(blob)) return 'MACRO'
