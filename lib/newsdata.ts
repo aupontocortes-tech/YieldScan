@@ -216,8 +216,8 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
   const geo = RE_GEO.test(blob)
   const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
-  /* IA só com foco claro no texto (evita «tecnologia» genérica no filtro). */
-  const ai = textoIndicaFocoInteligenciaArtificial(blob)
+  /* IA só no título/descrição/conteúdo — nunca nas categorias da API (ex.: tag «artificial intelligence» em artigo agrícola). */
+  const ai = textoIndicaFocoInteligenciaArtificial(full)
   /* Futuros/swaps sobre cripto (ex. Índia Gen Z + futures) */
   const futuroCripto =
     /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
