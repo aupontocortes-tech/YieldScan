@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NewsSpeakButton } from '@/components/news/news-speak-button'
-import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
@@ -28,24 +27,6 @@ async function fetchNoticias(): Promise<NewsPayload> {
   return json
 }
 
-/* ── Filters ─────────────────────────────────────────────────────────────── */
-const FILTROS = [
-  { label: 'Todos', value: 'todos' },
-  { label: 'Cripto', value: 'CRIPTO' },
-  { label: 'Geopolítica', value: 'GEOPOLÍTICA' },
-  { label: 'Macro', value: 'MACRO' },
-  { label: 'Economia', value: 'ECONOMIA' },
-  { label: 'IA', value: 'IA' },
-] as const
-
-type Filtro = (typeof FILTROS)[number]['value']
-
-const NEWS_FILTRO_KV = 'news_filtro_v2' as const
-
-function isFiltroGuard(v: unknown): v is Filtro {
-  return typeof v === 'string' && FILTROS.some((f) => f.value === v)
-}
-
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 function formatarData(pub: string | null): string {
   if (!pub) return ''
@@ -65,10 +46,6 @@ function formatarData(pub: string | null): string {
   }
 }
 
-function categoriaDoItem(item: ItemFeedNoticia): InsightNoticia['categoria'] {
-  return item.dados.categoria
-}
-
 /* ── Design maps ─────────────────────────────────────────────────────────── */
 const COR_IMPACTO: Record<InsightNoticia['impacto'], string> = {
   POSITIVO: 'bg-emerald-500',
@@ -82,21 +59,7 @@ const LABEL_IMPACTO: Record<InsightNoticia['impacto'], string> = {
   NEUTRO: 'Neutro',
 }
 
-const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
-  CRIPTO: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300',
-  GEOPOLÍTICA: 'border-amber-400/40 bg-amber-500/15 text-amber-300',
-  MACRO: 'border-yellow-400/40 bg-yellow-500/15 text-yellow-300',
-  ECONOMIA: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
-  IA: 'border-violet-500/40 bg-violet-500/15 text-violet-300',
-}
-
-const LABEL_CAT: Record<InsightNoticia['categoria'], string> = {
-  CRIPTO: 'Cripto',
-  GEOPOLÍTICA: 'Geopolítica',
-  MACRO: 'Macro',
-  ECONOMIA: 'Economia',
-  IA: 'IA',
-}
+const BADGE_CRIPTO = 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300'
 
 /* ── Skeletons ────────────────────────────────────────────────────────────── */
 function NewsCardSkeleton() {
@@ -138,10 +101,10 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
         <span
           className={cn(
             'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold',
-            BADGE_CAT[n.categoria]
+            BADGE_CRIPTO
           )}
         >
-          {LABEL_CAT[n.categoria]}
+          Cripto
         </span>
         <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
           <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', COR_IMPACTO[n.impacto])} />
@@ -200,7 +163,6 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
         speechId={speechId}
         title={n.titulo}
         description={n.resumo}
-        // Botão TTS mais visível e centralizado na base do card
         className="absolute bottom-4 left-1/2 -translate-x-1/2 h-9 w-9 text-[17px]"
       />
     </div>
@@ -209,22 +171,6 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 export function DashbuddyNews() {
-  const [filtro, setFiltro] = useState<Filtro>('todos')
-  const [filtroHydrated, setFiltroHydrated] = useState(false)
-
-  useEffect(() => {
-    void openYieldscanSqlite().then(() => {
-      const v = kvGetJson<unknown>(NEWS_FILTRO_KV)
-      if (isFiltroGuard(v)) setFiltro(v)
-      setFiltroHydrated(true)
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!filtroHydrated) return
-    kvSetJson(NEWS_FILTRO_KV, filtro)
-  }, [filtro, filtroHydrated])
-
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['dashbuddy-news'],
     queryFn: fetchNoticias,
@@ -244,21 +190,20 @@ export function DashbuddyNews() {
   const isConfigError = isError && Boolean(error?.message?.includes('NEWSDATA_API_KEY'))
   const apiErro = isError && !isConfigError ? (error?.message ?? 'Erro ao carregar notícias.') : null
 
-  const feedFiltrado = useMemo(() => {
-    if (filtro === 'todos') return feed
-    return feed.filter((item) => categoriaDoItem(item) === filtro)
-  }, [feed, filtro])
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
             <Newspaper className="h-5 w-5 text-yellow-400" />
-            <h2 className="text-2xl font-bold tracking-tight">Notícias</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Notícias cripto</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cada filtro mostra só o tema do rótulo: cripto, geopolítica (internacional/conflito), macro (juros, inflação, bancos centrais, política fiscal e processos legislativos com impacto em mercado), economia (bolsas, empresas, commodities) e IA. «Todos» junta todas as notícias. Títulos e resumos em português quando a fonte é noutro idioma; sem imagem na fonte, só texto.
+            Só temas de criptomoedas e blockchain (NewsData + CryptoPanic quando configurado). Títulos e
+            resumos em português quando a fonte é noutro idioma; sem imagem na fonte, só texto.
+            {!isLoading && !isError && feed.length > 0 && (
+              <span className="text-muted-foreground/80"> {feed.length} no feed.</span>
+            )}
           </p>
         </div>
         <Button
@@ -273,40 +218,6 @@ export function DashbuddyNews() {
         </Button>
       </div>
 
-      {!isConfigError && !isError && (
-        <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-          {FILTROS.map((f) => {
-            const count =
-              f.value === 'todos' ? feed.length : feed.filter((it) => categoriaDoItem(it) === f.value).length
-            return (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setFiltro(f.value)}
-                className={cn(
-                  'shrink-0 flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition-all',
-                  filtro === f.value
-                    ? 'border-yellow-500 bg-yellow-500 text-black shadow-sm'
-                    : 'border-border/60 bg-card/50 text-muted-foreground hover:border-yellow-500/40 hover:text-foreground'
-                )}
-              >
-                {f.label}
-                {!isLoading && count > 0 && (
-                  <span
-                    className={cn(
-                      'rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums',
-                      filtro === f.value ? 'bg-black/20 text-black' : 'bg-muted/60 text-muted-foreground'
-                    )}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
       {isConfigError && (
         <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-center">
           <p className="font-semibold text-yellow-400">Chave API não configurada</p>
@@ -314,7 +225,7 @@ export function DashbuddyNews() {
             Adiciona{' '}
             <code className="rounded bg-muted px-1 py-0.5 text-foreground">NEWSDATA_API_KEY=tua_chave</code> no
             ficheiro <code className="rounded bg-muted px-1 py-0.5 text-foreground">.env.local</code> (ou na Vercel) e
-            reinicia o servidor.
+            reinicia o servidor. Opcional: <code className="rounded bg-muted px-1 py-0.5 text-foreground">CRYPTOPANIC_AUTH_TOKEN</code> para mais artigos.
           </p>
         </div>
       )}
@@ -340,15 +251,14 @@ export function DashbuddyNews() {
         </div>
       )}
 
-      {!isLoading && !isError && !apiErro && !isConfigError && feedFiltrado.length === 0 && (
+      {!isLoading && !isError && !apiErro && !isConfigError && feed.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border/40 bg-card/30 py-20 text-center">
           <Newspaper className="h-10 w-10 opacity-20" />
           <div>
-            <p className="font-medium">Nenhum item neste filtro</p>
+            <p className="font-medium">Nenhuma notícia no momento</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filtro !== 'todos'
-                ? 'Tenta outro filtro ou actualiza.'
-                : 'Actualiza para tentar de novo.'}
+              Confirma <code className="rounded bg-muted px-1">NEWSDATA_API_KEY</code> e o plano na NewsData; define
+              também <code className="rounded bg-muted px-1">CRYPTOPANIC_AUTH_TOKEN</code> para reforçar o feed.
             </p>
           </div>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => void refetch()}>
@@ -358,9 +268,9 @@ export function DashbuddyNews() {
         </div>
       )}
 
-      {!isLoading && feedFiltrado.length > 0 && (
+      {!isLoading && feed.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {feedFiltrado.map((item) => (
+          {feed.map((item) => (
             <NewsCard key={item.id} speechId={item.id} n={item.dados} />
           ))}
         </div>
