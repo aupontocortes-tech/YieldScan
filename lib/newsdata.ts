@@ -334,8 +334,7 @@ async function fetchNewsDataSinglePage(
     'language',
     (process.env.NEWSDATA_LANGUAGES ?? 'pt,en').trim() || 'pt,en'
   )
-  url.searchParams.set('category', 'business,technology,top,science')
-  url.searchParams.set('prioritydomain', 'top')
+  // Evita over-filter da API (alguns planos retornam vazio com category+prioritydomain).
   url.searchParams.set('size', size)
   if (pageToken) url.searchParams.set('page', pageToken)
 
@@ -417,6 +416,30 @@ function enrichYieldscanAiFlag(results: NewsDataArticle[], aiArticles: NewsDataA
 }
 
 /**
+ * Quando uma URL entrou primeiro pela query geral, pode perder o marcador de query cripto.
+ * Reaplica _yieldscanCryptoQuery por URL para o filtro «Cripto» não esvaziar.
+ */
+function enrichYieldscanCryptoFlag(results: NewsDataArticle[], cryptoArticles: NewsDataArticle[]): void {
+  if (!cryptoArticles.length) return
+  const cryptoKeys = new Set<string>()
+  for (const a of cryptoArticles) {
+    const raw = (a.link ?? '').trim()
+    const key =
+      normalizarLinkDedupe(raw || undefined) ||
+      `id:${String(a.article_id ?? a.title ?? '').toLowerCase()}`
+    cryptoKeys.add(key)
+  }
+  for (const a of results) {
+    const raw = (a.link ?? '').trim()
+    const key =
+      normalizarLinkDedupe(raw || undefined) ||
+      `id:${String(a.article_id ?? a.title ?? '').toLowerCase()}`
+    if (!cryptoKeys.has(key)) continue
+    a._yieldscanCryptoQuery = true
+  }
+}
+
+/**
  * NewsData (cripto+macro+geo) + opcional CryptoPanic (cripto), fundidos sem URLs duplicadas.
  */
 export async function pegarTodasNoticias(apiKey?: string): Promise<{
@@ -427,10 +450,11 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
   /* Menos páginas = resposta mais rápida; volume ainda cobre o feed. */
-  const [newsdataGeral, newsdataCripto, newsdataAi, newsdataAiAlt, cryptopanicResults, rssAiArticles] =
+  const [newsdataGeral, newsdataCripto, newsdataCriptoFallback, newsdataAi, newsdataAiAlt, cryptopanicResults, rssAiArticles] =
     await Promise.all([
       fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
       fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
+      fetchQueryAccumulate(key, 'bitcoin OR ethereum OR crypto', { maxArticles: 18, maxPages: 3, size: '10' }),
       fetchQueryAccumulate(key, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
       fetchQueryAccumulate(key, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
       fetchCryptopanicAsNewsDataArticles(),
@@ -442,7 +466,8 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
     rssAiArticles
   )
 
-  const newsdataCriptoMarcados: NewsDataArticle[] = newsdataCripto.map((a) => ({
+  const newsdataCriptoMerged = mergeArticlesDedupe(newsdataCripto, newsdataCriptoFallback)
+  const newsdataCriptoMarcados: NewsDataArticle[] = newsdataCriptoMerged.map((a) => ({
     ...a,
     _yieldscanCryptoQuery: true,
   }))
@@ -456,6 +481,7 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
   const mergedNdComIa = mergeArticlesDedupe(mergedNd, newsdataAiMarcados)
   const results = mergeArticlesDedupe(cryptopanicResults, mergedNdComIa)
+  enrichYieldscanCryptoFlag(results, newsdataCriptoMarcados)
   enrichYieldscanAiFlag(results, newsdataAiMerged)
   if (results.length === 0) return { results: [], erro: 'sem_artigos' }
   return { results }
