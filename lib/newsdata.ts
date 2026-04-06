@@ -270,8 +270,7 @@ async function fetchNewsDataSinglePage(
     'language',
     (process.env.NEWSDATA_LANGUAGES ?? 'en,pt').trim() || 'en,pt'
   )
-  url.searchParams.set('category', 'business,technology,top,science')
-  url.searchParams.set('prioritydomain', 'top')
+  // Evita over-filter: alguns planos/contas retornam vazio com category+prioritydomain.
   url.searchParams.set('size', size)
   if (pageToken) url.searchParams.set('page', pageToken)
 
@@ -341,15 +340,20 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
     return { results: cryptopanicResults }
   }
 
-  const [newsdataCripto, newsdataCriptoAlt] = await Promise.all([
+  const [newsdataCripto, newsdataCriptoAlt, newsdataFallback] = await Promise.all([
     fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 36, maxPages: 5, size: '10' }),
     fetchQueryAccumulate(key, KEYWORDS_CRYPTO_ALT, { maxArticles: 28, maxPages: 4, size: '10' }),
+    // Fallback curto para contas que não retornam bem query longa com OR.
+    fetchQueryAccumulate(key, 'bitcoin OR ethereum OR crypto', { maxArticles: 20, maxPages: 3, size: '10' }),
   ])
 
   const marcarCripto = (arr: NewsDataArticle[]): NewsDataArticle[] =>
     arr.map((a) => ({ ...a, _yieldscanCryptoQuery: true }))
 
-  const mergedNd = mergeArticlesDedupe(marcarCripto(newsdataCripto), marcarCripto(newsdataCriptoAlt))
+  const mergedNd = mergeArticlesDedupe(
+    mergeArticlesDedupe(marcarCripto(newsdataCripto), marcarCripto(newsdataCriptoAlt)),
+    marcarCripto(newsdataFallback)
+  )
   const results = mergeArticlesDedupe(cryptopanicResults, mergedNd)
   if (results.length === 0) return { results: [], erro: 'sem_artigos' }
   return { results }

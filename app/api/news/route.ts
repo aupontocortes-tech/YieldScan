@@ -39,7 +39,7 @@ const AVISO_SEM_FONTES =
   'Sem notícias: adiciona NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
 
 const AVISO_SEM_ARTIGOS =
-  'O feed veio vazio. Verifica a chave NewsData, o plano/quotas, ou configura CRYPTOPANIC_AUTH_TOKEN como reforço.'
+  'O feed veio vazio neste momento. A fonte pode estar sem artigos recentes/temporariamente limitada; tenta atualizar em 1-2 minutos. Para reforçar volume, usa também CRYPTOPANIC_AUTH_TOKEN.'
 
 /** Agrega fetch + processamento + tradução; cacheia ~45s para vários utilizadores não repetirem o trabalho. */
 const montarNoticiasEmCache = unstable_cache(
@@ -60,7 +60,7 @@ const montarNoticiasEmCache = unstable_cache(
     ])
     return { traduzidas }
   },
-  ['api-news-montar-v10'],
+  ['api-news-montar-v11'],
   { revalidate: 45, tags: ['news'] }
 )
 
