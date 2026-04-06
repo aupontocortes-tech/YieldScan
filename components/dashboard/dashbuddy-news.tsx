@@ -33,6 +33,7 @@ const FILTROS = [
   { label: 'Todos', value: 'todos' },
   { label: 'Cripto', value: 'CRIPTO' },
   { label: 'Geopolítica', value: 'GEOPOLÍTICA' },
+  { label: 'Política', value: 'POLÍTICA' },
   { label: 'Macro', value: 'MACRO' },
   { label: 'IA', value: 'IA' },
 ] as const
@@ -84,6 +85,7 @@ const LABEL_IMPACTO: Record<InsightNoticia['impacto'], string> = {
 const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300',
   GEOPOLÍTICA: 'border-amber-400/40 bg-amber-500/15 text-amber-300',
+  POLÍTICA: 'border-sky-500/40 bg-sky-500/15 text-sky-300',
   MACRO: 'border-yellow-400/40 bg-yellow-500/15 text-yellow-300',
   IA: 'border-violet-500/40 bg-violet-500/15 text-violet-300',
 }
@@ -91,6 +93,7 @@ const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
 const LABEL_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'Cripto',
   GEOPOLÍTICA: 'Geopolítica',
+  POLÍTICA: 'Política',
   MACRO: 'Macro',
   IA: 'IA',
 }
@@ -255,7 +258,7 @@ export function DashbuddyNews() {
             <h2 className="text-2xl font-bold tracking-tight">Notícias</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Filtros por categoria. Títulos e resumos vêm em português (tradução automática quando a fonte é noutro idioma). Sem imagem na fonte, o cartão mostra só o texto.
+            Cada filtro mostra só o tema do rótulo: geopolítica (internacional/conflito), política (eleições, Congresso, Judiciário), macro (juros, inflação, mercados). Em «Todos» vês tudo misturado com o ícone certo por notícia. Títulos e resumos em português quando a fonte é noutro idioma; sem imagem na fonte, só texto.
           </p>
         </div>
         <Button

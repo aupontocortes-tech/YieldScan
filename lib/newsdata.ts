@@ -21,7 +21,7 @@ export const NEWSDATA_NEWS_URL = 'https://newsdata.io/api/1/news'
 export interface InsightNoticia {
   titulo: string
   resumo: string
-  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO' | 'IA'
+  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'POLÍTICA' | 'MACRO' | 'IA'
   impacto: 'POSITIVO' | 'NEGATIVO' | 'NEUTRO'
   ativos: Array<'BTC' | 'ETH' | 'ALTCOINS' | 'MERCADO GLOBAL'>
   confianca: 'ALTA' | 'MÉDIA' | 'BAIXA'
@@ -99,7 +99,8 @@ const RELEVANCE_WORDS = new Set([
   'inflation','inflação','fed','federal reserve','interest rate','taxa de juros',
   'war','guerra','sanction','sanção','geopolit','tariff','tarifa',
   'gdp','pib','recession','recessão','economy','economia','stock market',
-  'mercado','bolsa','dollar','dólar','oil','petróleo','market','mercado',
+  'mercado','bolsa','dollar','dólar','oil','petróleo','market',
+  'congresso','senado','eleicao','eleição','election','governo','government','parlamento',
   'coinbase','binance','solana','xrp','bnb','stablecoin','satoshi',
   'openai','chatgpt','anthropic','claude','llm','gpt','machine learning','artificial intelligence',
   'inteligencia artificial','ia generativa','modelo de linguagem',
@@ -139,10 +140,23 @@ function normalizarTextoMatch(s: string): string {
     .replace(/\p{M}/gu, '')
 }
 
-const RE_GEO =
-  /\b(ucrania|ucraine|ukraine|russia|russian|china|chines|taiwan|irao|iran|israel|gaza|otan|nato|guerra|war|conflito|conflict|sancoes|sanction|eleicao|election|congresso|congress|senado|senate|parlamento|parliament|geopolit|oriente medio|middle east|coreia do norte|north korea|venezuela)\b/i
+/**
+ * Relações internacionais, conflito, defesa, sanções entre Estados — sem eleições/congresso
+ * (isso vai para POLÍTICA: são processos internos).
+ */
+const RE_GEOPOLITICA =
+  /\b(ucrania|ukraine|russia|russian|putin|zelensk|china|chines|beijing|taiwan|taipei|estreito|iran|irao|\bira\b|israel|gaza|palestin|hamas|hezbollah|siria|syria|yemen|iemen|iraque|iraq|afeganistao|afghanistan|taliban|coreia do norte|north korea|arma(s)? nuclear|otan|nato|guerra|war|invasao|invasion|conflito|conflict|militar|military|pentagon|ministr(o|a) da defesa|defense secretary|sancoes|sanction|embargo|geopolit|oriente medio|middle east|mar vermelho|red sea|estreito|strait|opec\b|refugiad|embaixa(da|dor)|espionage|spy\b|golpe de estado\b|coupe d'etat|venezuela|nicaragua|crimeia|crimea|donbas|ceasefire|alto el fuego)\b/i
+
+/** Eleições, legislativo, Judiciário, governo — foco doméstico / institucional. */
+const RE_POLITICA =
+  /\b(eleicao|eleiç|election|eleitoral|referendum|plebiscito|runoff|segundo turno|impeachment|congresso nacional|camara dos deputados|senado federal|plenario|plenário|comissao parlamentar|voto em\b|urnas?\b|parlamento europeu|european parliament|\bcongress\b|\bsenate\b|house of representatives|downing street|white house staff|gabinete (ministerial|do)|coalizao|coalition government|ministerio publico|stf\b|supremo tribunal|tribunal superior|judiciario|veto (presidencial|do presidente)|projeto de lei|bill (to|passes)|pec\b|emenda constitucional|nomeacao (para|de) ministr|cabinet reshuffle)\b/i
+
 const RE_MACRO =
-  /\b(fed|federal reserve|taxa de juros|interest rate|juros|inflacao|inflation|cpi|pib|gdp|recessao|recession|desemprego|unemployment|tesouro|treasury|banco central|central bank|bce|ecb|boj|macroeconom|politica monetaria|monetary policy|fiscal|selic)\b/i
+  /\b(fed|federal reserve|taxa de juros|interest rate|juros|inflacao|inflation|cpi\b|pce\b|pib|gdp|recessao|recession|desemprego|unemployment|payroll|non-?farm|tesouro|treasury\b|bond yield|yield curve|banco central|central bank|bce|ecb|boj|macroeconom|politica monetaria|monetary policy|politica fiscal|fiscal policy|orcamento|budget deficit|deficit publico|selic|copom|quantitative easing|stimulus\b|g20\b|\bg7\b|imf\b|fmi|world bank|banco mundial|oecd|ocde|davos|economic forum)\b/i
+
+/** Mercados e empresas (não basta a palavra «mercado» genérica). */
+const RE_MACRO_MERCADOS =
+  /\b(nasdaq|dow jones|s&p|sp\s*500|ibovespa|bovespa|stock(s)?\b|acoes\b|share(s)? price|equity market|earnings\b|eps\b|ipo\b|m&a|merger|bull market|bear market|volatil|vix\b|commodit(y|ies)|brent|wti\b|gold price|oil price|forex|fx market|negociacao\b|trading floor)\b/i
 const RE_CRYPTO =
   /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
 
@@ -213,23 +227,27 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
 
   const catJoined = (catsApi ?? []).join(' ').toLowerCase()
   const blob = `${full} ${catJoined}`
-  const geo = RE_GEO.test(blob)
-  const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
   /* Futuros/swaps sobre cripto (ex. Índia Gen Z + futures) */
   const futuroCripto =
     /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
 
+  const geo = RE_GEOPOLITICA.test(full)
+  const macro = RE_MACRO.test(full) || RE_MACRO_MERCADOS.test(full)
+  const pol = RE_POLITICA.test(full)
+
   /**
    * Cripto tem prioridade quando o texto menciona BTC/ETH/blockchain/etc.
-   * IA não é decidida aqui: a query geral inclui OpenAI/ChatGPT na string de busca,
-   * quase todos os cartões mencionariam «IA» no texto e o filtro IA ficaria igual a Todos.
-   * Categoria IA só em `processarNoticia` quando `_yieldscanAiQuery` (feeds/queries IA + enrich).
+   * Ordem: cripto → geopolítica internacional → macro (dados/mercados/inst. econ.) → política institucional.
+   * IA só em `processarNoticia` com `_yieldscanAiQuery` (feeds/queries IA + enrich).
+   * Não usar «economia|mercado» sozinhos: punham quase tudo em Macro.
    */
   if (cry || futuroCripto) return 'CRIPTO'
   if (geo) return 'GEOPOLÍTICA'
   if (macro) return 'MACRO'
-  if (/economy|economic|economia|mercado|finance|financas|financeiro/.test(blob)) return 'MACRO'
+  if (pol) return 'POLÍTICA'
+  if (/\b(governo|government|presidente\b|president\b|ministr|prime minister|premier\b)\b/i.test(full))
+    return 'POLÍTICA'
   return 'MACRO'
 }
 
@@ -251,14 +269,15 @@ export function analisarTextoMercado(textoBruto: string): {
 } {
   const full = normalizarTextoMatch(textoBruto)
   const cry = RE_CRYPTO.test(full)
-  const geo = RE_GEO.test(full)
-  const macro = RE_MACRO.test(full)
+  const geo = RE_GEOPOLITICA.test(full)
+  const pol = RE_POLITICA.test(full)
+  const macro = RE_MACRO.test(full) || RE_MACRO_MERCADOS.test(full)
   const ai = textoIndicaFocoInteligenciaArtificial(full)
   const mercadoGeral =
-    /\b(economy|economic|economia|mercado|finance|financas|financeiro|stock|stocks|bolsa|nasdaq|sp500|s&p|dollar|dólar|euro|yen|oil|petróleo|gold|ouro|treasury|yield|tariff|trade|banco|bank|ipo|earnings)\b/i.test(
+    /\b(economy|economic|economia|mercado financeiro|mercado de capitais|finance|financas|financeiro|stock|stocks|bolsa|nasdaq|sp500|s&p|dollar|dólar|euro|yen|oil|petróleo|gold|ouro|treasury|yield|tariff|trade|banco|bank|ipo|earnings)\b/i.test(
       full
     )
-  const relevanteParaFeed = cry || geo || macro || mercadoGeral || ai
+  const relevanteParaFeed = cry || geo || pol || macro || mercadoGeral || ai
   const categoria = classificarCategoria(full, null)
   const impacto = classificarImpacto(full)
   return { normalizado: full, categoria, impacto, relevanteParaFeed }
@@ -269,7 +288,12 @@ function ativosAfetados(full: string, categoria: InsightNoticia['categoria']): I
   if (RE_BTC.test(full)) out.add('BTC')
   if (RE_ETH.test(full)) out.add('ETH')
   if (RE_ALT.test(full)) out.add('ALTCOINS')
-  if (categoria === 'GEOPOLÍTICA' || categoria === 'MACRO' || categoria === 'IA') {
+  if (
+    categoria === 'GEOPOLÍTICA' ||
+    categoria === 'POLÍTICA' ||
+    categoria === 'MACRO' ||
+    categoria === 'IA'
+  ) {
     out.add('MERCADO GLOBAL')
   }
   if (categoria === 'CRIPTO' && out.size === 0) {
@@ -488,7 +512,8 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
 /** Máximo de cartões por categoria no feed (cripto pode ter muito mais que uma página da API). */
 const LIMITE_POR_CATEGORIA: Record<InsightNoticia['categoria'], number> = {
   CRIPTO: 40,
-  GEOPOLÍTICA: 16,
+  GEOPOLÍTICA: 14,
+  POLÍTICA: 14,
   MACRO: 16,
   IA: 28,
 }
