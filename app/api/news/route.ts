@@ -35,6 +35,15 @@ function permitir(id: string): boolean {
   return true
 }
 
+function parecePortugues(t: string): boolean {
+  const s = t.trim()
+  if (!s) return false
+  if (/[ãõáéíóúâêôçÃÕÁÉÍÓÚÂÊÔÇ]/.test(s)) return true
+  return /\b(o|a|os|as|de|do|da|que|com|para|mercado|economia|governo|empresa|tecnologia|hoje|entre)\b/i.test(
+    s
+  )
+}
+
 const AVISO_SEM_FONTES =
   'Sem notícias: adiciona NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
 
@@ -58,9 +67,16 @@ const montarNoticiasEmCache = unstable_cache(
         setTimeout(() => resolve(processadas), 28_000)
       ),
     ])
-    return { traduzidas }
+    const curadas = traduzidas
+      .map((n) => ({
+        ...n,
+        titulo: (n.titulo ?? '').trim(),
+        resumo: (n.resumo ?? '').trim() || (n.titulo ?? '').trim(),
+      }))
+      .filter((n) => n.titulo && n.resumo && parecePortugues(`${n.titulo} ${n.resumo}`))
+    return { traduzidas: curadas }
   },
-  ['api-news-montar-v13'],
+  ['api-news-montar-v14'],
   { revalidate: 45, tags: ['news'] }
 )
 

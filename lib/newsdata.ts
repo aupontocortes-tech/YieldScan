@@ -164,6 +164,8 @@ const RE_POS =
   /\b(approval|approve|aprovado|homologado|adoption|adocao|breakthrough|partnership|parceria|record high|recorde|all-?time high|rally|surge\s+approval|etf\s+approved|launch\s+success|alta\s+forte)\b/i
 const RE_NEG =
   /\b(hack|exploit|breach|invasao|ban\b|banned|banid|lawsuit|processo|acao judicial|fraud|fraude|scam|golpe|collapse|colapso|crash|queda brusca|selloff|seizure|apreensao|criminal charge|shutdown|encerramento|bankrupt|falencia)\b/i
+const RE_RASO_OU_LOCAL =
+  /\b(celebrity|famoso|rumor|rumour|boato|viral|influencer|curiosidade|esporte local|bairro|municipal|cidade pequena|fofoca)\b/i
 
 const RE_BTC = /\b(bitcoin|btc)\b/i
 const RE_ETH = /\b(ethereum|ether|\beth\b)\b/i
@@ -253,6 +255,33 @@ function classificarImpacto(full: string): InsightNoticia['impacto'] {
   if (RE_NEG.test(full)) return 'NEGATIVO'
   if (RE_POS.test(full)) return 'POSITIVO'
   return 'NEUTRO'
+}
+
+function noticiaEhRelevanteEstrita(a: NewsDataArticle, fullNorm: string): boolean {
+  const title = (a.title ?? '').trim()
+  if (title.length < 18) return false
+  if (RE_RASO_OU_LOCAL.test(fullNorm)) return false
+
+  const fromCryptopanic =
+    typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')
+  if (fromCryptopanic) return true
+
+  const temaPrincipal =
+    a._yieldscanCryptoQuery === true ||
+    a._yieldscanAiQuery === true ||
+    RE_CRYPTO.test(fullNorm) ||
+    RE_GEOPOLITICA.test(fullNorm) ||
+    RE_MACRO.test(fullNorm) ||
+    RE_MACRO_MERCADOS.test(fullNorm)
+
+  if (!temaPrincipal) return false
+
+  // Exige sinais de impacto/escala para evitar notícias vagas.
+  const escalaRelevante =
+    /\b(fed|ecb|bce|boj|imf|fmi|g20|g7|sec\b|etf|treasury|yield|inflation|cpi|gdp|recession|war|sanction|tariff|nasdaq|sp500|ibovespa|earnings|ipo|openai|anthropic|gemini|bitcoin|ethereum|xrp|solana|binance|coinbase|regulation|regulacao|governo|government)\b/i.test(
+      fullNorm
+    )
+  return escalaRelevante
 }
 
 /**
@@ -545,21 +574,22 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
 
   // Processa e filtra por relevância mínima
   const todas: NoticiaProcessada[] = []
+  const titulosSeen = new Set<string>()
   for (const a of articles) {
     // Descarta artigos sem nenhuma palavra-chave relevante
     const fullNorm = normalizarTextoMatch(
       [a.title, a.description].filter(Boolean).join(' ')
     )
-    const fromCryptopanic =
-      typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')
     const ehRelevante =
-      fromCryptopanic ||
-      a._yieldscanCryptoQuery === true ||
-      a._yieldscanAiQuery === true ||
+      noticiaEhRelevanteEstrita(a, fullNorm) ||
       [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
     if (!ehRelevante) continue
     const p = processarNoticia(a)
-    if (p) todas.push(p)
+    if (!p) continue
+    const tk = normalizarTextoMatch(p.titulo).replace(/[^\w\s]/g, '').trim()
+    if (!tk || titulosSeen.has(tk)) continue
+    titulosSeen.add(tk)
+    todas.push(p)
   }
 
   // Ordena por data mais recente primeiro
