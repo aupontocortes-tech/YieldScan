@@ -35,16 +35,22 @@ function permitir(id: string): boolean {
   return true
 }
 
+const AVISO_SEM_FONTES =
+  'Sem notícias: adiciona NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
+
+const AVISO_SEM_ARTIGOS =
+  'O feed veio vazio. Verifica a chave NewsData, o plano/quotas, ou configura CRYPTOPANIC_AUTH_TOKEN como reforço.'
+
 /** Agrega fetch + processamento + tradução; cacheia ~45s para vários utilizadores não repetirem o trabalho. */
 const montarNoticiasEmCache = unstable_cache(
-  async (): Promise<
-    | { ok: true; traduzidas: NoticiaProcessada[] }
-    | { ok: false; erro: 'sem_artigos' | 'no_key' }
-  > => {
-    const key = process.env.NEWSDATA_API_KEY?.trim()
-    if (!key) return { ok: false, erro: 'no_key' }
-    const { results, erro } = await pegarTodasNoticias(key)
-    if (erro === 'sem_artigos') return { ok: false, erro: 'sem_artigos' }
+  async (): Promise<{ traduzidas: NoticiaProcessada[]; aviso?: string }> => {
+    const { results, erro } = await pegarTodasNoticias(process.env.NEWSDATA_API_KEY)
+    if (!results.length) {
+      return {
+        traduzidas: [],
+        aviso: erro === 'sem_fontes' ? AVISO_SEM_FONTES : AVISO_SEM_ARTIGOS,
+      }
+    }
     const processadas = processarNoticias(results)
     const traduzidas = await Promise.race([
       traduzirNoticiasRapido(processadas),
@@ -52,9 +58,9 @@ const montarNoticiasEmCache = unstable_cache(
         setTimeout(() => resolve(processadas), 28_000)
       ),
     ])
-    return { ok: true, traduzidas }
+    return { traduzidas }
   },
-  ['api-news-montar-v9'],
+  ['api-news-montar-v10'],
   { revalidate: 45, tags: ['news'] }
 )
 
@@ -73,46 +79,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const key = process.env.NEWSDATA_API_KEY
-    if (!key?.trim()) {
-      return NextResponse.json(
-        {
-          erro: 'NEWSDATA_API_KEY não configurada. Define a chave em .env.local na raiz do projeto.',
-          noticias: [],
-          feed: [],
-          insights: [],
-        },
-        { status: 503 }
-      )
-    }
-
-    const payload = await montarNoticiasEmCache()
-
-    if (!payload.ok && payload.erro === 'sem_artigos') {
-      return NextResponse.json(
-        {
-          erro: 'Não foi possível obter notícias. Verifica a chave API ou o plano na NewsData.',
-          noticias: [],
-          feed: [],
-          insights: [],
-        },
-        { status: 502 }
-      )
-    }
-
-    if (!payload.ok) {
-      return NextResponse.json(
-        {
-          erro: 'NEWSDATA_API_KEY não configurada. Define a chave em .env.local na raiz do projeto.',
-          noticias: [],
-          feed: [],
-          insights: [],
-        },
-        { status: 503 }
-      )
-    }
-
-    const { traduzidas } = payload
+    const { traduzidas, aviso } = await montarNoticiasEmCache()
     const feed = noticiasParaFeed(traduzidas)
 
     return NextResponse.json(
@@ -121,8 +88,10 @@ export async function GET(req: NextRequest) {
         noticias: traduzidas,
         feed,
         insights: paraJsonInsights(traduzidas),
+        ...(aviso ? { aviso } : {}),
       },
       {
+        status: 200,
         headers: {
           'Cache-Control':
             'public, s-maxage=45, stale-while-revalidate=120',

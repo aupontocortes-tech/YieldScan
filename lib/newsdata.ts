@@ -327,18 +327,23 @@ async function fetchQueryAccumulate(
 
 /**
  * NewsData (só queries cripto) + CryptoPanic, fundidos sem URLs duplicadas.
+ * Sem chave NewsData: usa só CryptoPanic (útil na Vercel só com CRYPTOPANIC_AUTH_TOKEN).
  */
-export async function pegarTodasNoticias(apiKey?: string): Promise<{
+export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
   results: NewsDataArticle[]
-  erro?: string
+  erro?: 'sem_artigos' | 'sem_fontes'
 }> {
-  const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
-  if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
+  const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim() || ''
+  const cryptopanicResults = await fetchCryptopanicAsNewsDataArticles()
 
-  const [newsdataCripto, newsdataCriptoAlt, cryptopanicResults] = await Promise.all([
+  if (!key) {
+    if (cryptopanicResults.length === 0) return { results: [], erro: 'sem_fontes' }
+    return { results: cryptopanicResults }
+  }
+
+  const [newsdataCripto, newsdataCriptoAlt] = await Promise.all([
     fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 36, maxPages: 5, size: '10' }),
     fetchQueryAccumulate(key, KEYWORDS_CRYPTO_ALT, { maxArticles: 28, maxPages: 4, size: '10' }),
-    fetchCryptopanicAsNewsDataArticles(),
   ])
 
   const marcarCripto = (arr: NewsDataArticle[]): NewsDataArticle[] =>

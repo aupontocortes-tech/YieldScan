@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface NewsPayload {
   erro?: string
+  /** Mensagem de configuração ou feed vazio (HTTP 200 — não dispara erro na query). */
+  aviso?: string
   totalResults?: number
   noticias: NoticiaProcessada[]
   feed?: ItemFeedNoticia[]
@@ -187,8 +189,8 @@ export function DashbuddyNews() {
     return noticiasParaFeed(data?.noticias ?? [])
   }, [data])
 
-  const isConfigError = isError && Boolean(error?.message?.includes('NEWSDATA_API_KEY'))
-  const apiErro = isError && !isConfigError ? (error?.message ?? 'Erro ao carregar notícias.') : null
+  const apiErro = isError ? (error?.message ?? 'Erro ao carregar notícias.') : null
+  const avisoFeed = !isError ? data?.aviso?.trim() : undefined
 
   return (
     <div className="space-y-6">
@@ -218,24 +220,17 @@ export function DashbuddyNews() {
         </Button>
       </div>
 
-      {isConfigError && (
-        <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-6 text-center">
-          <p className="font-semibold text-yellow-400">Chave API não configurada</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Adiciona{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-foreground">NEWSDATA_API_KEY=tua_chave</code> no
-            ficheiro <code className="rounded bg-muted px-1 py-0.5 text-foreground">.env.local</code> (ou na Vercel) e
-            reinicia o servidor. Opcional: <code className="rounded bg-muted px-1 py-0.5 text-foreground">CRYPTOPANIC_AUTH_TOKEN</code> para mais artigos.
-          </p>
+      {avisoFeed && (
+        <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-5 text-center">
+          <p className="font-semibold text-yellow-400">Configurar fontes de notícias</p>
+          <p className="mt-2 text-sm text-muted-foreground">{avisoFeed}</p>
         </div>
       )}
 
-      {(isError || apiErro) && !isConfigError && (
+      {isError && apiErro && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center">
           <p className="font-semibold text-red-400">Não foi possível carregar as notícias</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {apiErro ?? (error instanceof Error ? error.message : 'Erro desconhecido.')}
-          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">{apiErro}</p>
           <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => void refetch()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Tentar de novo
@@ -251,15 +246,12 @@ export function DashbuddyNews() {
         </div>
       )}
 
-      {!isLoading && !isError && !apiErro && !isConfigError && feed.length === 0 && (
+      {!isLoading && !isError && feed.length === 0 && !avisoFeed && (
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border/40 bg-card/30 py-20 text-center">
           <Newspaper className="h-10 w-10 opacity-20" />
           <div>
             <p className="font-medium">Nenhuma notícia no momento</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Confirma <code className="rounded bg-muted px-1">NEWSDATA_API_KEY</code> e o plano na NewsData; define
-              também <code className="rounded bg-muted px-1">CRYPTOPANIC_AUTH_TOKEN</code> para reforçar o feed.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Tenta atualizar dentro de instantes.</p>
           </div>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => void refetch()}>
             <RefreshCw className="h-3.5 w-3.5" />
