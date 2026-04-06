@@ -4,6 +4,10 @@
  */
 
 import type { NewsDataArticle } from '@/lib/newsdata'
+import {
+  normalizarTextoParaClassificacaoIa,
+  textoIndicaFocoInteligenciaArtificial,
+} from '@/lib/news-ia-strict'
 
 const UA = 'YieldScan/1 (news aggregator; IA RSS)'
 
@@ -86,16 +90,6 @@ function toPubDateIso(pub: string): string | null {
   return d.toISOString().replace('T', ' ').slice(0, 19)
 }
 
-/** Evita ruído em feeds «tag AI» (ex. guias de gadgets só com categoria lateral). */
-function pareceNoticiaIa(title: string, description: string): boolean {
-  const blob = `${title}\n${description}`.toLowerCase()
-  return (
-    /artificial intelligence|machine learning|openai|anthropic|\bclaude\b|chatgpt|gpt-4|gpt-5|\bllm\b|generative ai|neural|ai model|ai lab|agentic|\bcopilot\b|\bgemini\b|nvidia.*\bai\b|\bmeta\b.*\bai\b|data center.*\bai\b|semiconductor.*\bai\b/i.test(
-      blob
-    ) || /\b(ai|ml)\b/.test(blob)
-  )
-}
-
 /**
  * Artigos de feeds RSS dedicados a IA → mesmo formato NewsData + flag de classificação.
  */
@@ -114,8 +108,8 @@ export async function fetchAiNewsFromRssFeeds(opts?: { maxPerFeed?: number; time
     for (const it of items) {
       const link = it.link.trim()
       if (!link || seen.has(link)) continue
-      // Wired «tag AI» inclui alguns artigos periféricos; o feed TechCrunch já é categoria IA.
-      if (sourceName === 'Wired' && !pareceNoticiaIa(it.title, it.description)) continue
+      const blobIa = normalizarTextoParaClassificacaoIa(`${it.title}\n${it.description}`)
+      if (!textoIndicaFocoInteligenciaArtificial(blobIa)) continue
       seen.add(link)
       out.push({
         article_id: hashId(link),
@@ -132,7 +126,8 @@ export async function fetchAiNewsFromRssFeeds(opts?: { maxPerFeed?: number; time
         language: 'en',
         keywords: null,
         image_url: null,
-        _yieldscanAiQuery: true,
+        /* Flag aplicado em enrichYieldscanAiFlag só se o texto passar o critério estrito. */
+        _yieldscanAiQuery: false,
       })
     }
   }

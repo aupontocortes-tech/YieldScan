@@ -54,7 +54,7 @@ const montarNoticiasEmCache = unstable_cache(
     ])
     return { ok: true, traduzidas }
   },
-  ['api-news-montar-v4'],
+  ['api-news-montar-v5'],
   { revalidate: 45, tags: ['news'] }
 )
 

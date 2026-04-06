@@ -8,6 +8,7 @@
  */
 
 import { fetchAiNewsFromRssFeeds } from '@/lib/ai-news-rss'
+import { textoIndicaFocoInteligenciaArtificial } from '@/lib/news-ia-strict'
 import {
   fetchCryptopanicAsNewsDataArticles,
   mergeArticlesDedupe,
@@ -145,9 +146,6 @@ const RE_MACRO =
 const RE_CRYPTO =
   /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
 
-const RE_AI =
-  /\b(artificial intelligence|inteligencia artificial|machine learning|deep learning|neural networks?|generative ai|ia generativa|large language model|modelo de linguagem|openai|chatgpt|anthropic|llm)\b|gpt-4|gpt-5|\bclaude\b|\bgemini\b|\bcopilot\b/i
-
 const RE_POS =
   /\b(approval|approve|aprovado|homologado|adoption|adocao|breakthrough|partnership|parceria|record high|recorde|all-?time high|rally|surge\s+approval|etf\s+approved|launch\s+success|alta\s+forte)\b/i
 const RE_NEG =
@@ -218,7 +216,8 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
   const geo = RE_GEO.test(blob)
   const macro = RE_MACRO.test(blob)
   const cry = RE_CRYPTO.test(blob)
-  const ai = RE_AI.test(blob)
+  /* IA só com foco claro no texto (evita «tecnologia» genérica no filtro). */
+  const ai = textoIndicaFocoInteligenciaArtificial(blob)
   /* Futuros/swaps sobre cripto (ex. Índia Gen Z + futures) */
   const futuroCripto =
     /\bfuturos?\b/.test(full) && /\b(cripto|criptomoeda|bitcoin|btc|eth|crypto|coin)\b/.test(full)
@@ -254,7 +253,7 @@ export function analisarTextoMercado(textoBruto: string): {
   const cry = RE_CRYPTO.test(full)
   const geo = RE_GEO.test(full)
   const macro = RE_MACRO.test(full)
-  const ai = RE_AI.test(full)
+  const ai = textoIndicaFocoInteligenciaArtificial(full)
   const mercadoGeral =
     /\b(economy|economic|economia|mercado|finance|financas|financeiro|stock|stocks|bolsa|nasdaq|sp500|s&p|dollar|dólar|euro|yen|oil|petróleo|gold|ouro|treasury|yield|tariff|trade|banco|bank|ipo|earnings)\b/i.test(
       full
@@ -391,6 +390,7 @@ function enrichYieldscanAiFlag(results: NewsDataArticle[], aiArticles: NewsDataA
     if (!aiKeys.has(key)) continue
     if (a._yieldscanCryptoQuery === true) continue
     if (typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')) continue
+    if (!textoIndicaFocoInteligenciaArtificial(textoParaAnalise(a))) continue
     a._yieldscanAiQuery = true
   }
 }
@@ -428,7 +428,7 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
 
   const newsdataAiMarcados: NewsDataArticle[] = newsdataAiMerged.map((a) => ({
     ...a,
-    _yieldscanAiQuery: true,
+    _yieldscanAiQuery: false,
   }))
 
   /* CryptoPanic primeiro: é a API dedicada a cripto; em duplicado de URL, mantém-se o post dela. */
@@ -459,7 +459,8 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
       ? 'CRIPTO'
       : typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-')
         ? 'CRIPTO'
-        : article._yieldscanAiQuery === true
+        : article._yieldscanAiQuery === true &&
+            textoIndicaFocoInteligenciaArtificial(fullLower)
           ? 'IA'
           : classificarCategoria(fullLower, article.category ?? null)
   let resumo = notaGeopoliticaCrypto(categoria, resumoBase || title)
