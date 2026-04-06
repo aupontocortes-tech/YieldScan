@@ -75,7 +75,7 @@ export type NewsDataApiResponse =
 
 /** Query geral: macro, geo e mercado (+ termos IA para classificação no feed «Todos»). */
 const KEYWORDS_Q =
-  'bitcoin OR ethereum OR cripto OR blockchain OR altcoin OR inflation OR geopolitics OR OpenAI OR ChatGPT OR artificial intelligence OR machine learning'
+  'bitcoin OR ethereum OR cripto OR blockchain OR altcoin OR inflation OR geopolitics OR sanctions OR conflict OR war OR ukraine OR russia OR china OR taiwan OR middle east OR OpenAI OR ChatGPT OR artificial intelligence OR machine learning'
 
 /** Segunda query só cripto — a geral muitas vezes vem cheia de macro/geo e o filtro «Cripto» ficava vazio. */
 const KEYWORDS_CRYPTO =
@@ -145,7 +145,7 @@ function normalizarTextoMatch(s: string): string {
  * (processos legislativos/domésticos entram em Macro com o restante tema mercado).
  */
 const RE_GEOPOLITICA =
-  /\b(ucrania|ukraine|russia|russian|putin|zelensk|china|chines|beijing|taiwan|taipei|estreito|iran|irao|\bira\b|israel|gaza|palestin|hamas|hezbollah|siria|syria|yemen|iemen|iraque|iraq|afeganistao|afghanistan|taliban|coreia do norte|north korea|arma(s)? nuclear|otan|nato|guerra|war|invasao|invasion|conflito|conflict|militar|military|pentagon|ministr(o|a) da defesa|defense secretary|sancoes|sanction|embargo|geopolit|oriente medio|middle east|mar vermelho|red sea|estreito|strait|opec\b|refugiad|embaixa(da|dor)|espionage|spy\b|golpe de estado\b|coupe d'etat|venezuela|nicaragua|crimeia|crimea|donbas|ceasefire|alto el fuego)\b/i
+  /\b(ucrania|ukraine|russia|russian|putin|zelensk|china|chines|beijing|taiwan|taipei|estreito|iran|irao|\bira\b|israel|gaza|palestin|hamas|hezbollah|siria|syria|yemen|iemen|iraque|iraq|afeganistao|afghanistan|taliban|coreia do norte|north korea|arma(s)? nuclear|otan|nato|guerra|war|invasao|invasion|conflito|conflict|militar|military|pentagon|ministr(o|a) da defesa|defense secretary|sancoes|sanction|embargo|geopolit|oriente medio|middle east|mar vermelho|red sea|estreito|strait|opec\b|refugiad|embaixa(da|dor)|espionage|spy\b|golpe de estado\b|coupe d'etat|venezuela|nicaragua|crimeia|crimea|donbas|ceasefire|alto el fuego|tariff(s)?|tarifa(s)?|trade war|guerra comercial|diplomac(y|ia)|fronteira(s)?|border(s)?)\b/i
 
 /** Eleições, legislativo, Judiciário, governo — foco doméstico / institucional. */
 const RE_POLITICA =
