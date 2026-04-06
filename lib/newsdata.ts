@@ -7,7 +7,11 @@
  * Notícias cripto extra: CryptoPanic (Developer API v2) — CRYPTOPANIC_AUTH_TOKEN.
  */
 
-import { fetchCryptopanicAsNewsDataArticles, mergeArticlesDedupe } from '@/lib/cryptopanic'
+import {
+  fetchCryptopanicAsNewsDataArticles,
+  mergeArticlesDedupe,
+  normalizarLinkDedupe,
+} from '@/lib/cryptopanic'
 
 export const NEWSDATA_NEWS_URL = 'https://newsdata.io/api/1/news'
 
@@ -67,17 +71,22 @@ export type NewsDataApiResponse =
       results: { message?: string; code?: string }
     }
 
-/** Query geral: macro, geo e mercado. */
+/** Query geral: macro, geo e mercado (+ termos IA para classificação no feed «Todos»). */
 const KEYWORDS_Q =
-  'bitcoin OR ethereum OR cripto OR blockchain OR altcoin OR inflation OR geopolitics'
+  'bitcoin OR ethereum OR cripto OR blockchain OR altcoin OR inflation OR geopolitics OR OpenAI OR ChatGPT OR artificial intelligence OR machine learning'
 
 /** Segunda query só cripto — a geral muitas vezes vem cheia de macro/geo e o filtro «Cripto» ficava vazio. */
 const KEYWORDS_CRYPTO =
   'bitcoin OR ethereum OR cryptocurrency OR solana OR blockchain OR defi OR stablecoin OR altcoin OR xrp OR ripple OR binance OR coinbase OR web3 OR nft OR memecoin OR halving'
 
-/** Query dedicada IA — mesma API NewsData, fundida no fetch existente. */
+/**
+ * Query dedicada IA — evitar o token isolado «AI» (a NewsData/planos gratuitos costuma ignorar ou falhar).
+ * Segunda query curta em paralelo cobre fornecedores de modelo.
+ */
 const KEYWORDS_AI =
-  'artificial intelligence OR AI OR machine learning OR OpenAI OR ChatGPT OR generative AI OR LLM OR deep learning OR neural network OR Anthropic OR Claude'
+  'artificial intelligence OR machine learning OR OpenAI OR ChatGPT OR generative AI OR deep learning OR neural network OR large language model'
+
+const KEYWORDS_AI_ALT = 'Anthropic OR Claude OR Gemini OR Copilot OR Nvidia AI OR AI chip OR AI model'
 
 /**
  * Palavras-mínimo para que um artigo seja relevante para o feed.
@@ -91,6 +100,7 @@ const RELEVANCE_WORDS = new Set([
   'mercado','bolsa','dollar','dólar','oil','petróleo','market','mercado',
   'coinbase','binance','solana','xrp','bnb','stablecoin','satoshi',
   'openai','chatgpt','anthropic','claude','llm','gpt','machine learning','artificial intelligence',
+  'inteligencia artificial','ia generativa','modelo de linguagem',
 ])
 
 /** Fontes tratadas como maior credibilidade editorial (heurística conservadora). */
@@ -135,7 +145,7 @@ const RE_CRYPTO =
   /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
 
 const RE_AI =
-  /\b(artificial intelligence|machine learning|deep learning|neural networks?|generative ai|large language model|openai|chatgpt|anthropic|llm)\b|gpt-4|gpt-5|\bclaude\b|\bgemini\b|\bcopilot\b/i
+  /\b(artificial intelligence|inteligencia artificial|machine learning|deep learning|neural networks?|generative ai|ia generativa|large language model|modelo de linguagem|openai|chatgpt|anthropic|llm)\b|gpt-4|gpt-5|\bclaude\b|\bgemini\b|\bcopilot\b/i
 
 const RE_POS =
   /\b(approval|approve|aprovado|homologado|adoption|adocao|breakthrough|partnership|parceria|record high|recorde|all-?time high|rally|surge\s+approval|etf\s+approved|launch\s+success|alta\s+forte)\b/i
@@ -303,7 +313,7 @@ async function fetchNewsDataSinglePage(
     'language',
     (process.env.NEWSDATA_LANGUAGES ?? 'pt,en').trim() || 'pt,en'
   )
-  url.searchParams.set('category', 'business,technology,top')
+  url.searchParams.set('category', 'business,technology,top,science')
   url.searchParams.set('prioritydomain', 'top')
   url.searchParams.set('size', size)
   if (pageToken) url.searchParams.set('page', pageToken)
@@ -359,6 +369,32 @@ async function fetchQueryAccumulate(
 }
 
 /**
+ * Quando a mesma URL já entrou pelo feed geral/cripto, o merge descarta a cópia da query IA
+ * e perde-se `_yieldscanAiQuery`. Reaplica o flag por URL para o filtro «IA» não ficar vazio.
+ */
+function enrichYieldscanAiFlag(results: NewsDataArticle[], aiArticles: NewsDataArticle[]): void {
+  if (!aiArticles.length) return
+  const aiKeys = new Set<string>()
+  for (const a of aiArticles) {
+    const raw = (a.link ?? '').trim()
+    const key =
+      normalizarLinkDedupe(raw || undefined) ||
+      `id:${String(a.article_id ?? a.title ?? '').toLowerCase()}`
+    aiKeys.add(key)
+  }
+  for (const a of results) {
+    const raw = (a.link ?? '').trim()
+    const key =
+      normalizarLinkDedupe(raw || undefined) ||
+      `id:${String(a.article_id ?? a.title ?? '').toLowerCase()}`
+    if (!aiKeys.has(key)) continue
+    if (a._yieldscanCryptoQuery === true) continue
+    if (typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')) continue
+    a._yieldscanAiQuery = true
+  }
+}
+
+/**
  * NewsData (cripto+macro+geo) + opcional CryptoPanic (cripto), fundidos sem URLs duplicadas.
  */
 export async function pegarTodasNoticias(apiKey?: string): Promise<{
@@ -369,19 +405,23 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
 
   /* Menos páginas = resposta mais rápida; volume ainda cobre o feed. */
-  const [newsdataGeral, newsdataCripto, newsdataAi, cryptopanicResults] = await Promise.all([
-    fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
-    fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
-    fetchQueryAccumulate(key, KEYWORDS_AI, { maxArticles: 22, maxPages: 3, size: '10' }),
-    fetchCryptopanicAsNewsDataArticles(),
-  ])
+  const [newsdataGeral, newsdataCripto, newsdataAi, newsdataAiAlt, cryptopanicResults] =
+    await Promise.all([
+      fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
+      fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
+      fetchQueryAccumulate(key, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
+      fetchQueryAccumulate(key, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
+      fetchCryptopanicAsNewsDataArticles(),
+    ])
+
+  const newsdataAiMerged = mergeArticlesDedupe(newsdataAi, newsdataAiAlt)
 
   const newsdataCriptoMarcados: NewsDataArticle[] = newsdataCripto.map((a) => ({
     ...a,
     _yieldscanCryptoQuery: true,
   }))
 
-  const newsdataAiMarcados: NewsDataArticle[] = newsdataAi.map((a) => ({
+  const newsdataAiMarcados: NewsDataArticle[] = newsdataAiMerged.map((a) => ({
     ...a,
     _yieldscanAiQuery: true,
   }))
@@ -390,6 +430,7 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
   const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
   const mergedNdComIa = mergeArticlesDedupe(mergedNd, newsdataAiMarcados)
   const results = mergeArticlesDedupe(cryptopanicResults, mergedNdComIa)
+  enrichYieldscanAiFlag(results, newsdataAiMerged)
   if (results.length === 0) return { results: [], erro: 'sem_artigos' }
   return { results }
 }
