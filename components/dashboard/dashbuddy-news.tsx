@@ -40,6 +40,9 @@ const FILTROS = [
 
 type Filtro = (typeof FILTROS)[number]['value']
 
+/** Máximo de cartões por aba temática; «Todos» mostra a lista completa por relevância. */
+const LIMITE_NOTICIAS_POR_ABA_CATEGORIA = 10
+
 const NEWS_FILTRO_KV = 'news_filtro_v3' as const
 
 function isFiltroGuard(v: unknown): v is Filtro {
@@ -273,7 +276,9 @@ export function DashbuddyNews() {
 
   const feedFiltrado = useMemo(() => {
     if (filtro === 'todos') return feed
-    return feed.filter((item) => categoriaDoItem(item) === filtro)
+    return feed
+      .filter((item) => categoriaDoItem(item) === filtro)
+      .slice(0, LIMITE_NOTICIAS_POR_ABA_CATEGORIA)
   }, [feed, filtro])
 
   return (

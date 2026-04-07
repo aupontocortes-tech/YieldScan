@@ -128,54 +128,52 @@ const FONTES_ALTA = new Set(
   ].map((s) => s.toLowerCase())
 )
 
-/** Palavras-chave obrigatórias (título/descrição/conteúdo normalizado). */
-function passaFiltroPalavrasChave(full: string): boolean {
-  if (/trump/i.test(full)) return true
-  if (/\bwar\b|guerra/i.test(full)) return true
-  if (/iran|irão|irã/i.test(full)) return true
-  if (/\bfed\b|federal reserve/i.test(full)) return true
-  if (/interest rate|taxa de juros|taxa de juro/i.test(full)) return true
-  if (/\betf\b/i.test(full)) return true
-  if (/\bsec\b/i.test(full)) return true
-  if (/bitcoin|\bbtc\b/i.test(full)) return true
-  if (/nvidia|openai|chatgpt/i.test(full)) return true
+/** Palavras-chave por categoria (texto normalizado; inclui PT comum). */
+const RE_CLASS_GEO =
+  /\b(war|guerra|trump|iran|irao|china|russia|ucrania|ukraine|conflict|conflito|government|governo)\b/i
+const RE_CLASS_MACRO =
+  /\b(inflation|inflacao|interest rate|taxa de juros|\bfed\b|federal reserve|central bank|banco central|economy|economia)\b/i
+const RE_CLASS_CRIPTO =
+  /\b(bitcoin|btc|ethereum|eth|crypto|cripto|aave|binance)\b/i
+const RE_CLASS_IA =
+  /\b(openai|nvidia|chatgpt|machine learning|artificial intelligence|inteligencia artificial|\bai\b)\b/i
+
+function passaFiltroPalavrasChave(full: string, article: NewsDataArticle): boolean {
   if (
-    /\b(i\.?\s*a\.?|\bai\b|inteligencia artificial|artificial intelligence|machine learning)\b/i.test(
-      full
-    )
+    RE_CLASS_GEO.test(full) ||
+    RE_CLASS_MACRO.test(full) ||
+    RE_CLASS_CRIPTO.test(full) ||
+    RE_CLASS_IA.test(full)
   )
     return true
+  if (article._yieldscanCryptoQuery === true) return true
+  const aid = article.article_id
+  if (typeof aid === 'string' && (aid.startsWith('cryptopanic-') || aid.startsWith('cryptocv-'))) return true
+  if (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full)) return true
   return false
 }
 
-const MIN_SCORE_NOTICIA = 5
+/** Corta ruído; artigos só IA (~+2) ou só tema fraco ficam de fora se abaixo disto. */
+const MIN_SCORE_NOTICIA = 2
 
-function normalizarNomeFonte(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim()
-}
-
-function fonteEhAltaCredibilidade(fonte: string): boolean {
-  const n = normalizarNomeFonte(fonte)
-  for (const f of FONTES_ALTA) {
-    if (n.includes(f)) return true
-  }
-  return false
-}
-
-function pontuarNoticia(full: string, fonte: string): number {
-  let score = 2
-  if (/trump|iran|irão|irã|\bwar\b|guerra/i.test(full)) score += 5
-  if (/\betf\b|\bsec\b|\bfed\b|interest rate|taxa de juros|taxa de juro|federal reserve/i.test(full))
-    score += 4
-  if (fonteEhAltaCredibilidade(fonte)) score += 3
-  if (/bitcoin|ethereum|aave|\bcrypto\b|\bbtc\b|cripto|criptomoeda/i.test(full)) score += 3
+/**
+ * Relevância: +5 crítico geo, +4 macro forte, +3 cripto (ETF/Bitcoin/SEC + termos do filtro cripto), +2 IA (OpenAI/Nvidia).
+ * Vários blocos somam (ex.: Trump + Fed → 9).
+ */
+function pontuarNoticia(full: string): number {
+  let score = 0
+  if (/\bwar\b|guerra|\battack\b|ataque|trump|iran|irão|irã|irao/i.test(full)) score += 5
   if (
-    /openai|nvidia|chatgpt|anthropic|claude|\b(i\.?\s*a\.?|inteligencia artificial|artificial intelligence|machine learning)\b/i.test(
+    /\bfed\b|federal reserve|interest rate|taxa de juros|inflation|inflação|inflacao|central bank|banco central/i.test(
       full
     )
   )
+    score += 4
+  if (
+    /\betf\b|\bbtc\b|bitcoin|\bsec\b|ethereum|\beth\b|aave|binance|\bcrypto\b|cripto/i.test(full)
+  )
     score += 3
-  if (/inflation|inflação/i.test(full)) score += 3
+  if (/openai|nvidia|chatgpt/i.test(full)) score += 2
   return score
 }
 
@@ -193,25 +191,26 @@ function dedupeArtigosPorTitulo(articles: NewsDataArticle[]): NewsDataArticle[] 
   return out
 }
 
+/**
+ * Uma categoria principal. Prioridade se várias combinam: Geopolítica > Macroeconomia > Cripto > IA.
+ */
 function classificarAutomatica(full: string, article: NewsDataArticle): InsightNoticia['categoria'] {
-  if (article._yieldscanCryptoQuery === true) return 'CRIPTO'
-  if (typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-'))
-    return 'CRIPTO'
-  if (typeof article.article_id === 'string' && article.article_id.startsWith('cryptocv-')) return 'CRIPTO'
+  const geo = RE_CLASS_GEO.test(full)
+  const macro = RE_CLASS_MACRO.test(full)
+  const criptoKw = RE_CLASS_CRIPTO.test(full)
+  const iaKw = RE_CLASS_IA.test(full)
+  const fromDedicatedCrypto =
+    article._yieldscanCryptoQuery === true ||
+    (typeof article.article_id === 'string' &&
+      (article.article_id.startsWith('cryptopanic-') || article.article_id.startsWith('cryptocv-')))
+  const iaMarcada =
+    iaKw || (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full))
 
-  const criptoTerms = /\b(bitcoin|ethereum|aave|\bcrypto\b|\bbtc\b|cripto|criptomoeda)\b/i
-  const geoTerms =
-    /\b(war|guerra|trump|iran|irão|irã|ucrania|ukraine|russia|putin|zelensk|china|taiwan|israel|gaza|nato|otan)\b/i
-  const macroTerms =
-    /\b(inflation|inflação|interest rate|taxa de juros|\bfed\b|federal reserve|\bsec\b|\betf\b|cpi\b|recession|recessão|gdp|pib|juros)\b/i
-  const iaTerms =
-    /\b(openai|nvidia|chatgpt|anthropic|claude|\bai\b|artificial intelligence|inteligencia artificial|machine learning)\b/i
+  if (geo) return 'GEOPOLÍTICA'
+  if (macro) return 'MACRO'
+  if (criptoKw || fromDedicatedCrypto) return 'CRIPTO'
+  if (iaMarcada) return 'IA'
 
-  if (criptoTerms.test(full)) return 'CRIPTO'
-  if (geoTerms.test(full)) return 'GEOPOLÍTICA'
-  if (macroTerms.test(full)) return 'MACRO'
-  if (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full)) return 'IA'
-  if (iaTerms.test(full)) return 'IA'
   return classificarCategoria(full, article.category ?? null)
 }
 
@@ -685,9 +684,10 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
   }
 }
 
-/** Máximo de itens por categoria após ordenar por score e data. */
-const LIMITE_POR_CATEGORIA_FEED = 10
-
+/**
+ * Lista completa relevância → data. A aba «Todos» usa isto integralmente;
+ * abas por categoria limitam no cliente (ex.: 10).
+ */
 export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
   if (!Array.isArray(articles)) return []
 
@@ -702,10 +702,9 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
 
     const fullNorm = textoParaAnalise(a)
     if (RE_RASO_OU_LOCAL.test(fullNorm)) continue
-    if (!passaFiltroPalavrasChave(fullNorm)) continue
+    if (!passaFiltroPalavrasChave(fullNorm, a)) continue
 
-    const fonte = (a.source_name ?? a.source_id ?? '').trim()
-    const score = pontuarNoticia(fullNorm, fonte)
+    const score = pontuarNoticia(fullNorm)
     if (score < MIN_SCORE_NOTICIA) continue
 
     const rawTs = a.pubDate ? new Date(a.pubDate.replace(' ', 'T')).getTime() : 0
@@ -728,13 +727,7 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     todas.push(p)
   }
 
-  const contagem: Record<string, number> = {}
-  return todas.filter((n) => {
-    const c = n.categoria
-    const prox = (contagem[c] ?? 0) + 1
-    contagem[c] = prox
-    return prox <= LIMITE_POR_CATEGORIA_FEED
-  })
+  return todas
 }
 
 /** JSON só com os campos obrigatórios do contrato. */
