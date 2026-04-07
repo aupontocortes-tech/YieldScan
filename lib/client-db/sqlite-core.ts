@@ -121,6 +121,16 @@ async function persistToIdb() {
   }
 }
 
+/** Grava o snapshot atual do SQLite (memória → IndexedDB) sem esperar o debounce interno. */
+export async function flushYieldscanSqlitePersist(): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  await persistToIdb()
+}
+
 export async function openYieldscanSqlite(): Promise<void> {
   if (typeof window === 'undefined') return
   if (db) return

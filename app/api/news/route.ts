@@ -44,6 +44,15 @@ function parecePortugues(t: string): boolean {
   )
 }
 
+const AVISO_IDIOMA_ORIGINAL =
+  'As notícias aparecem no idioma original: a tradução automática não respondeu a tempo ou o filtro de português estava vazio. Recarrega mais tarde ou define MYMEMORY_EMAIL no .env.local para mais quota.'
+
+function temTituloEResumo(n: NoticiaProcessada): boolean {
+  const t = (n.titulo ?? '').trim()
+  const r = (n.resumo ?? '').trim() || t
+  return Boolean(t && r)
+}
+
 const AVISO_SEM_FONTES =
   'Sem notícias: adiciona GNEWS_API_KEY (recomendado), NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
 
@@ -67,16 +76,25 @@ const montarNoticiasEmCache = unstable_cache(
         setTimeout(() => resolve(processadas), 28_000)
       ),
     ])
-    const curadas = traduzidas
-      .map((n) => ({
-        ...n,
-        titulo: (n.titulo ?? '').trim(),
-        resumo: (n.resumo ?? '').trim() || (n.titulo ?? '').trim(),
-      }))
-      .filter((n) => n.titulo && n.resumo && parecePortugues(`${n.titulo} ${n.resumo}`))
-    return { traduzidas: curadas }
+    const normalizadas = traduzidas.map((n) => ({
+      ...n,
+      titulo: (n.titulo ?? '').trim(),
+      resumo: (n.resumo ?? '').trim() || (n.titulo ?? '').trim(),
+    }))
+    const curadas = normalizadas.filter(
+      (n) => n.titulo && n.resumo && parecePortugues(`${n.titulo} ${n.resumo}`)
+    )
+    /** Evita feed vazio em local/dev quando a tradução falhou e tudo ficou em inglês. */
+    const comConteudo = normalizadas.filter(temTituloEResumo)
+    if (curadas.length > 0) {
+      return { traduzidas: curadas }
+    }
+    if (comConteudo.length > 0) {
+      return { traduzidas: comConteudo, aviso: AVISO_IDIOMA_ORIGINAL }
+    }
+    return { traduzidas: [], aviso: AVISO_SEM_ARTIGOS }
   },
-  ['api-news-montar-v16'],
+  ['api-news-montar-v17'],
   { revalidate: 30, tags: ['news'] }
 )
 

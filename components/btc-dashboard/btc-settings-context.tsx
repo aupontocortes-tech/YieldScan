@@ -10,7 +10,12 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
+import {
+  flushYieldscanSqlitePersist,
+  kvGetJson,
+  kvSetJson,
+  openYieldscanSqlite,
+} from '@/lib/client-db/sqlite-core'
 import type {
   BollingerSettings,
   CandlestickSettings,
@@ -146,6 +151,19 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [candles, setCandles] = useState<CandlestickSettings>(() => ({ ...DEFAULT_CANDLES }))
   const [hydrated, setHydrated] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistRef = useRef<BtcPersistV1 | null>(null)
+
+  persistRef.current = {
+    v: 1,
+    timeframeId: timeframe.id,
+    mas,
+    rsi,
+    macd,
+    stoch,
+    bollinger,
+    zones,
+    candles,
+  }
 
   useEffect(() => {
     let cancel = false
@@ -210,23 +228,33 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null
-      const snap: BtcPersistV1 = {
-        v: 1,
-        timeframeId: timeframe.id,
-        mas,
-        rsi,
-        macd,
-        stoch,
-        bollinger,
-        zones,
-        candles,
-      }
-      kvSetJson(BTC_KV, snap)
+      const snap = persistRef.current
+      if (snap) kvSetJson(BTC_KV, snap)
     }, 450)
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
   }, [hydrated, timeframe.id, mas, rsi, macd, stoch, bollinger, zones, candles])
+
+  useEffect(() => {
+    if (!hydrated) return
+    const persistNow = () => {
+      const snap = persistRef.current
+      if (!snap) return
+      kvSetJson(BTC_KV, snap)
+      void flushYieldscanSqlitePersist()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') persistNow()
+    }
+    window.addEventListener('pagehide', persistNow)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', persistNow)
+      document.removeEventListener('visibilitychange', onVisibility)
+      persistNow()
+    }
+  }, [hydrated])
 
   const addMa = useCallback(() => {
     setMas((prev) => [...prev, { id: newMaId(), period: 20, type: 'EMA', color: '#D4AF37' }])

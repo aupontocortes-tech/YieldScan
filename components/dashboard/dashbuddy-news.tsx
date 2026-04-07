@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NewsSpeakButton } from '@/components/news/news-speak-button'
+import { useNewsSeen } from '@/hooks/use-news-seen'
 import { useNewsTtsHeard } from '@/hooks/use-news-tts-heard'
 import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils'
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface NewsPayload {
   erro?: string
+  aviso?: string
   totalResults?: number
   noticias: NoticiaProcessada[]
   feed?: ItemFeedNoticia[]
@@ -126,6 +128,7 @@ function NewsCard({
   autoTts?: boolean
 }) {
   const ttsHeard = useNewsTtsHeard(speechId)
+  const { seen, markSeenOnce, cardRef } = useNewsSeen(speechId)
   const fallback = fallbackImagemPorCategoria(n.categoria)
   const [src, setSrc] = useState(n.imagemUrl)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -189,12 +192,16 @@ function NewsCard({
 
   return (
     <div
+      ref={cardRef}
+      onClick={!hasLink ? () => markSeenOnce() : undefined}
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-xl border bg-card/85',
         'transition-[border-color,opacity,box-shadow] duration-300 ease-out',
         ttsHeard
           ? 'border-emerald-500/30 opacity-[0.92]'
-          : 'border-border/50 opacity-100',
+          : seen
+            ? 'border-emerald-500/20 opacity-80'
+            : 'border-border/50 opacity-100',
         'hover:border-yellow-500/35 hover:shadow-lg'
       )}
     >
@@ -202,6 +209,7 @@ function NewsCard({
         href={hasLink ? n.link : undefined}
         target={hasLink ? '_blank' : undefined}
         rel={hasLink ? 'noopener noreferrer' : undefined}
+        onClick={hasLink ? () => markSeenOnce() : undefined}
         className={cn(
           'flex min-h-0 flex-1 flex-col outline-none',
           hasLink ? 'cursor-pointer' : 'cursor-default'
@@ -315,6 +323,9 @@ export function DashbuddyNews() {
             Cada filtro mostra só o tema do rótulo: cripto, geopolítica, macroeconomia e IA.
             Em «Todos» vês todas as notícias misturadas com o ícone certo por notícia.
           </p>
+          {data?.aviso && !isError && (
+            <p className="mt-2 text-xs text-amber-500/90">{data.aviso}</p>
+          )}
         </div>
         <Button
           variant="outline"
