@@ -136,7 +136,9 @@ function passaFiltroPalavrasChave(full: string): boolean {
   if (/bitcoin|\bbtc\b/i.test(full)) return true
   if (/nvidia|openai|chatgpt/i.test(full)) return true
   if (
-    /\b(i\.?\s*a\.?|inteligencia artificial|artificial intelligence|machine learning)\b/i.test(full)
+    /\b(i\.?\s*a\.?|\bai\b|inteligencia artificial|artificial intelligence|machine learning)\b/i.test(
+      full
+    )
   )
     return true
   return false
