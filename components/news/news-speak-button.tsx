@@ -3,14 +3,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Volume2 } from 'lucide-react'
 import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
-import { isNewsTtsHeard, markNewsTtsHeard, pruneNewsTtsHeardIfStale } from '@/lib/news/news-tts-heard'
+import { isNewsTtsHeard, pruneNewsTtsHeardIfStale } from '@/lib/news/news-tts-heard'
 import {
   getNewsSpeechActiveId,
   getNewsSpeechActiveIdServer,
   isNewsSpeechSupported,
   playNewsSpeech,
   subscribeNewsSpeech,
-  subscribeNewsSpeechHeard,
   toggleNewsSpeech,
 } from '@/lib/speech/news-speech'
 import { cn } from '@/lib/utils'
@@ -19,35 +18,21 @@ type Props = {
   speechId: string
   title: string
   description: string
+  /** Sincronizado com SQLite (ex.: `useNewsTtsHeard` no cartão). */
+  heard: boolean
   className?: string
   /** Primeira notícia breaking na lista: TTS automático se ainda não foi ouvida. */
   autoPlay?: boolean
 }
 
-export function NewsSpeakButton({ speechId, title, description, className, autoPlay }: Props) {
+export function NewsSpeakButton({ speechId, title, description, heard, className, autoPlay }: Props) {
   const [mounted, setMounted] = useState(false)
-  const [heard, setHeard] = useState(false)
   const autoAttemptedRef = useRef(false)
 
   useEffect(() => setMounted(true), [])
 
   useEffect(() => {
     autoAttemptedRef.current = false
-  }, [speechId])
-
-  useEffect(() => {
-    void openYieldscanSqlite().then(() => {
-      pruneNewsTtsHeardIfStale()
-      if (isNewsTtsHeard(speechId)) setHeard(true)
-    })
-  }, [speechId])
-
-  useEffect(() => {
-    return subscribeNewsSpeechHeard((id) => {
-      if (id !== speechId) return
-      markNewsTtsHeard(speechId)
-      setHeard(true)
-    })
   }, [speechId])
 
   useEffect(() => {
@@ -79,31 +64,33 @@ export function NewsSpeakButton({ speechId, title, description, className, autoP
       }}
       className={cn(
         'pointer-events-auto z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-        'transition-colors transition-opacity',
+        'transition-colors transition-opacity duration-300 ease-out',
         'bg-black/25 backdrop-blur-[2px] hover:bg-black/40',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-500/60',
-        heard && !playing && 'text-emerald-400 opacity-100 hover:text-emerald-300',
+        heard &&
+          !playing &&
+          'text-emerald-400 opacity-90 shadow-[0_0_10px_rgba(52,211,153,0.25)] hover:text-emerald-300',
         (!heard || playing) && 'text-white opacity-70 hover:opacity-100',
-        playing && 'ring-1 ring-white/40 opacity-100',
+        playing && 'ring-1 ring-white/40 opacity-100 shadow-none',
         className
       )}
       title={
-        playing
-          ? 'Parar leitura'
-          : heard
-            ? 'Já ouviu esta notícia — ouvir de novo'
-            : 'Ouvir notícia'
+        playing ? 'Parar leitura' : heard ? 'Já ouvida' : 'Ouvir notícia'
       }
       aria-label={
         playing
           ? 'Parar leitura da notícia'
           : heard
-            ? 'Notícia já ouvida até ao fim. Ouvir de novo'
+            ? 'Já ouvida. Ouvir de novo'
             : 'Ouvir título e resumo da notícia'
       }
       aria-pressed={playing}
     >
-      <Volume2 className="h-4 w-4" aria-hidden strokeWidth={2.25} />
+      <Volume2
+        className={cn('h-4 w-4 transition-colors duration-300 ease-out')}
+        aria-hidden
+        strokeWidth={2.25}
+      />
     </button>
   )
 }

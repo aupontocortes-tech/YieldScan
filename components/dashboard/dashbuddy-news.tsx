@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NewsSpeakButton } from '@/components/news/news-speak-button'
+import { useNewsTtsHeard } from '@/hooks/use-news-tts-heard'
 import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
@@ -124,6 +125,7 @@ function NewsCard({
   speechId: string
   autoTts?: boolean
 }) {
+  const ttsHeard = useNewsTtsHeard(speechId)
   const fallback = fallbackImagemPorCategoria(n.categoria)
   const [src, setSrc] = useState(n.imagemUrl)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -188,8 +190,12 @@ function NewsCard({
   return (
     <div
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-xl border border-border/50 bg-card/85',
-        'transition-all duration-200 hover:border-yellow-500/35 hover:shadow-lg'
+        'group relative flex flex-col overflow-hidden rounded-xl border bg-card/85',
+        'transition-[border-color,opacity,box-shadow] duration-300 ease-out',
+        ttsHeard
+          ? 'border-emerald-500/30 opacity-[0.92]'
+          : 'border-border/50 opacity-100',
+        'hover:border-yellow-500/35 hover:shadow-lg'
       )}
     >
       <a
@@ -233,6 +239,7 @@ function NewsCard({
         speechId={speechId}
         title={n.titulo}
         description={n.resumo}
+        heard={ttsHeard}
         autoPlay={autoTts === true}
         // Botão TTS mais visível e centralizado na base do card
         className="absolute bottom-4 left-1/2 -translate-x-1/2 h-9 w-9 text-[17px]"
