@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -9,6 +9,7 @@ import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlit
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
+import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { cn } from '@/lib/utils'
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -110,12 +111,32 @@ function NewsCardSkeleton() {
   )
 }
 
-/* ── NewsCard: imagem quadrada + texto; sem imagem = só texto ───────────── */
+/* ── NewsCard: imagem quadrada + texto (sempre área de imagem; fallback por categoria) ─ */
 function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
+  const fallback = fallbackImagemPorCategoria(n.categoria)
+  const [src, setSrc] = useState(n.imagemUrl)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgErr, setImgErr] = useState(false)
-  const hasImg = Boolean(n.imagemUrl && !imgErr)
+  const retriedFallback = useRef(false)
+
+  useEffect(() => {
+    setSrc(n.imagemUrl)
+    setImgLoaded(false)
+    setImgErr(false)
+    retriedFallback.current = false
+  }, [n.imagemUrl, n.articleId, n.link])
+
   const hasLink = n.link && n.link !== '#'
+
+  const onImgError = () => {
+    if (!retriedFallback.current && n.imagemUrl !== fallback) {
+      retriedFallback.current = true
+      setSrc(fallback)
+      setImgLoaded(false)
+      return
+    }
+    setImgErr(true)
+  }
 
   const meta = (
     <div className="mt-auto flex items-center justify-between border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
@@ -169,11 +190,11 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
           hasLink ? 'cursor-pointer' : 'cursor-default'
         )}
       >
-        {hasImg ? (
-          <>
-            <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted/30">
+        <>
+          <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted/30">
+            {!imgErr ? (
               <img
-                src={n.imagemUrl!}
+                src={src}
                 alt=""
                 loading="lazy"
                 className={cn(
@@ -181,17 +202,21 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
                   imgLoaded ? 'opacity-100' : 'opacity-0'
                 )}
                 onLoad={() => setImgLoaded(true)}
-                onError={() => setImgErr(true)}
+                onError={onImgError}
               />
-              {!imgLoaded && !imgErr && (
-                <div className="absolute inset-0 animate-pulse bg-muted/50" aria-hidden />
-              )}
-            </div>
-            <div className="flex flex-1 flex-col p-4 pb-10">{texto}</div>
-          </>
-        ) : (
-          <div className="flex flex-1 flex-col p-4 pb-10 pt-5">{texto}</div>
-        )}
+            ) : null}
+            {(!imgLoaded || imgErr) && (
+              <div
+                className={cn(
+                  'absolute inset-0 bg-muted/50',
+                  !imgErr && 'animate-pulse'
+                )}
+                aria-hidden
+              />
+            )}
+          </div>
+          <div className="flex flex-1 flex-col p-4 pb-10">{texto}</div>
+        </>
       </a>
       <NewsSpeakButton
         speechId={speechId}

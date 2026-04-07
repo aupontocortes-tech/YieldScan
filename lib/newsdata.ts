@@ -10,6 +10,7 @@
 import { fetchAiNewsFromRssFeeds } from '@/lib/ai-news-rss'
 import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
 import { fetchGnewsAsArticles } from '@/lib/gnews'
+import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { textoIndicaFocoInteligenciaArtificial } from '@/lib/news-ia-strict'
 import {
   fetchCryptopanicAsNewsDataArticles,
@@ -35,7 +36,8 @@ export interface NoticiaProcessada extends InsightNoticia {
   fonte: string
   dataPublicacao: string | null
   articleId: string | null
-  imagemUrl: string | null
+  /** Sempre definida (API ou fallback por categoria). */
+  imagemUrl: string
   linguagem: string | null
 }
 
@@ -60,6 +62,8 @@ export interface NewsDataArticle {
   thumbnail?: string | null
   enclosure?: { link?: string | null; url?: string | null } | null
   media?: { thumbnail?: string | null; content?: string | null } | null
+  /** Nome comum em APIs estilo NewsAPI. */
+  urlToImage?: string | null
   /**
    * Interno: veio da query NewsData só cripto — classificar como CRIPTO no filtro
    * (a API já filtrou por termos cripto; sem isto, muitos caíam em «Macro» só pela palavra «mercado»).
@@ -285,6 +289,7 @@ function escolherImagemNoticia(a: NewsDataArticle): string | null {
   candidates.push(
     toText(a.image_url),
     toText(a.image),
+    toText(a.urlToImage),
     toText(a.imageUrl),
     toText(a.thumbnail),
     toText(a.enclosure?.link),
@@ -294,7 +299,8 @@ function escolherImagemNoticia(a: NewsDataArticle): string | null {
     toText(rec['imageUrlLarge']),
     toText(rec['cover_image']),
     toText(rec['coverImage']),
-    toText(rec['thumbnail_url'])
+    toText(rec['thumbnail_url']),
+    toText(rec['urlToImage'])
   )
 
   for (const c of candidates) {
@@ -673,7 +679,8 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
     fonte,
     dataPublicacao: article.pubDate ?? null,
     articleId: article.article_id ?? null,
-    imagemUrl: escolherImagemNoticia(article),
+    imagemUrl:
+      escolherImagemNoticia(article) ?? fallbackImagemPorCategoria(categoria),
     linguagem: article.language ?? null,
   }
 }
