@@ -1,11 +1,15 @@
 'use client'
 
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Volume2 } from 'lucide-react'
+import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
+import { isNewsTtsHeard, markNewsTtsHeard } from '@/lib/news/news-tts-heard'
 import {
   getNewsSpeechActiveId,
   getNewsSpeechActiveIdServer,
   isNewsSpeechSupported,
   subscribeNewsSpeech,
+  subscribeNewsSpeechHeard,
   toggleNewsSpeech,
 } from '@/lib/speech/news-speech'
 import { cn } from '@/lib/utils'
@@ -19,7 +23,23 @@ type Props = {
 
 export function NewsSpeakButton({ speechId, title, description, className }: Props) {
   const [mounted, setMounted] = useState(false)
+  const [heard, setHeard] = useState(false)
+
   useEffect(() => setMounted(true), [])
+
+  useEffect(() => {
+    void openYieldscanSqlite().then(() => {
+      if (isNewsTtsHeard(speechId)) setHeard(true)
+    })
+  }, [speechId])
+
+  useEffect(() => {
+    return subscribeNewsSpeechHeard((id) => {
+      if (id !== speechId) return
+      markNewsTtsHeard(speechId)
+      setHeard(true)
+    })
+  }, [speechId])
 
   const activeId = useSyncExternalStore(
     subscribeNewsSpeech,
@@ -40,17 +60,31 @@ export function NewsSpeakButton({ speechId, title, description, className }: Pro
       }}
       className={cn(
         'pointer-events-auto z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-        'text-[15px] leading-none text-white opacity-70 transition-opacity hover:opacity-100',
+        'transition-colors transition-opacity',
         'bg-black/25 backdrop-blur-[2px] hover:bg-black/40',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-500/60',
-        playing && 'opacity-100 ring-1 ring-white/40',
+        heard && !playing && 'text-emerald-400 opacity-100 hover:text-emerald-300',
+        (!heard || playing) && 'text-white opacity-70 hover:opacity-100',
+        playing && 'ring-1 ring-white/40 opacity-100',
         className
       )}
-      title={playing ? 'Parar leitura' : 'Ouvir notícia'}
-      aria-label={playing ? 'Parar leitura da notícia' : 'Ouvir título e resumo da notícia'}
+      title={
+        playing
+          ? 'Parar leitura'
+          : heard
+            ? 'Já ouviu esta notícia — ouvir de novo'
+            : 'Ouvir notícia'
+      }
+      aria-label={
+        playing
+          ? 'Parar leitura da notícia'
+          : heard
+            ? 'Notícia já ouvida até ao fim. Ouvir de novo'
+            : 'Ouvir título e resumo da notícia'
+      }
       aria-pressed={playing}
     >
-      <span aria-hidden>🔊</span>
+      <Volume2 className="h-4 w-4" aria-hidden strokeWidth={2.25} />
     </button>
   )
 }

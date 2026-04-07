@@ -5,15 +5,33 @@
 
 let activeId: string | null = null
 const listeners = new Set<() => void>()
+const endListeners = new Set<(id: string) => void>()
+
+type UtterRef = { id: string; skipMarkHeard: boolean }
+
+/** Ref do utterance corrente (para não marcar "ouvido" ao parar ou ao trocar de notícia). */
+let currentUtteranceRef: UtterRef | null = null
 
 function emit() {
   listeners.forEach((l) => l())
+}
+
+function emitHeard(id: string) {
+  endListeners.forEach((l) => l(id))
 }
 
 export function subscribeNewsSpeech(listener: () => void) {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
+  }
+}
+
+/** Dispara só quando a leitura termina até ao fim (não ao parar nem ao mudar de item). */
+export function subscribeNewsSpeechHeard(listener: (id: string) => void) {
+  endListeners.add(listener)
+  return () => {
+    endListeners.delete(listener)
   }
 }
 
@@ -43,7 +61,10 @@ function aplicarVozPortugues(syn: SpeechSynthesis, u: SpeechSynthesisUtterance) 
 /** Para o que estiver a falar (ex.: ao sair da página). */
 export function cancelNewsSpeech() {
   const syn = getSynth()
-  if (syn) syn.cancel()
+  if (syn) {
+    if (currentUtteranceRef) currentUtteranceRef.skipMarkHeard = true
+    syn.cancel()
+  }
   activeId = null
   emit()
 }
@@ -60,27 +81,37 @@ export function toggleNewsSpeech(id: string, title: string, description: string)
   if (!text) return
 
   if (activeId === id) {
+    if (currentUtteranceRef?.id === id) currentUtteranceRef.skipMarkHeard = true
     syn.cancel()
     activeId = null
     emit()
     return
   }
 
+  if (currentUtteranceRef) currentUtteranceRef.skipMarkHeard = true
   syn.cancel()
   activeId = id
+
+  const utterRef: UtterRef = { id, skipMarkHeard: false }
+  currentUtteranceRef = utterRef
 
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'pt-BR'
   u.rate = 0.95
 
-  const done = () => {
+  const finish = (markHeard: boolean) => {
     if (activeId === id) {
       activeId = null
-      emit()
     }
+    const shouldMark =
+      markHeard && currentUtteranceRef === utterRef && !utterRef.skipMarkHeard
+    if (currentUtteranceRef === utterRef) currentUtteranceRef = null
+    emit()
+    if (shouldMark) emitHeard(id)
   }
-  u.onend = done
-  u.onerror = done
+
+  u.onend = () => finish(true)
+  u.onerror = () => finish(false)
 
   let iniciou = false
   const falar = () => {
