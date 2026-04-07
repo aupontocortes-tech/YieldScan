@@ -45,12 +45,12 @@ function parecePortugues(t: string): boolean {
 }
 
 const AVISO_SEM_FONTES =
-  'Sem notícias: adiciona NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
+  'Sem notícias: adiciona GNEWS_API_KEY (recomendado), NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
 
 const AVISO_SEM_ARTIGOS =
   'O feed veio vazio neste momento. A fonte pode estar sem artigos recentes/temporariamente limitada; tenta atualizar em 1-2 minutos. Para reforçar volume, usa também CRYPTOPANIC_AUTH_TOKEN.'
 
-/** Agrega fetch + processamento + tradução; cacheia ~45s para vários utilizadores não repetirem o trabalho. */
+/** Agrega fetch + processamento + tradução; cacheia ~30s para vários utilizadores não repetirem o trabalho. */
 const montarNoticiasEmCache = unstable_cache(
   async (): Promise<{ traduzidas: NoticiaProcessada[]; aviso?: string }> => {
     const { results, erro } = await pegarTodasNoticias(process.env.NEWSDATA_API_KEY)
@@ -76,8 +76,8 @@ const montarNoticiasEmCache = unstable_cache(
       .filter((n) => n.titulo && n.resumo && parecePortugues(`${n.titulo} ${n.resumo}`))
     return { traduzidas: curadas }
   },
-  ['api-news-montar-v14'],
-  { revalidate: 45, tags: ['news'] }
+  ['api-news-montar-v15'],
+  { revalidate: 30, tags: ['news'] }
 )
 
 /* ── Handler ────────────────────────────────────────────────────────────── */
@@ -110,9 +110,9 @@ export async function GET(req: NextRequest) {
         status: 200,
         headers: {
           'Cache-Control':
-            'public, s-maxage=45, stale-while-revalidate=120',
-          'CDN-Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
-          'Vercel-CDN-Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
+            'public, s-maxage=30, stale-while-revalidate=90',
+          'CDN-Cache-Control': 'public, s-maxage=30, stale-while-revalidate=90',
+          'Vercel-CDN-Cache-Control': 'public, s-maxage=30, stale-while-revalidate=90',
         },
       }
     )

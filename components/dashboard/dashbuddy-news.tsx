@@ -55,7 +55,7 @@ function formatarData(pub: string | null): string {
     const h = Math.floor(diff / 3_600_000)
     const dias = Math.floor(diff / 86_400_000)
     if (min < 1) return 'agora'
-    if (min < 60) return `há ${min}min`
+    if (min < 60) return `há ${min} min`
     if (h < 24) return `há ${h}h`
     if (dias < 7) return `há ${dias}d`
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
@@ -227,8 +227,9 @@ export function DashbuddyNews() {
     queryFn: fetchNoticias,
     retry: 2,
     retryDelay: 2_000,
-    staleTime: 60_000,
+    staleTime: 30_000,
     gcTime: 5 * 60_000,
+    refetchInterval: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   })
@@ -238,7 +239,11 @@ export function DashbuddyNews() {
     return noticiasParaFeed(data?.noticias ?? [])
   }, [data])
 
-  const isConfigError = isError && Boolean(error?.message?.includes('NEWSDATA_API_KEY'))
+  const isConfigError =
+    isError &&
+    Boolean(
+      error?.message?.includes('NEWSDATA_API_KEY') || error?.message?.includes('GNEWS_API_KEY')
+    )
   const apiErro = isError && !isConfigError ? (error?.message ?? 'Erro ao carregar notícias.') : null
 
   const feedFiltrado = useMemo(() => {

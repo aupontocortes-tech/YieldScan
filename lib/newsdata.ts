@@ -8,6 +8,8 @@
  */
 
 import { fetchAiNewsFromRssFeeds } from '@/lib/ai-news-rss'
+import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
+import { fetchGnewsAsArticles } from '@/lib/gnews'
 import { textoIndicaFocoInteligenciaArtificial } from '@/lib/news-ia-strict'
 import {
   fetchCryptopanicAsNewsDataArticles,
@@ -52,6 +54,12 @@ export interface NewsDataArticle {
   language?: string | null
   keywords?: string[] | null
   image_url?: string | null
+  /** Campos opcionais de imagem que algumas fontes devolvem. */
+  image?: string | null
+  imageUrl?: string | null
+  thumbnail?: string | null
+  enclosure?: { link?: string | null; url?: string | null } | null
+  media?: { thumbnail?: string | null; content?: string | null } | null
   /**
    * Interno: veio da query NewsData só cripto — classificar como CRIPTO no filtro
    * (a API já filtrou por termos cripto; sem isto, muitos caíam em «Macro» só pela palavra «mercado»).
@@ -90,22 +98,6 @@ const KEYWORDS_AI =
 
 const KEYWORDS_AI_ALT = 'Anthropic OR Claude OR Gemini OR Copilot OR Nvidia AI OR AI chip OR AI model'
 
-/**
- * Palavras-mínimo para que um artigo seja relevante para o feed.
- * Artigos que não contenham NENHUMA serão descartados.
- */
-const RELEVANCE_WORDS = new Set([
-  'bitcoin','ethereum','cripto','crypto','cryptocurrency','blockchain','altcoin','defi','nft','token',
-  'inflation','inflação','fed','federal reserve','interest rate','taxa de juros',
-  'war','guerra','sanction','sanção','geopolit','tariff','tarifa',
-  'gdp','pib','recession','recessão','economy','economia','stock market',
-  'mercado','bolsa','dollar','dólar','oil','petróleo','market',
-  'congresso','senado','eleicao','eleição','election','governo','government','parlamento',
-  'coinbase','binance','solana','xrp','bnb','stablecoin','satoshi',
-  'openai','chatgpt','anthropic','claude','llm','gpt','machine learning','artificial intelligence',
-  'inteligencia artificial','ia generativa','modelo de linguagem',
-])
-
 /** Fontes tratadas como maior credibilidade editorial (heurística conservadora). */
 const FONTES_ALTA = new Set(
   [
@@ -131,6 +123,91 @@ const FONTES_ALTA = new Set(
     'cnn brasil',
   ].map((s) => s.toLowerCase())
 )
+
+/** Palavras-chave obrigatórias (título/descrição/conteúdo normalizado). */
+function passaFiltroPalavrasChave(full: string): boolean {
+  if (/trump/i.test(full)) return true
+  if (/\bwar\b|guerra/i.test(full)) return true
+  if (/iran|irão|irã/i.test(full)) return true
+  if (/\bfed\b|federal reserve/i.test(full)) return true
+  if (/interest rate|taxa de juros|taxa de juro/i.test(full)) return true
+  if (/\betf\b/i.test(full)) return true
+  if (/\bsec\b/i.test(full)) return true
+  if (/bitcoin|\bbtc\b/i.test(full)) return true
+  if (/nvidia|openai|chatgpt/i.test(full)) return true
+  if (
+    /\b(i\.?\s*a\.?|inteligencia artificial|artificial intelligence|machine learning)\b/i.test(full)
+  )
+    return true
+  return false
+}
+
+const MIN_SCORE_NOTICIA = 5
+
+function normalizarNomeFonte(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim()
+}
+
+function fonteEhAltaCredibilidade(fonte: string): boolean {
+  const n = normalizarNomeFonte(fonte)
+  for (const f of FONTES_ALTA) {
+    if (n.includes(f)) return true
+  }
+  return false
+}
+
+function pontuarNoticia(full: string, fonte: string): number {
+  let score = 2
+  if (/trump|iran|irão|irã|\bwar\b|guerra/i.test(full)) score += 5
+  if (/\betf\b|\bsec\b|\bfed\b|interest rate|taxa de juros|taxa de juro|federal reserve/i.test(full))
+    score += 4
+  if (fonteEhAltaCredibilidade(fonte)) score += 3
+  if (/bitcoin|ethereum|aave|\bcrypto\b|\bbtc\b|cripto|criptomoeda/i.test(full)) score += 3
+  if (
+    /openai|nvidia|chatgpt|anthropic|claude|\b(i\.?\s*a\.?|inteligencia artificial|artificial intelligence|machine learning)\b/i.test(
+      full
+    )
+  )
+    score += 3
+  if (/inflation|inflação/i.test(full)) score += 3
+  return score
+}
+
+function dedupeArtigosPorTitulo(articles: NewsDataArticle[]): NewsDataArticle[] {
+  const seen = new Set<string>()
+  const out: NewsDataArticle[] = []
+  for (const a of articles) {
+    const t = normalizarTextoMatch((a.title ?? '').trim()).replace(/\s+/g, ' ')
+    if (t.length >= 12) {
+      if (seen.has(t)) continue
+      seen.add(t)
+    }
+    out.push(a)
+  }
+  return out
+}
+
+function classificarAutomatica(full: string, article: NewsDataArticle): InsightNoticia['categoria'] {
+  if (article._yieldscanCryptoQuery === true) return 'CRIPTO'
+  if (typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-'))
+    return 'CRIPTO'
+  if (typeof article.article_id === 'string' && article.article_id.startsWith('cryptocv-')) return 'CRIPTO'
+
+  const criptoTerms = /\b(bitcoin|ethereum|aave|\bcrypto\b|\bbtc\b|cripto|criptomoeda)\b/i
+  const geoTerms =
+    /\b(war|guerra|trump|iran|irão|irã|ucrania|ukraine|russia|putin|zelensk|china|taiwan|israel|gaza|nato|otan)\b/i
+  const macroTerms =
+    /\b(inflation|inflação|interest rate|taxa de juros|\bfed\b|federal reserve|\bsec\b|\betf\b|cpi\b|recession|recessão|gdp|pib|juros)\b/i
+  const iaTerms =
+    /\b(openai|nvidia|chatgpt|anthropic|claude|\bai\b|artificial intelligence|inteligencia artificial|machine learning)\b/i
+
+  if (criptoTerms.test(full)) return 'CRIPTO'
+  if (geoTerms.test(full)) return 'GEOPOLÍTICA'
+  if (macroTerms.test(full)) return 'MACRO'
+  if (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full)) return 'IA'
+  if (iaTerms.test(full)) return 'IA'
+  return classificarCategoria(full, article.category ?? null)
+}
 
 /** Texto normalizado (minúsculas, sem acentos) para classificar PT/EN. */
 function normalizarTextoMatch(s: string): string {
@@ -173,6 +250,55 @@ const RE_ALT = /\b(altcoin|solana|ada|cardano|xrp|ripple|bnb|polygon|avax|doge|m
 
 function stripHtml(s: string): string {
   return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function toText(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+function imagemPareceValida(raw: string): boolean {
+  const s = raw.trim()
+  if (!s) return false
+  if (/^(data|blob):/i.test(s)) return false
+  try {
+    const u = new URL(s)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    const full = `${u.hostname}${u.pathname}${u.search}`.toLowerCase()
+    if (/(placeholder|spacer|blank|default-image|no-?image|pixel\.gif)/i.test(full)) return false
+    if (/(^|[\/_-])(16x16|24x24|32x32|48x48|64x64)([\/_.-]|$)/i.test(full)) return false
+    if (/(^|[\/_-])(icon|favicon|sprite|avatar|logo)([\/_.-]|$)/i.test(full)) return false
+    const ext = u.pathname.toLowerCase()
+    if (/\.(jpg|jpeg|png|webp|gif|avif|bmp|svg)$/i.test(ext)) return true
+    // Algumas APIs servem imagem sem extensão explícita.
+    return true
+  } catch {
+    return false
+  }
+}
+
+function escolherImagemNoticia(a: NewsDataArticle): string | null {
+  const candidates: string[] = []
+  const rec = a as Record<string, unknown>
+
+  candidates.push(
+    toText(a.image_url),
+    toText(a.image),
+    toText(a.imageUrl),
+    toText(a.thumbnail),
+    toText(a.enclosure?.link),
+    toText(a.enclosure?.url),
+    toText(a.media?.content),
+    toText(a.media?.thumbnail),
+    toText(rec['imageUrlLarge']),
+    toText(rec['cover_image']),
+    toText(rec['coverImage']),
+    toText(rec['thumbnail_url'])
+  )
+
+  for (const c of candidates) {
+    if (imagemPareceValida(c)) return c
+  }
+  return null
 }
 
 /** Texto que a NewsData insere em planos gratuitos dentro da descrição. */
@@ -255,33 +381,6 @@ function classificarImpacto(full: string): InsightNoticia['impacto'] {
   if (RE_NEG.test(full)) return 'NEGATIVO'
   if (RE_POS.test(full)) return 'POSITIVO'
   return 'NEUTRO'
-}
-
-function noticiaEhRelevanteEstrita(a: NewsDataArticle, fullNorm: string): boolean {
-  const title = (a.title ?? '').trim()
-  if (title.length < 18) return false
-  if (RE_RASO_OU_LOCAL.test(fullNorm)) return false
-
-  const fromCryptopanic =
-    typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')
-  if (fromCryptopanic) return true
-
-  const temaPrincipal =
-    a._yieldscanCryptoQuery === true ||
-    a._yieldscanAiQuery === true ||
-    RE_CRYPTO.test(fullNorm) ||
-    RE_GEOPOLITICA.test(fullNorm) ||
-    RE_MACRO.test(fullNorm) ||
-    RE_MACRO_MERCADOS.test(fullNorm)
-
-  if (!temaPrincipal) return false
-
-  // Exige sinais de impacto/escala para evitar notícias vagas.
-  const escalaRelevante =
-    /\b(fed|ecb|bce|boj|imf|fmi|g20|g7|sec\b|etf|treasury|yield|inflation|cpi|gdp|recession|war|sanction|tariff|nasdaq|sp500|ibovespa|earnings|ipo|openai|anthropic|gemini|bitcoin|ethereum|xrp|solana|binance|coinbase|regulation|regulacao|governo|government)\b/i.test(
-      fullNorm
-    )
-  return escalaRelevante
 }
 
 /**
@@ -468,25 +567,15 @@ function enrichYieldscanCryptoFlag(results: NewsDataArticle[], cryptoArticles: N
   }
 }
 
-/**
- * NewsData (cripto+macro+geo) + opcional CryptoPanic (cripto), fundidos sem URLs duplicadas.
- */
-export async function pegarTodasNoticias(apiKey?: string): Promise<{
-  results: NewsDataArticle[]
-  erro?: string
-}> {
-  const key = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim()
-  if (!key) throw new Error('NEWSDATA_API_KEY não definida. Adicione em .env.local')
-
-  /* Menos páginas = resposta mais rápida; volume ainda cobre o feed. */
-  const [newsdataGeral, newsdataCripto, newsdataCriptoFallback, newsdataAi, newsdataAiAlt, cryptopanicResults, rssAiArticles] =
+/** NewsData + RSS IA (fallback). CryptoPanic e GNews ficam em `pegarTodasNoticias`. */
+async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
+  const [newsdataGeral, newsdataCripto, newsdataCriptoFallback, newsdataAi, newsdataAiAlt, rssAiArticles] =
     await Promise.all([
-      fetchQueryAccumulate(key, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
-      fetchQueryAccumulate(key, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
-      fetchQueryAccumulate(key, 'bitcoin OR ethereum OR crypto', { maxArticles: 18, maxPages: 3, size: '10' }),
-      fetchQueryAccumulate(key, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
-      fetchQueryAccumulate(key, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
-      fetchCryptopanicAsNewsDataArticles(),
+      fetchQueryAccumulate(ndKey, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
+      fetchQueryAccumulate(ndKey, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
+      fetchQueryAccumulate(ndKey, 'bitcoin OR ethereum OR crypto', { maxArticles: 18, maxPages: 3, size: '10' }),
+      fetchQueryAccumulate(ndKey, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
+      fetchQueryAccumulate(ndKey, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
       fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
     ])
 
@@ -506,14 +595,48 @@ export async function pegarTodasNoticias(apiKey?: string): Promise<{
     _yieldscanAiQuery: false,
   }))
 
-  /* CryptoPanic primeiro: é a API dedicada a cripto; em duplicado de URL, mantém-se o post dela. */
   const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
   const mergedNdComIa = mergeArticlesDedupe(mergedNd, newsdataAiMarcados)
-  const results = mergeArticlesDedupe(cryptopanicResults, mergedNdComIa)
-  enrichYieldscanCryptoFlag(results, newsdataCriptoMarcados)
-  enrichYieldscanAiFlag(results, newsdataAiMerged)
-  if (results.length === 0) return { results: [], erro: 'sem_artigos' }
-  return { results }
+  enrichYieldscanCryptoFlag(mergedNdComIa, newsdataCriptoMarcados)
+  enrichYieldscanAiFlag(mergedNdComIa, newsdataAiMerged)
+  return mergedNdComIa
+}
+
+/**
+ * GNews + cryptocurrency.cv (primários) + CryptoPanic + NewsData/RSS (fallback), fundidos.
+ */
+export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
+  results: NewsDataArticle[]
+  erro?: 'sem_artigos' | 'sem_fontes'
+}> {
+  const ndKey = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim() || ''
+
+  const [ndBundle, gnews, cryptoCv, cryptopanicResults] = await Promise.all([
+    ndKey
+      ? fetchNewsdataComRss(ndKey)
+      : fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
+    fetchGnewsAsArticles(),
+    fetchCryptoCvAsArticles(),
+    fetchCryptopanicAsNewsDataArticles(),
+  ])
+
+  let merged = mergeArticlesDedupe(gnews, cryptoCv)
+  merged = mergeArticlesDedupe(merged, cryptopanicResults)
+  merged = mergeArticlesDedupe(merged, ndBundle)
+  enrichYieldscanCryptoFlag(merged, cryptoCv)
+  merged = dedupeArtigosPorTitulo(merged)
+
+  const temChave =
+    Boolean(ndKey) ||
+    Boolean(process.env.GNEWS_API_KEY?.trim()) ||
+    Boolean(
+      process.env.CRYPTOPANIC_AUTH_TOKEN?.trim() || process.env.CRYPTOPUNK_API_TOKEN?.trim()
+    )
+
+  if (!merged.length) {
+    return { results: [], erro: temChave ? 'sem_artigos' : 'sem_fontes' }
+  }
+  return { results: merged }
 }
 
 /**
@@ -530,15 +653,7 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
   const resumoBase = resumoDuasLinhas(baseText || title)
   const fullLower = textoParaAnalise(article)
 
-  const categoria =
-    article._yieldscanCryptoQuery === true
-      ? 'CRIPTO'
-      : typeof article.article_id === 'string' && article.article_id.startsWith('cryptopanic-')
-        ? 'CRIPTO'
-        : article._yieldscanAiQuery === true &&
-            textoIndicaFocoInteligenciaArtificial(fullLower)
-          ? 'IA'
-          : classificarCategoria(fullLower, article.category ?? null)
+  const categoria = classificarAutomatica(fullLower, article)
   let resumo = notaGeopoliticaCrypto(categoria, resumoBase || title)
 
   const impacto = classificarImpacto(fullLower)
@@ -556,35 +671,47 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
     fonte,
     dataPublicacao: article.pubDate ?? null,
     articleId: article.article_id ?? null,
-    imagemUrl: article.image_url?.trim() || null,
+    imagemUrl: escolherImagemNoticia(article),
     linguagem: article.language ?? null,
   }
 }
 
-/** Máximo de cartões por categoria no feed (cripto pode ter muito mais que uma página da API). */
-const LIMITE_POR_CATEGORIA: Record<InsightNoticia['categoria'], number> = {
-  CRIPTO: 40,
-  GEOPOLÍTICA: 14,
-  MACRO: 16,
-  IA: 28,
-}
+/** Máximo de itens por categoria após ordenar por score e data. */
+const LIMITE_POR_CATEGORIA_FEED = 10
 
 export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
   if (!Array.isArray(articles)) return []
 
-  // Processa e filtra por relevância mínima
+  type Row = { article: NewsDataArticle; score: number; ts: number }
+  const rows: Row[] = []
+
+  for (const a of articles) {
+    const title = (a.title ?? '').trim()
+    const fromPanic =
+      typeof a.article_id === 'string' && a.article_id.startsWith('cryptopanic-')
+    if (title.length < 12 && !fromPanic) continue
+
+    const fullNorm = textoParaAnalise(a)
+    if (RE_RASO_OU_LOCAL.test(fullNorm)) continue
+    if (!passaFiltroPalavrasChave(fullNorm)) continue
+
+    const fonte = (a.source_name ?? a.source_id ?? '').trim()
+    const score = pontuarNoticia(fullNorm, fonte)
+    if (score < MIN_SCORE_NOTICIA) continue
+
+    const rawTs = a.pubDate ? new Date(a.pubDate.replace(' ', 'T')).getTime() : 0
+    rows.push({ article: a, score, ts: Number.isFinite(rawTs) ? rawTs : 0 })
+  }
+
+  rows.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    return b.ts - a.ts
+  })
+
   const todas: NoticiaProcessada[] = []
   const titulosSeen = new Set<string>()
-  for (const a of articles) {
-    // Descarta artigos sem nenhuma palavra-chave relevante
-    const fullNorm = normalizarTextoMatch(
-      [a.title, a.description].filter(Boolean).join(' ')
-    )
-    const ehRelevante =
-      noticiaEhRelevanteEstrita(a, fullNorm) ||
-      [...RELEVANCE_WORDS].some((w) => fullNorm.includes(w))
-    if (!ehRelevante) continue
-    const p = processarNoticia(a)
+  for (const { article } of rows) {
+    const p = processarNoticia(article)
     if (!p) continue
     const tk = normalizarTextoMatch(p.titulo).replace(/[^\w\s]/g, '').trim()
     if (!tk || titulosSeen.has(tk)) continue
@@ -592,19 +719,12 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     todas.push(p)
   }
 
-  // Ordena por data mais recente primeiro
-  todas.sort((a, b) => {
-    const da = a.dataPublicacao ? new Date(a.dataPublicacao.replace(' ', 'T')).getTime() : 0
-    const db = b.dataPublicacao ? new Date(b.dataPublicacao.replace(' ', 'T')).getTime() : 0
-    return db - da
-  })
-
-  // Limita por categoria (cripto com tecto mais alto)
   const contagem: Record<string, number> = {}
   return todas.filter((n) => {
-    const lim = LIMITE_POR_CATEGORIA[n.categoria] ?? 12
-    contagem[n.categoria] = (contagem[n.categoria] ?? 0) + 1
-    return contagem[n.categoria] <= lim
+    const c = n.categoria
+    const prox = (contagem[c] ?? 0) + 1
+    contagem[c] = prox
+    return prox <= LIMITE_POR_CATEGORIA_FEED
   })
 }
 
