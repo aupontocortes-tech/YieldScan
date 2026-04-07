@@ -76,7 +76,7 @@ const montarNoticiasEmCache = unstable_cache(
       .filter((n) => n.titulo && n.resumo && parecePortugues(`${n.titulo} ${n.resumo}`))
     return { traduzidas: curadas }
   },
-  ['api-news-montar-v15'],
+  ['api-news-montar-v16'],
   { revalidate: 30, tags: ['news'] }
 )
 

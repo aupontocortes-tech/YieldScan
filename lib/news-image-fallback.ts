@@ -6,10 +6,10 @@
 export type CategoriaNoticiaImagem = 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO' | 'IA'
 
 const FALLBACK: Record<CategoriaNoticiaImagem, string> = {
-  CRIPTO: 'https://source.unsplash.com/600x400/?crypto,bitcoin',
+  CRIPTO: 'https://source.unsplash.com/600x400/?crypto',
   IA: 'https://source.unsplash.com/600x400/?artificial-intelligence',
-  MACRO: 'https://source.unsplash.com/600x400/?economy,stock-market',
-  GEOPOLÍTICA: 'https://source.unsplash.com/600x400/?war,politics',
+  MACRO: 'https://source.unsplash.com/600x400/?economy',
+  GEOPOLÍTICA: 'https://source.unsplash.com/600x400/?war',
 }
 
 export function fallbackImagemPorCategoria(categoria: CategoriaNoticiaImagem): string {

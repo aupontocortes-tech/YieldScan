@@ -39,6 +39,8 @@ export interface NoticiaProcessada extends InsightNoticia {
   /** Sempre definida (API ou fallback por categoria). */
   imagemUrl: string
   linguagem: string | null
+  /** Evento crítico (score de palavras-chave ≥ 8); usado para ordenação — layout pode ignorar. */
+  isBreaking: boolean
 }
 
 export interface NewsDataArticle {
@@ -130,11 +132,11 @@ const FONTES_ALTA = new Set(
 
 /** Palavras-chave por categoria (texto normalizado; inclui PT comum). */
 const RE_CLASS_GEO =
-  /\b(war|guerra|trump|iran|irao|china|russia|ucrania|ukraine|conflict|conflito|government|governo)\b/i
+  /\b(war|guerra|trump|iran|irao|china|russia|ucrania|ukraine|conflict|conflito|government|governo|attack|ataque|missile|explosion|explosao|invasion|invasao|sanctions|sanction|sancoes)\b/i
 const RE_CLASS_MACRO =
-  /\b(inflation|inflacao|interest rate|taxa de juros|\bfed\b|federal reserve|central bank|banco central|economy|economia)\b/i
+  /\b(inflation|inflacao|interest rate|taxa de juros|\bfed\b|federal reserve|central bank|banco central|economy|economia|recession|recessao|recessão|gdp|pib|unemployment|desemprego)\b/i
 const RE_CLASS_CRIPTO =
-  /\b(bitcoin|btc|ethereum|eth|crypto|cripto|aave|binance)\b/i
+  /\b(bitcoin|btc|ethereum|eth|crypto|cripto|aave|binance|blackrock)\b/i
 const RE_CLASS_IA =
   /\b(openai|nvidia|chatgpt|machine learning|artificial intelligence|inteligencia artificial|\bai\b)\b/i
 
@@ -153,28 +155,41 @@ function passaFiltroPalavrasChave(full: string, article: NewsDataArticle): boole
   return false
 }
 
-/** Corta ruído; artigos só IA (~+2) ou só tema fraco ficam de fora se abaixo disto. */
-const MIN_SCORE_NOTICIA = 2
+/** Soma só de palavras-chave (antes de recência); corte mínimo para entrar no feed. */
+const MIN_SCORE_NOTICIA = 3
 
-/**
- * Relevância: +5 crítico geo, +4 macro forte, +3 cripto (ETF/Bitcoin/SEC + termos do filtro cripto), +2 IA (OpenAI/Nvidia).
- * Vários blocos somam (ex.: Trump + Fed → 9).
- */
-function pontuarNoticia(full: string): number {
+/** Notícias críticas (soma de tiers de palavras-chave); ordenação prioritária. */
+const SCORE_MIN_BREAKING = 8
+
+const RE_SCORE_CRITICO =
+  /\b(war|guerra|attack|ataque|missile|missil|explosion|explosao|explosão|invasion|invasao|invasão|sanctions|sanction|sancoes|sanções|trump|iran|irao|irã|irão)\b/i
+const RE_SCORE_MACRO =
+  /\b(\bfed\b|federal reserve|interest rate|taxa de juros|inflation|inflação|inflacao|central bank|banco central|recession|recessao|recessão|\bgdp\b|\bpib\b|unemployment|desemprego)\b/i
+const RE_SCORE_CRIPTO =
+  /\b(\betf\b|bitcoin|\bbtc\b|\bsec\b|ethereum|\beth\b|aave|binance|crypto|cripto|blackrock)\b/i
+const RE_SCORE_IA = /\b(openai|nvidia|chatgpt|\bai\b)\b/i
+
+/** Pontuação só por conteúdo (Bloomberg-style); blocos somados. */
+function pontuarPalavrasChaveNoticia(full: string): number {
   let score = 0
-  if (/\bwar\b|guerra|\battack\b|ataque|trump|iran|irão|irã|irao/i.test(full)) score += 5
-  if (
-    /\bfed\b|federal reserve|interest rate|taxa de juros|inflation|inflação|inflacao|central bank|banco central/i.test(
-      full
-    )
-  )
-    score += 4
-  if (
-    /\betf\b|\bbtc\b|bitcoin|\bsec\b|ethereum|\beth\b|aave|binance|\bcrypto\b|cripto/i.test(full)
-  )
-    score += 3
-  if (/openai|nvidia|chatgpt/i.test(full)) score += 2
+  if (RE_SCORE_CRITICO.test(full)) score += 5
+  if (RE_SCORE_MACRO.test(full)) score += 4
+  if (RE_SCORE_CRIPTO.test(full)) score += 3
+  if (RE_SCORE_IA.test(full)) score += 2
   return score
+}
+
+/** +2 se publicada há menos de 1 h; +1 se menos de 3 h. */
+function boostRecencia(pubDate: string | null | undefined): number {
+  if (!pubDate) return 0
+  const t = new Date(pubDate.replace(' ', 'T')).getTime()
+  if (!Number.isFinite(t)) return 0
+  const ageMs = Date.now() - t
+  const h = ageMs / 3_600_000
+  if (h < 0) return 2
+  if (h < 1) return 2
+  if (h < 3) return 1
+  return 0
 }
 
 function dedupeArtigosPorTitulo(articles: NewsDataArticle[]): NewsDataArticle[] {
@@ -650,7 +665,10 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
  * Processa cada artigo: extrai resumo do texto original e classifica com regras fixas (sem LLM).
  * Não inventa factos; impacto e categoria tendem a NEUTRO/MACRO quando o texto é ambíguo.
  */
-export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | null {
+export function processarNoticia(
+  article: NewsDataArticle,
+  opts?: { isBreaking?: boolean }
+): NoticiaProcessada | null {
   const title = (article.title ?? '').trim()
   const link = (article.link ?? '').trim()
   if (!title && !link) return null
@@ -681,6 +699,7 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
     imagemUrl:
       escolherImagemNoticia(article) ?? fallbackImagemPorCategoria(categoria),
     linguagem: article.language ?? null,
+    isBreaking: opts?.isBreaking === true,
   }
 }
 
@@ -691,7 +710,14 @@ export function processarNoticia(article: NewsDataArticle): NoticiaProcessada | 
 export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessada[] {
   if (!Array.isArray(articles)) return []
 
-  type Row = { article: NewsDataArticle; score: number; ts: number }
+  type Row = {
+    article: NewsDataArticle
+    keywordScore: number
+    recencyBoost: number
+    scoreFinal: number
+    isBreaking: boolean
+    ts: number
+  }
   const rows: Row[] = []
 
   for (const a of articles) {
@@ -704,22 +730,34 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     if (RE_RASO_OU_LOCAL.test(fullNorm)) continue
     if (!passaFiltroPalavrasChave(fullNorm, a)) continue
 
-    const score = pontuarNoticia(fullNorm)
-    if (score < MIN_SCORE_NOTICIA) continue
+    const keywordScore = pontuarPalavrasChaveNoticia(fullNorm)
+    if (keywordScore < MIN_SCORE_NOTICIA) continue
+
+    const recencyBoost = boostRecencia(a.pubDate)
+    const scoreFinal = keywordScore + recencyBoost
+    const isBreaking = keywordScore >= SCORE_MIN_BREAKING
 
     const rawTs = a.pubDate ? new Date(a.pubDate.replace(' ', 'T')).getTime() : 0
-    rows.push({ article: a, score, ts: Number.isFinite(rawTs) ? rawTs : 0 })
+    rows.push({
+      article: a,
+      keywordScore,
+      recencyBoost,
+      scoreFinal,
+      isBreaking,
+      ts: Number.isFinite(rawTs) ? rawTs : 0,
+    })
   }
 
   rows.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score
+    if (a.isBreaking !== b.isBreaking) return a.isBreaking ? -1 : 1
+    if (b.scoreFinal !== a.scoreFinal) return b.scoreFinal - a.scoreFinal
     return b.ts - a.ts
   })
 
   const todas: NoticiaProcessada[] = []
   const titulosSeen = new Set<string>()
-  for (const { article } of rows) {
-    const p = processarNoticia(article)
+  for (const { article, isBreaking } of rows) {
+    const p = processarNoticia(article, { isBreaking })
     if (!p) continue
     const tk = normalizarTextoMatch(p.titulo).replace(/[^\w\s]/g, '').trim()
     if (!tk || titulosSeen.has(tk)) continue
