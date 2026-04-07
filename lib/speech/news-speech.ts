@@ -3,13 +3,23 @@
  * Um único áudio de cada vez; novo pedido cancela o anterior.
  */
 
+import { isNewsTtsHeard } from '@/lib/news/news-tts-heard'
+
 let activeId: string | null = null
 const listeners = new Set<() => void>()
 const endListeners = new Set<(id: string) => void>()
 
-type UtterRef = { id: string; skipMarkHeard: boolean }
+/** Progresso mínimo para marcar como ouvida (além de onend). */
+const HEARD_PROGRESS = 0.8
 
-/** Ref do utterance corrente (para não marcar "ouvido" ao parar ou ao trocar de notícia). */
+type UtterRef = {
+  id: string
+  skipMarkHeard: boolean
+  fullText: string
+  heardEmitted: boolean
+  progressTimer: ReturnType<typeof setInterval> | null
+}
+
 let currentUtteranceRef: UtterRef | null = null
 
 function emit() {
@@ -20,6 +30,13 @@ function emitHeard(id: string) {
   endListeners.forEach((l) => l(id))
 }
 
+function clearUtterProgress(utterRef: UtterRef) {
+  if (utterRef.progressTimer != null) {
+    clearInterval(utterRef.progressTimer)
+    utterRef.progressTimer = null
+  }
+}
+
 export function subscribeNewsSpeech(listener: () => void) {
   listeners.add(listener)
   return () => {
@@ -27,7 +44,6 @@ export function subscribeNewsSpeech(listener: () => void) {
   }
 }
 
-/** Dispara só quando a leitura termina até ao fim (não ao parar nem ao mudar de item). */
 export function subscribeNewsSpeechHeard(listener: (id: string) => void) {
   endListeners.add(listener)
   return () => {
@@ -48,7 +64,6 @@ function getSynth(): SpeechSynthesis | null {
   return window.speechSynthesis ?? null
 }
 
-/** Escolhe voz em português (prioridade pt-BR) para o sintetizador não usar inglês por defeito. */
 function aplicarVozPortugues(syn: SpeechSynthesis, u: SpeechSynthesisUtterance) {
   const vs = syn.getVoices()
   const pt =
@@ -58,7 +73,6 @@ function aplicarVozPortugues(syn: SpeechSynthesis, u: SpeechSynthesisUtterance) 
   if (pt) u.voice = pt
 }
 
-/** Para o que estiver a falar (ex.: ao sair da página). */
 export function cancelNewsSpeech() {
   const syn = getSynth()
   if (syn) {
@@ -70,13 +84,32 @@ export function cancelNewsSpeech() {
 }
 
 /**
+ * Inicia leitura (não faz toggle para parar).
+ * `skipIfHeard`: evita TTS automático em notícias já ouvidas.
+ */
+export function playNewsSpeech(
+  id: string,
+  title: string,
+  description: string,
+  opts?: { skipIfHeard?: boolean }
+) {
+  if (opts?.skipIfHeard && isNewsTtsHeard(id)) return
+  const syn = getSynth()
+  if (!syn) return
+  const text = [title.trim(), description.trim()].filter(Boolean).join('. ')
+  if (!text) return
+  if (activeId === id) return
+
+  internalStart(id, text, syn)
+}
+
+/**
  * Se `id` já estiver activo → para.
  * Caso contrário → cancela o anterior e lê `title` + `description` em pt-BR.
  */
 export function toggleNewsSpeech(id: string, title: string, description: string) {
   const syn = getSynth()
   if (!syn) return
-
   const text = [title.trim(), description.trim()].filter(Boolean).join('. ')
   if (!text) return
 
@@ -88,21 +121,45 @@ export function toggleNewsSpeech(id: string, title: string, description: string)
     return
   }
 
+  internalStart(id, text, syn)
+}
+
+function internalStart(id: string, text: string, syn: SpeechSynthesis) {
   if (currentUtteranceRef) currentUtteranceRef.skipMarkHeard = true
   syn.cancel()
   activeId = id
 
-  const utterRef: UtterRef = { id, skipMarkHeard: false }
+  const utterRef: UtterRef = {
+    id,
+    skipMarkHeard: false,
+    fullText: text,
+    heardEmitted: false,
+    progressTimer: null,
+  }
   currentUtteranceRef = utterRef
 
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'pt-BR'
   u.rate = 0.95
 
-  const finish = (markHeard: boolean) => {
-    if (activeId === id) {
-      activeId = null
+  const tryProgressMarkByIndex = (charIndex: number) => {
+    if (utterRef.skipMarkHeard || utterRef.heardEmitted) return
+    const len = utterRef.fullText.length
+    if (len <= 0) return
+    if (charIndex / len >= HEARD_PROGRESS) {
+      utterRef.heardEmitted = true
+      emitHeard(id)
+      clearUtterProgress(utterRef)
     }
+  }
+
+  u.onboundary = (ev: SpeechSynthesisEvent) => {
+    tryProgressMarkByIndex(ev.charIndex ?? 0)
+  }
+
+  const finish = (markHeard: boolean) => {
+    clearUtterProgress(utterRef)
+    if (activeId === id) activeId = null
     const shouldMark =
       markHeard && currentUtteranceRef === utterRef && !utterRef.skipMarkHeard
     if (currentUtteranceRef === utterRef) currentUtteranceRef = null
@@ -112,6 +169,17 @@ export function toggleNewsSpeech(id: string, title: string, description: string)
 
   u.onend = () => finish(true)
   u.onerror = () => finish(false)
+
+  const t0 = performance.now()
+  utterRef.progressTimer = setInterval(() => {
+    if (utterRef.skipMarkHeard || utterRef.heardEmitted) {
+      clearUtterProgress(utterRef)
+      return
+    }
+    const elapsed = (performance.now() - t0) / 1000
+    const approxChars = elapsed * 13 * u.rate
+    tryProgressMarkByIndex(approxChars)
+  }, 320)
 
   let iniciou = false
   const falar = () => {

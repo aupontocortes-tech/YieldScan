@@ -115,7 +115,15 @@ function NewsCardSkeleton() {
 }
 
 /* ── NewsCard: imagem quadrada + texto (sempre área de imagem; fallback por categoria) ─ */
-function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
+function NewsCard({
+  n,
+  speechId,
+  autoTts,
+}: {
+  n: NoticiaProcessada
+  speechId: string
+  autoTts?: boolean
+}) {
   const fallback = fallbackImagemPorCategoria(n.categoria)
   const [src, setSrc] = useState(n.imagemUrl)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -225,6 +233,7 @@ function NewsCard({ n, speechId }: { n: NoticiaProcessada; speechId: string }) {
         speechId={speechId}
         title={n.titulo}
         description={n.resumo}
+        autoPlay={autoTts === true}
         // Botão TTS mais visível e centralizado na base do card
         className="absolute bottom-4 left-1/2 -translate-x-1/2 h-9 w-9 text-[17px]"
       />
@@ -280,6 +289,12 @@ export function DashbuddyNews() {
       .filter((item) => categoriaDoItem(item) === filtro)
       .slice(0, LIMITE_NOTICIAS_POR_ABA_CATEGORIA)
   }, [feed, filtro])
+
+  /** Uma notícia “breaking” (score ≥ 8): TTS automático se ainda não ouvida; só a primeira do filtro atual. */
+  const autoTtsSpeechId = useMemo(() => {
+    const first = feedFiltrado.find((item) => item.dados.isBreaking)
+    return first?.id ?? null
+  }, [feedFiltrado])
 
   return (
     <div className="space-y-6">
@@ -394,7 +409,12 @@ export function DashbuddyNews() {
       {!isLoading && feedFiltrado.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {feedFiltrado.map((item) => (
-            <NewsCard key={item.id} speechId={item.id} n={item.dados} />
+            <NewsCard
+              key={item.id}
+              speechId={item.id}
+              n={item.dados}
+              autoTts={item.id === autoTtsSpeechId}
+            />
           ))}
         </div>
       )}

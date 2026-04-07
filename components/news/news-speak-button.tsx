@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Volume2 } from 'lucide-react'
 import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
-import { isNewsTtsHeard, markNewsTtsHeard } from '@/lib/news/news-tts-heard'
+import { isNewsTtsHeard, markNewsTtsHeard, pruneNewsTtsHeardIfStale } from '@/lib/news/news-tts-heard'
 import {
   getNewsSpeechActiveId,
   getNewsSpeechActiveIdServer,
   isNewsSpeechSupported,
+  playNewsSpeech,
   subscribeNewsSpeech,
   subscribeNewsSpeechHeard,
   toggleNewsSpeech,
@@ -19,16 +20,24 @@ type Props = {
   title: string
   description: string
   className?: string
+  /** Primeira notícia breaking na lista: TTS automático se ainda não foi ouvida. */
+  autoPlay?: boolean
 }
 
-export function NewsSpeakButton({ speechId, title, description, className }: Props) {
+export function NewsSpeakButton({ speechId, title, description, className, autoPlay }: Props) {
   const [mounted, setMounted] = useState(false)
   const [heard, setHeard] = useState(false)
+  const autoAttemptedRef = useRef(false)
 
   useEffect(() => setMounted(true), [])
 
   useEffect(() => {
+    autoAttemptedRef.current = false
+  }, [speechId])
+
+  useEffect(() => {
     void openYieldscanSqlite().then(() => {
+      pruneNewsTtsHeardIfStale()
       if (isNewsTtsHeard(speechId)) setHeard(true)
     })
   }, [speechId])
@@ -40,6 +49,16 @@ export function NewsSpeakButton({ speechId, title, description, className }: Pro
       setHeard(true)
     })
   }, [speechId])
+
+  useEffect(() => {
+    if (!autoPlay || !mounted || autoAttemptedRef.current || !isNewsSpeechSupported()) return
+    void openYieldscanSqlite().then(() => {
+      pruneNewsTtsHeardIfStale()
+      if (isNewsTtsHeard(speechId)) return
+      autoAttemptedRef.current = true
+      playNewsSpeech(speechId, title, description, { skipIfHeard: true })
+    })
+  }, [autoPlay, speechId, title, description, mounted])
 
   const activeId = useSyncExternalStore(
     subscribeNewsSpeech,
