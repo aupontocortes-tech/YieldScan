@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   BookOpen,
+  Calculator,
   Coins,
   LayoutGrid,
   LineChart,
@@ -38,6 +39,7 @@ const MAIN_NAV = [
   { name: 'Notícias', href: '/news', icon: Newspaper },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
   { name: 'Indicator', href: '/indicator', icon: LineChart },
+  { name: 'Calculator', href: '/calculator', icon: Calculator },
   { name: 'DEX', href: '/dex', icon: LayoutGrid },
   { name: 'Swap', href: '/swap', icon: ArrowLeftRight },
 ] as const
@@ -47,6 +49,7 @@ function pageTitle(pathname: string): string {
   if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
   if (pathname.startsWith('/pools')) return 'Pools'
   if (pathname.startsWith('/indicator')) return 'Indicator'
+  if (pathname.startsWith('/calculator')) return 'Calculator'
   if (pathname.startsWith('/dex')) return 'DEX'
   if (pathname.startsWith('/swap')) return 'Swap'
   if (pathname.startsWith('/token/')) {
@@ -134,7 +137,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             ? pathname.startsWith('/pools')
                             : item.href === '/indicator'
                               ? pathname.startsWith('/indicator')
-                              : pathname === item.href
+                              : item.href === '/calculator'
+                                ? pathname.startsWith('/calculator')
+                                : pathname === item.href
                       }
                       tooltip={item.name}
                     >
