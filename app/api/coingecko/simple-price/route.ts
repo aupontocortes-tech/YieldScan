@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CALCULATOR_COINGECKO_IDS } from '@/lib/calculator/assets'
 
-const IDS_DEFAULT = CALCULATOR_COINGECKO_IDS
+const IDS_DEFAULT = 'bitcoin,ethereum,solana,tether'
 const VS_DEFAULT = 'usd,brl'
 
 /**

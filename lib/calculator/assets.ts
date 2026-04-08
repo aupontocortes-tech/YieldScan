@@ -1,6 +1,5 @@
 /**
- * Ativos suportados no conversor (crypto ↔ fiat via CoinGecko simple/price).
- * Para novas moedas: acrescentar entrada e, se crypto, incluir o id na lista da API.
+ * Ativos do conversor: cripto (id CoinGecko) ↔ moeda de cotação (vs_currencies).
  */
 
 export type CalculatorAssetType = 'crypto' | 'fiat'
@@ -10,11 +9,11 @@ export type CalculatorAsset = {
   symbol: string
   name: string
   type: CalculatorAssetType
-  /** Rótulo curto no select */
   label: string
 }
 
-export const CALCULATOR_ASSETS: CalculatorAsset[] = [
+/** Moedas padrão (par inicial e fallback de normalização). */
+export const DEFAULT_CALCULATOR_ASSETS: CalculatorAsset[] = [
   {
     id: 'bitcoin',
     symbol: 'BTC',
@@ -59,50 +58,106 @@ export const CALCULATOR_ASSETS: CalculatorAsset[] = [
   },
 ]
 
-/** Ids enviados ao CoinGecko (simple/price). */
-export const CALCULATOR_COINGECKO_IDS = CALCULATOR_ASSETS.filter((a) => a.type === 'crypto')
-  .map((a) => a.id)
-  .join(',')
+/** vs_currencies que convém mostrar com mais casas (preço em outra cripto). */
+export const VS_IDS_SIX_DECIMALS = new Set([
+  'btc',
+  'eth',
+  'sol',
+  'bnb',
+  'xrp',
+  'ada',
+  'doge',
+  'ltc',
+  'bch',
+  'avax',
+  'dot',
+  'link',
+  'matic',
+  'pol',
+  'shib',
+  'trx',
+])
 
-export function getCalculatorAsset(id: string): CalculatorAsset | undefined {
-  return CALCULATOR_ASSETS.find((a) => a.id === id)
+const VS_NAME_HINT: Record<string, string> = {
+  usd: 'US Dollar',
+  brl: 'Brazilian Real',
+  eur: 'Euro',
+  gbp: 'British Pound',
+  jpy: 'Japanese Yen',
+  chf: 'Swiss Franc',
+  cad: 'Canadian Dollar',
+  aud: 'Australian Dollar',
+  cny: 'Chinese Yuan',
+  mxn: 'Mexican Peso',
+  ars: 'Argentine Peso',
+  clp: 'Chilean Peso',
+  cop: 'Colombian Peso',
+  btc: 'Bitcoin',
+  eth: 'Ethereum',
+  sol: 'Solana',
+  xau: 'Gold',
 }
 
-export function calculatorAssetsByType(type: CalculatorAssetType): CalculatorAsset[] {
-  return CALCULATOR_ASSETS.filter((a) => a.type === type)
-}
-
-export function pickDefaultPair(): { leftId: string; rightId: string } {
-  const firstCrypto = CALCULATOR_ASSETS.find((a) => a.type === 'crypto')
-  const firstFiat = CALCULATOR_ASSETS.find((a) => a.type === 'fiat')
+export function buildCoinAsset(hit: { id: string; name: string; symbol: string }): CalculatorAsset {
+  const sym = String(hit.symbol || '').toUpperCase() || hit.id
   return {
-    leftId: firstCrypto?.id ?? 'bitcoin',
-    rightId: firstFiat?.id ?? 'usd',
+    id: hit.id,
+    symbol: sym,
+    name: hit.name || hit.id,
+    type: 'crypto',
+    label: `${hit.name} (${sym})`,
   }
 }
 
-/** Garante um par crypto + fiat; ajusta `rightId` se necessário. */
-export function normalizeCalculatorPair(leftId: string, rightId: string): { leftId: string; rightId: string } {
-  const L = getCalculatorAsset(leftId)
-  const R = getCalculatorAsset(rightId)
-  const def = pickDefaultPair()
-  if (!L || !R) return def
-  if (L.type !== R.type) return { leftId: L.id, rightId: R.id }
-  const opposite =
-    L.type === 'crypto'
-      ? CALCULATOR_ASSETS.find((a) => a.type === 'fiat')
-      : CALCULATOR_ASSETS.find((a) => a.type === 'crypto')
-  return { leftId: L.id, rightId: opposite?.id ?? def.rightId }
+export function buildVsAsset(code: string): CalculatorAsset {
+  const id = code.trim().toLowerCase()
+  const sym = id.toUpperCase()
+  return {
+    id,
+    symbol: sym,
+    name: VS_NAME_HINT[id] ?? sym,
+    type: 'fiat',
+    label: VS_NAME_HINT[id] ? `${sym} — ${VS_NAME_HINT[id]}` : sym,
+  }
 }
 
-export function getCryptoAndFiatFromPair(
-  leftId: string,
-  rightId: string
-): { cryptoId: string; fiatId: string } | null {
-  const L = getCalculatorAsset(leftId)
-  const R = getCalculatorAsset(rightId)
-  if (!L || !R || L.type === R.type) return null
-  const crypto = L.type === 'crypto' ? L : R
-  const fiat = L.type === 'fiat' ? L : R
-  return { cryptoId: crypto.id, fiatId: fiat.id }
+export function findDefaultAssetById(assetId: string): CalculatorAsset | undefined {
+  return DEFAULT_CALCULATOR_ASSETS.find((a) => a.id === assetId)
+}
+
+export function pickDefaultPairAssets(): { left: CalculatorAsset; right: CalculatorAsset } {
+  const firstCrypto = DEFAULT_CALCULATOR_ASSETS.find((a) => a.type === 'crypto')
+  const firstFiat = DEFAULT_CALCULATOR_ASSETS.find((a) => a.type === 'fiat')
+  return {
+    left: firstCrypto ?? DEFAULT_CALCULATOR_ASSETS[0],
+    right: firstFiat ?? DEFAULT_CALCULATOR_ASSETS[4],
+  }
+}
+
+export function normalizeCalculatorAssetPair(
+  left: CalculatorAsset,
+  right: CalculatorAsset
+): { left: CalculatorAsset; right: CalculatorAsset } {
+  const def = pickDefaultPairAssets()
+  if (left.type !== right.type) {
+    return { left, right }
+  }
+  if (left.type === 'crypto') {
+    return { left, right: def.right }
+  }
+  return { left: def.left, right }
+}
+
+export function getCoinAndVsFromAssets(
+  left: CalculatorAsset,
+  right: CalculatorAsset
+): { coinId: string; vsId: string } | null {
+  if (left.type === right.type) return null
+  const coin = left.type === 'crypto' ? left : right
+  const vs = left.type === 'fiat' ? left : right
+  return { coinId: coin.id, vsId: vs.id }
+}
+
+export function isVsSixDecimals(vsId: string): boolean {
+  return VS_IDS_SIX_DECIMALS.has(vsId.toLowerCase())
 }

@@ -3,30 +3,25 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ArrowLeftRight, Calculator, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { CalculatorAssetPicker } from '@/components/calculator/calculator-asset-picker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  CALCULATOR_ASSETS,
-  CALCULATOR_COINGECKO_IDS,
-  getCalculatorAsset,
-  getCryptoAndFiatFromPair,
-  normalizeCalculatorPair,
-  pickDefaultPair,
+  buildCoinAsset,
+  buildVsAsset,
+  findDefaultAssetById,
+  getCoinAndVsFromAssets,
+  isVsSixDecimals,
+  normalizeCalculatorAssetPair,
+  pickDefaultPairAssets,
   type CalculatorAsset,
 } from '@/lib/calculator/assets'
 import { cn } from '@/lib/utils'
 
-const STORAGE_KEY = 'yieldscan-calculator-v2'
+const STORAGE_KEY = 'yieldscan-calculator-v3'
+const STORAGE_KEY_LEGACY = 'yieldscan-calculator-v2'
 
-type PriceMap = Record<string, Record<string, number>>
 type LastEdited = 'left' | 'right'
 
 const ERR_MSG =
@@ -48,6 +43,11 @@ function formatFiat(n: number): string {
   }).format(n)
 }
 
+function formatQuote(n: number, vsId: string): string {
+  if (isVsSixDecimals(vsId)) return formatCrypto(n)
+  return formatFiat(n)
+}
+
 function parseAmount(s: string): number {
   const t = s.replace(',', '.').trim()
   if (!t) return 0
@@ -55,35 +55,53 @@ function parseAmount(s: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function formatAmountForField(n: number, side: 'crypto' | 'fiat'): string {
+function formatAmountForField(n: number, kind: 'coin' | 'quote', vsId: string): string {
   if (!Number.isFinite(n) || n === 0) return ''
-  if (side === 'fiat') return formatFiat(n).replace(/,/g, '')
+  if (kind === 'quote') {
+    const s = formatQuote(n, vsId).replace(/,/g, '')
+    return s
+  }
   const s = n.toFixed(8).replace(/\.?0+$/, '')
   return s || ''
 }
 
-async function fetchPrices(): Promise<PriceMap> {
+function assetsEqual(a: CalculatorAsset, b: CalculatorAsset): boolean {
+  return a.id === b.id && a.type === b.type
+}
+
+function legacyAssetFromId(id: string): CalculatorAsset {
+  const d = findDefaultAssetById(id)
+  if (d) return d
+  const short = ['usd', 'brl', 'eur', 'gbp', 'btc', 'eth', 'sol', 'jpy', 'cad', 'aud', 'chf', 'mxn']
+  if (short.includes(id.toLowerCase())) return buildVsAsset(id)
+  return buildCoinAsset({
+    id,
+    name: id.replace(/-/g, ' '),
+    symbol: id.slice(0, 8).toUpperCase(),
+  })
+}
+
+async function fetchPairRate(coinId: string, vsId: string): Promise<number> {
   const res = await fetch(
-    `/api/coingecko/simple-price?ids=${encodeURIComponent(CALCULATOR_COINGECKO_IDS)}&vs=usd,brl`
+    `/api/coingecko/simple-price?ids=${encodeURIComponent(coinId)}&vs=${encodeURIComponent(vsId)}`
   )
   if (!res.ok) {
     const err = new Error(ERR_MSG)
     ;(err as Error & { status?: number }).status = res.status
     throw err
   }
-  return res.json() as Promise<PriceMap>
-}
-
-function rateFromMap(prices: PriceMap | undefined, cryptoId: string, fiatId: string): number | null {
-  if (!prices?.[cryptoId]) return null
-  const p = prices[cryptoId][fiatId]
-  return typeof p === 'number' && Number.isFinite(p) && p > 0 ? p : null
+  const j = (await res.json()) as Record<string, Record<string, number>>
+  const n = j[coinId]?.[vsId]
+  if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) {
+    throw new Error(ERR_MSG)
+  }
+  return n
 }
 
 export function CryptoCalculator() {
-  const def = pickDefaultPair()
-  const [leftAssetId, setLeftAssetId] = useState(def.leftId)
-  const [rightAssetId, setRightAssetId] = useState(def.rightId)
+  const def = pickDefaultPairAssets()
+  const [leftAsset, setLeftAsset] = useState<CalculatorAsset>(def.left)
+  const [rightAsset, setRightAsset] = useState<CalculatorAsset>(def.right)
   const [leftAmount, setLeftAmount] = useState('1')
   const [rightAmount, setRightAmount] = useState('')
   const [lastEdited, setLastEdited] = useState<LastEdited>('left')
@@ -96,22 +114,24 @@ export function CryptoCalculator() {
   const [changePct, setChangePct] = useState<number | null>(null)
 
   const pair = useMemo(
-    () => normalizeCalculatorPair(leftAssetId, rightAssetId),
-    [leftAssetId, rightAssetId]
+    () => normalizeCalculatorAssetPair(leftAsset, rightAsset),
+    [leftAsset, rightAsset]
   )
-  const leftId = pair.leftId
-  const rightId = pair.rightId
-
-  const leftAsset = getCalculatorAsset(leftId)!
-  const rightAsset = getCalculatorAsset(rightId)!
-  const leftIsCrypto = leftAsset.type === 'crypto'
-
-  const pairKey = useMemo(() => `${leftId}|${rightId}`, [leftId, rightId])
 
   useEffect(() => {
-    if (leftAssetId !== pair.leftId) setLeftAssetId(pair.leftId)
-    if (rightAssetId !== pair.rightId) setRightAssetId(pair.rightId)
-  }, [pair, leftAssetId, rightAssetId])
+    if (!assetsEqual(leftAsset, pair.left)) setLeftAsset(pair.left)
+    if (!assetsEqual(rightAsset, pair.right)) setRightAsset(pair.right)
+  }, [pair, leftAsset, rightAsset])
+
+  const left = pair.left
+  const right = pair.right
+  const leftIsCoin = left.type === 'crypto'
+
+  const coinVs = useMemo(() => getCoinAndVsFromAssets(left, right), [left, right])
+  const pairKey = useMemo(
+    () => (coinVs ? `${coinVs.coinId}|${coinVs.vsId}` : ''),
+    [coinVs]
+  )
 
   useEffect(() => {
     prevRateRef.current = null
@@ -125,10 +145,13 @@ export function CryptoCalculator() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw =
+        localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(STORAGE_KEY_LEGACY)
       if (raw) {
         const j = JSON.parse(raw) as {
           v?: number
+          leftAsset?: CalculatorAsset
+          rightAsset?: CalculatorAsset
           leftAssetId?: string
           rightAssetId?: string
           leftAmount?: string
@@ -139,20 +162,26 @@ export function CryptoCalculator() {
           leftIsCrypto?: boolean
           amount?: string
         }
-        if (j.v === 2) {
-          const n = normalizeCalculatorPair(
-            j.leftAssetId ?? def.leftId,
-            j.rightAssetId ?? def.rightId
-          )
-          setLeftAssetId(n.leftId)
-          setRightAssetId(n.rightId)
+        if (j.v === 3 && j.leftAsset && j.rightAsset) {
+          const L = j.leftAsset
+          const R = j.rightAsset
+          if (L.id && R.id && L.type && R.type) {
+            setLeftAsset(L)
+            setRightAsset(R)
+            if (typeof j.leftAmount === 'string') setLeftAmount(j.leftAmount)
+            if (typeof j.rightAmount === 'string') setRightAmount(j.rightAmount)
+            if (j.lastEdited === 'left' || j.lastEdited === 'right') setLastEdited(j.lastEdited)
+          }
+        } else if (j.leftAssetId && j.rightAssetId) {
+          setLeftAsset(legacyAssetFromId(j.leftAssetId))
+          setRightAsset(legacyAssetFromId(j.rightAssetId))
           if (typeof j.leftAmount === 'string') setLeftAmount(j.leftAmount)
           if (typeof j.rightAmount === 'string') setRightAmount(j.rightAmount)
           if (j.lastEdited === 'left' || j.lastEdited === 'right') setLastEdited(j.lastEdited)
         } else if (j.cryptoId && j.fiatId) {
           const lc = Boolean(j.leftIsCrypto !== false)
-          setLeftAssetId(lc ? j.cryptoId : j.fiatId)
-          setRightAssetId(lc ? j.fiatId : j.cryptoId)
+          setLeftAsset(legacyAssetFromId(lc ? j.cryptoId : j.fiatId))
+          setRightAsset(legacyAssetFromId(lc ? j.fiatId : j.cryptoId))
           if (typeof j.amount === 'string') {
             setLeftAmount(j.amount)
             setLastEdited('left')
@@ -163,19 +192,19 @@ export function CryptoCalculator() {
       /* ignore */
     }
     setHydrated(true)
-  }, [def.leftId, def.rightId])
+  }, [])
 
   useEffect(() => {
     if (!hydrated) return
+    const n = normalizeCalculatorAssetPair(leftAsset, rightAsset)
     const t = window.setTimeout(() => {
       try {
-        const n = normalizeCalculatorPair(leftAssetId, rightAssetId)
         localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
-            v: 2,
-            leftAssetId: n.leftId,
-            rightAssetId: n.rightId,
+            v: 3,
+            leftAsset: n.left,
+            rightAsset: n.right,
             leftAmount,
             rightAmount,
             lastEdited,
@@ -186,10 +215,10 @@ export function CryptoCalculator() {
       }
     }, 300)
     return () => clearTimeout(t)
-  }, [hydrated, leftAssetId, rightAssetId, leftAmount, rightAmount, lastEdited])
+  }, [hydrated, leftAsset, rightAsset, leftAmount, rightAmount, lastEdited])
 
   const {
-    data: prices,
+    data: unitRate,
     isLoading,
     isFetching,
     isError,
@@ -197,8 +226,9 @@ export function CryptoCalculator() {
     refetch,
     dataUpdatedAt,
   } = useQuery({
-    queryKey: ['coingecko-simple-calculator'],
-    queryFn: fetchPrices,
+    queryKey: ['cg-calculator-unit', coinVs?.coinId, coinVs?.vsId],
+    queryFn: () => fetchPairRate(coinVs!.coinId, coinVs!.vsId),
+    enabled: Boolean(coinVs?.coinId && coinVs?.vsId),
     staleTime: 10_000,
     gcTime: 60_000,
     refetchInterval: 10_000,
@@ -212,13 +242,6 @@ export function CryptoCalculator() {
     retryDelay: (attempt) => Math.min(3000 * (attempt + 1), 12_000),
   })
 
-  const cryptoFiat = useMemo(() => getCryptoAndFiatFromPair(leftId, rightId), [leftId, rightId])
-  const unitRate = useMemo(
-    () =>
-      cryptoFiat ? rateFromMap(prices, cryptoFiat.cryptoId, cryptoFiat.fiatId) : null,
-    [prices, cryptoFiat]
-  )
-
   useEffect(() => {
     if (unitRate == null) return
     const prev = prevRateRef.current
@@ -230,63 +253,72 @@ export function CryptoCalculator() {
     prevRateRef.current = unitRate
   }, [unitRate])
 
+  const vsId = coinVs?.vsId ?? ''
+
   useEffect(() => {
-    if (unitRate == null || unitRate <= 0) return
+    if (unitRate == null || unitRate <= 0 || !coinVs) return
 
     if (lastEdited === 'left') {
       const lv = parseAmount(leftAmount)
       let nextRight: number
-      if (leftIsCrypto) nextRight = lv * unitRate
+      if (leftIsCoin) nextRight = lv * unitRate
       else nextRight = lv / unitRate
-      const formatted = formatAmountForField(nextRight, leftIsCrypto ? 'fiat' : 'crypto')
+      const formatted = formatAmountForField(
+        nextRight,
+        leftIsCoin ? 'quote' : 'coin',
+        vsId
+      )
       setRightAmount((prev) => (prev === formatted ? prev : formatted))
     } else {
       const rv = parseAmount(rightAmount)
       let nextLeft: number
-      if (leftIsCrypto) nextLeft = rv / unitRate
+      if (leftIsCoin) nextLeft = rv / unitRate
       else nextLeft = rv * unitRate
-      const formatted = formatAmountForField(nextLeft, leftIsCrypto ? 'crypto' : 'fiat')
+      const formatted = formatAmountForField(
+        nextLeft,
+        leftIsCoin ? 'coin' : 'quote',
+        vsId
+      )
       setLeftAmount((prev) => (prev === formatted ? prev : formatted))
     }
-  }, [lastEdited, leftAmount, rightAmount, unitRate, leftIsCrypto, leftId, rightId])
+  }, [
+    lastEdited,
+    leftAmount,
+    rightAmount,
+    unitRate,
+    leftIsCoin,
+    vsId,
+    coinVs,
+    left.id,
+    right.id,
+  ])
 
   const handleSwap = useCallback(() => {
     setSwapPulse(true)
     window.setTimeout(() => setSwapPulse(false), 320)
-    setLeftAssetId(rightId)
-    setRightAssetId(leftId)
+    setLeftAsset(right)
+    setRightAsset(left)
     setLeftAmount(rightAmount)
     setRightAmount(leftAmount)
     setLastEdited((e) => (e === 'left' ? 'right' : 'left'))
-  }, [leftId, rightId, leftAmount, rightAmount])
+  }, [left, right, leftAmount, rightAmount])
 
   const referenceLine = useMemo(() => {
-    if (!cryptoFiat || unitRate == null) return null
-    const c = getCalculatorAsset(cryptoFiat.cryptoId)
-    const f = getCalculatorAsset(cryptoFiat.fiatId)
-    if (!c || !f) return null
-    const rhs =
-      cryptoFiat.fiatId === 'usd'
-        ? `${f.symbol === 'USD' ? '$' : ''}${formatFiat(unitRate)} USD`
-        : `R$${formatFiat(unitRate)} BRL`
-    return `1 ${c.symbol} = ${rhs}`
-  }, [cryptoFiat, unitRate])
-
-  const rightOptions = useMemo(
-    () => CALCULATOR_ASSETS.filter((a) => a.type !== leftAsset.type),
-    [leftAsset.type]
-  )
-  const leftOptions = useMemo(
-    () => CALCULATOR_ASSETS.filter((a) => a.type !== rightAsset.type),
-    [rightAsset.type]
-  )
+    if (!coinVs || unitRate == null) return null
+    const coin = leftIsCoin ? left : right
+    const vs = leftIsCoin ? right : left
+    const num = formatQuote(unitRate, vs.id)
+    if (vs.id === 'usd') return `1 ${coin.symbol} = $${num} USD`
+    if (vs.id === 'brl') return `1 ${coin.symbol} = R$${num} BRL`
+    return `1 ${coin.symbol} = ${num} ${vs.symbol}`
+  }, [coinVs, unitRate, leftIsCoin, left, right])
 
   const secondsSinceUpdate = useMemo(() => {
     if (dataUpdatedAt <= 0) return null
     return Math.max(0, Math.floor((Date.now() - dataUpdatedAt) / 1000))
   }, [dataUpdatedAt, nowTick])
 
-  const hasStalePrices = Boolean(prices)
+  const hasStalePrices = typeof unitRate === 'number' && unitRate > 0
   const blockingError = isError && !hasStalePrices
   const softError = isError && hasStalePrices
 
@@ -302,6 +334,9 @@ export function CryptoCalculator() {
     </div>
   )
 
+  const leftPickerMode = left.type === 'crypto' ? 'coin' : 'vs'
+  const rightPickerMode = right.type === 'crypto' ? 'coin' : 'vs'
+
   return (
     <div className="flex flex-1 flex-col bg-background">
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -314,7 +349,7 @@ export function CryptoCalculator() {
               Crypto Calculator
             </h1>
             <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-              Convert cryptocurrencies and fiat currencies in real time
+              Search any CoinGecko coin and quote currency — type to find assets
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {isFetching && hasStalePrices && (
@@ -363,7 +398,7 @@ export function CryptoCalculator() {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Converter</CardTitle>
             <CardDescription>
-              CoinGecko prices · auto-refresh every 10s (cached 10s stale / 1m retention)
+              CoinGecko live prices · search coins (2+ letters) or filter quote currencies
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pt-2">
@@ -404,7 +439,7 @@ export function CryptoCalculator() {
               >
                 <div className="min-w-0 flex-1 space-y-2">
                   <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {leftAsset.type === 'crypto' ? 'Crypto' : 'Fiat'}
+                    {left.type === 'crypto' ? 'Crypto' : 'Quote'}
                   </label>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     {inputWrap(
@@ -425,7 +460,12 @@ export function CryptoCalculator() {
                         autoComplete="off"
                       />
                     )}
-                    <AssetSelect value={leftId} options={leftOptions} onChange={setLeftAssetId} />
+                    <CalculatorAssetPicker
+                      mode={leftPickerMode}
+                      value={left}
+                      onChange={setLeftAsset}
+                      disabled={!hasStalePrices && isLoading}
+                    />
                   </div>
                 </div>
 
@@ -445,7 +485,7 @@ export function CryptoCalculator() {
 
                 <div className="min-w-0 flex-1 space-y-2">
                   <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {rightAsset.type === 'crypto' ? 'Crypto' : 'Fiat'}
+                    {right.type === 'crypto' ? 'Crypto' : 'Quote'}
                   </label>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     {inputWrap(
@@ -466,7 +506,12 @@ export function CryptoCalculator() {
                         autoComplete="off"
                       />
                     )}
-                    <AssetSelect value={rightId} options={rightOptions} onChange={setRightAssetId} />
+                    <CalculatorAssetPicker
+                      mode={rightPickerMode}
+                      value={right}
+                      onChange={setRightAsset}
+                      disabled={!hasStalePrices && isLoading}
+                    />
                   </div>
                 </div>
               </div>
@@ -481,30 +526,5 @@ export function CryptoCalculator() {
         </Card>
       </main>
     </div>
-  )
-}
-
-function AssetSelect({
-  value,
-  options,
-  onChange,
-}: {
-  value: string
-  options: CalculatorAsset[]
-  onChange: (id: string) => void
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-full border-border bg-secondary font-medium sm:w-[200px]">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((a) => (
-          <SelectItem key={a.id} value={a.id}>
-            {a.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   )
 }
