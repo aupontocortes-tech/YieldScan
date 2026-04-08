@@ -10,6 +10,7 @@ import { useNewsTtsHeard } from '@/hooks/use-news-tts-heard'
 import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
+import { formatRelativeNewsTime, getNewsAgeHours, getNewsAgeMinutes } from '@/lib/news-time'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { cn } from '@/lib/utils'
@@ -53,26 +54,16 @@ function isFiltroGuard(v: unknown): v is Filtro {
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
-function formatarData(pub: string | null): string {
-  if (!pub) return ''
-  try {
-    const d = new Date(pub.replace(' ', 'T'))
-    const diff = Date.now() - d.getTime()
-    const min = Math.floor(diff / 60_000)
-    const h = Math.floor(diff / 3_600_000)
-    const dias = Math.floor(diff / 86_400_000)
-    if (min < 1) return 'agora'
-    if (min < 60) return `há ${min} min`
-    if (h < 24) return `há ${h}h`
-    if (dias < 7) return `há ${dias}d`
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-  } catch {
-    return ''
-  }
-}
-
 function categoriaDoItem(item: ItemFeedNoticia): InsightNoticia['categoria'] {
   return item.dados.categoria
+}
+
+function recencyLabel(pub: string | null, nowMs: number): 'AGORA' | 'RECENTE' | '' {
+  if (!pub) return ''
+  const ageMin = getNewsAgeMinutes(pub, nowMs)
+  if (ageMin < 15) return 'AGORA'
+  if (ageMin < 60) return 'RECENTE'
+  return ''
 }
 
 /* ── Design maps ─────────────────────────────────────────────────────────── */
@@ -122,10 +113,12 @@ function NewsCard({
   n,
   speechId,
   autoTts,
+  nowMs,
 }: {
   n: NoticiaProcessada
   speechId: string
   autoTts?: boolean
+  nowMs: number
 }) {
   const ttsHeard = useNewsTtsHeard(speechId)
   const { seen, markSeenOnce, cardRef } = useNewsSeen(speechId)
@@ -158,7 +151,11 @@ function NewsCard({
     <div className="mt-auto flex items-center justify-between border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
       <span className="min-w-0 truncate">
         {n.fonte}
-        {n.dataPublicacao ? ` · ${formatarData(n.dataPublicacao)}` : ''}
+        {n.dataPublicacao ? ` · ${formatRelativeNewsTime(n.dataPublicacao, nowMs)}` : ''}
+        {n.dataPublicacao ? (() => {
+          const label = recencyLabel(n.dataPublicacao, nowMs)
+          return label ? ` · ${label}` : ''
+        })() : ''}
       </span>
       {hasLink && (
         <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-40 group-hover:opacity-100" />
@@ -260,6 +257,7 @@ function NewsCard({
 export function DashbuddyNews() {
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [filtroHydrated, setFiltroHydrated] = useState(false)
+  const [nowMs, setNowMs] = useState(() => Date.now())
 
   useEffect(() => {
     void openYieldscanSqlite().then(() => {
@@ -273,6 +271,11 @@ export function DashbuddyNews() {
     if (!filtroHydrated) return
     kvSetJson(NEWS_FILTRO_KV, filtro)
   }, [filtro, filtroHydrated])
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['dashbuddy-news'],
@@ -298,12 +301,42 @@ export function DashbuddyNews() {
     )
   const apiErro = isError && !isConfigError ? (error?.message ?? 'Erro ao carregar notícias.') : null
 
+  const feedComTempo = useMemo(
+    () => {
+      const base = feed
+        .map((item) => ({
+          item,
+          ageHours: getNewsAgeHours(item.dados.dataPublicacao, nowMs),
+        }))
+        .filter(({ ageHours }) => ageHours <= 24)
+
+      const hasUnder2h = base.some(({ ageHours }) => ageHours < 2)
+      const preferredTop = hasUnder2h ? base.filter(({ ageHours }) => ageHours < 6) : base
+      const topFive = preferredTop.slice(0, 5)
+      const topIds = new Set(topFive.map(({ item }) => item.id))
+      const rest = base.filter(({ item }) => !topIds.has(item.id))
+
+      return [...topFive, ...rest].map(({ item }) => item)
+    },
+    [feed, nowMs]
+  )
+
+  useEffect(() => {
+    if (feedComTempo.length === 0) return
+    const allOlderThan6h = feedComTempo.every(
+      (item) => getNewsAgeHours(item.dados.dataPublicacao, nowMs) > 6
+    )
+    if (allOlderThan6h) {
+      console.warn('[news] Todas as notícias visíveis estão acima de 6h; possível atraso na API.')
+    }
+  }, [feedComTempo, nowMs])
+
   const feedFiltrado = useMemo(() => {
-    if (filtro === 'todos') return feed
-    return feed
+    if (filtro === 'todos') return feedComTempo
+    return feedComTempo
       .filter((item) => categoriaDoItem(item) === filtro)
       .slice(0, LIMITE_NOTICIAS_POR_ABA_CATEGORIA)
-  }, [feed, filtro])
+  }, [feedComTempo, filtro])
 
   /** Uma notícia “breaking” (score ≥ 8): TTS automático se ainda não ouvida; só a primeira do filtro atual. */
   const autoTtsSpeechId = useMemo(() => {
@@ -343,7 +376,9 @@ export function DashbuddyNews() {
         <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
           {FILTROS.map((f) => {
             const count =
-              f.value === 'todos' ? feed.length : feed.filter((it) => categoriaDoItem(it) === f.value).length
+              f.value === 'todos'
+                ? feedComTempo.length
+                : feedComTempo.filter((it) => categoriaDoItem(it) === f.value).length
             return (
               <button
                 key={f.value}
@@ -432,6 +467,7 @@ export function DashbuddyNews() {
               speechId={item.id}
               n={item.dados}
               autoTts={item.id === autoTtsSpeechId}
+              nowMs={nowMs}
             />
           ))}
         </div>

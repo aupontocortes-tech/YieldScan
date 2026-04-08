@@ -12,6 +12,7 @@ import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
 import { fetchGnewsAsArticles } from '@/lib/gnews'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { textoIndicaFocoInteligenciaArtificial } from '@/lib/news-ia-strict'
+import { normalizeNewsPublishedAt, parseNewsPublishedAt } from '@/lib/news-time'
 import {
   fetchCryptopanicAsNewsDataArticles,
   mergeArticlesDedupe,
@@ -182,13 +183,13 @@ function pontuarPalavrasChaveNoticia(full: string): number {
 /** +2 se publicada há menos de 1 h; +1 se menos de 3 h. */
 function boostRecencia(pubDate: string | null | undefined): number {
   if (!pubDate) return 0
-  const t = new Date(pubDate.replace(' ', 'T')).getTime()
+  const t = parseNewsPublishedAt(pubDate)
   if (!Number.isFinite(t)) return 0
   const ageMs = Date.now() - t
   const h = ageMs / 3_600_000
-  if (h < 0) return 2
-  if (h < 1) return 2
-  if (h < 3) return 1
+  // Boost agressivo para sensação de tempo real no ranking.
+  if (h < 0) return 5
+  if (h < 2) return 5
   return 0
 }
 
@@ -694,7 +695,7 @@ export function processarNoticia(
     confianca,
     link: link || '#',
     fonte,
-    dataPublicacao: article.pubDate ?? null,
+    dataPublicacao: normalizeNewsPublishedAt(article.pubDate),
     articleId: article.article_id ?? null,
     imagemUrl:
       escolherImagemNoticia(article) ?? fallbackImagemPorCategoria(categoria),
@@ -737,7 +738,7 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     const scoreFinal = keywordScore + recencyBoost
     const isBreaking = keywordScore >= SCORE_MIN_BREAKING
 
-    const rawTs = a.pubDate ? new Date(a.pubDate.replace(' ', 'T')).getTime() : 0
+    const rawTs = parseNewsPublishedAt(a.pubDate, 0)
     rows.push({
       article: a,
       keywordScore,
