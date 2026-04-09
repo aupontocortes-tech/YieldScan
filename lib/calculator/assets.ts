@@ -10,6 +10,7 @@ export type CalculatorAsset = {
   name: string
   type: CalculatorAssetType
   label: string
+  image?: string
 }
 
 /** Moedas padrão (par inicial e fallback de normalização). */
@@ -20,6 +21,7 @@ export const DEFAULT_CALCULATOR_ASSETS: CalculatorAsset[] = [
     name: 'Bitcoin',
     type: 'crypto',
     label: 'Bitcoin (BTC)',
+    image: 'https://assets.coingecko.com/coins/images/1/thumb/bitcoin.png',
   },
   {
     id: 'ethereum',
@@ -27,6 +29,7 @@ export const DEFAULT_CALCULATOR_ASSETS: CalculatorAsset[] = [
     name: 'Ethereum',
     type: 'crypto',
     label: 'Ethereum (ETH)',
+    image: 'https://assets.coingecko.com/coins/images/279/thumb/ethereum.png',
   },
   {
     id: 'solana',
@@ -34,6 +37,7 @@ export const DEFAULT_CALCULATOR_ASSETS: CalculatorAsset[] = [
     name: 'Solana',
     type: 'crypto',
     label: 'Solana (SOL)',
+    image: 'https://assets.coingecko.com/coins/images/4128/thumb/solana.png',
   },
   {
     id: 'tether',
@@ -41,6 +45,7 @@ export const DEFAULT_CALCULATOR_ASSETS: CalculatorAsset[] = [
     name: 'Tether',
     type: 'crypto',
     label: 'Tether (USDT)',
+    image: 'https://assets.coingecko.com/coins/images/325/thumb/Tether.png',
   },
   {
     id: 'usd',
@@ -98,7 +103,12 @@ const VS_NAME_HINT: Record<string, string> = {
   xau: 'Gold',
 }
 
-export function buildCoinAsset(hit: { id: string; name: string; symbol: string }): CalculatorAsset {
+export function buildCoinAsset(hit: {
+  id: string
+  name: string
+  symbol: string
+  image?: string
+}): CalculatorAsset {
   const sym = String(hit.symbol || '').toUpperCase() || hit.id
   return {
     id: hit.id,
@@ -106,6 +116,7 @@ export function buildCoinAsset(hit: { id: string; name: string; symbol: string }
     name: hit.name || hit.id,
     type: 'crypto',
     label: `${hit.name} (${sym})`,
+    image: hit.image,
   }
 }
 

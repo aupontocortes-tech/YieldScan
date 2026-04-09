@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export type CoinSearchHit = { id: string; name: string; symbol: string }
+export type CoinSearchHit = { id: string; name: string; symbol: string; image?: string }
 
 /**
  * Proxy para CoinGecko /search — autocomplete de moedas.
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       )
     }
     const data = (await res.json()) as {
-      coins?: Array<{ id?: string; name?: string; symbol?: string }>
+      coins?: Array<{ id?: string; name?: string; symbol?: string; thumb?: string; large?: string }>
     }
     const raw = Array.isArray(data.coins) ? data.coins : []
     const coins: CoinSearchHit[] = raw
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         id: String(c.id ?? '').trim(),
         name: String(c.name ?? '').trim(),
         symbol: String(c.symbol ?? '').trim(),
+        image: c.thumb ?? c.large ?? undefined,
       }))
       .filter((c) => c.id && c.name)
     return NextResponse.json({ coins })

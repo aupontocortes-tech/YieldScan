@@ -1,11 +1,10 @@
 'use client'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Calculator, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ArrowUpDown, Calculator, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalculatorAssetPicker } from '@/components/calculator/calculator-asset-picker'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   buildCoinAsset,
@@ -97,6 +96,113 @@ async function fetchPairRate(coinId: string, vsId: string): Promise<number> {
   }
   return n
 }
+
+/* ─── sub-components (must live outside CryptoCalculator to avoid remount) ─── */
+
+function AssetLogo({ asset }: { asset: CalculatorAsset }) {
+  if (asset.image) {
+    return (
+      <img
+        src={asset.image}
+        alt={asset.symbol}
+        className="size-8 shrink-0 rounded-full object-cover"
+        onError={(e) => {
+          const el = e.currentTarget as HTMLImageElement
+          el.style.display = 'none'
+          const fb = el.nextElementSibling as HTMLElement | null
+          if (fb) fb.style.display = 'flex'
+        }}
+      />
+    )
+  }
+  return (
+    <div className="size-8 shrink-0 rounded-full bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-300">
+      {asset.symbol.slice(0, 2)}
+    </div>
+  )
+}
+
+type InputCardProps = {
+  side: LastEdited
+  asset: CalculatorAsset
+  amount: string
+  focused: boolean
+  swapPulse: boolean
+  disabled: boolean
+  pickerMode: 'coin' | 'vs'
+  autoFocus?: boolean
+  onAmountChange: (v: string) => void
+  onFocus: () => void
+  onBlur: () => void
+  onLastEdited: (side: LastEdited) => void
+  onAssetChange: (a: CalculatorAsset) => void
+}
+
+function InputCard({
+  side,
+  asset,
+  amount,
+  focused,
+  swapPulse,
+  disabled,
+  pickerMode,
+  autoFocus,
+  onAmountChange,
+  onFocus,
+  onBlur,
+  onLastEdited,
+  onAssetChange,
+}: InputCardProps) {
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border bg-zinc-900 p-5 transition-all duration-200',
+        focused ? 'border-primary/60 shadow-sm shadow-primary/10' : 'border-zinc-800',
+        swapPulse && 'opacity-90'
+      )}
+    >
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+        {asset.type === 'crypto' ? 'Crypto' : 'Quote'}
+      </p>
+      <div className="flex items-center gap-3">
+        <AssetLogo asset={asset} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Input
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={amount}
+            onChange={(e) => {
+              onAmountChange(e.target.value)
+              onLastEdited(side)
+            }}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            autoComplete="off"
+            className={cn(
+              'h-14 border-0 bg-transparent p-0 text-2xl font-semibold tabular-nums text-foreground',
+              'placeholder:text-zinc-600 focus-visible:ring-0 focus-visible:ring-offset-0'
+            )}
+          />
+          <span className="text-sm text-zinc-500">{asset.name}</span>
+        </div>
+      </div>
+      <div className="mt-4 border-t border-zinc-800 pt-4">
+        <CalculatorAssetPicker
+          mode={pickerMode}
+          value={asset}
+          onChange={onAssetChange}
+          disabled={disabled}
+          className="w-full"
+        />
+      </div>
+    </div>
+  )
+}
+
+/* ─── main component ─── */
 
 export function CryptoCalculator() {
   const def = pickDefaultPairAssets()
@@ -222,7 +328,6 @@ export function CryptoCalculator() {
     isLoading,
     isFetching,
     isError,
-    error,
     refetch,
     dataUpdatedAt,
   } = useQuery({
@@ -322,208 +427,146 @@ export function CryptoCalculator() {
   const blockingError = isError && !hasStalePrices
   const softError = isError && hasStalePrices
 
-  const inputWrap = (side: LastEdited, children: ReactNode) => (
-    <div
-      className={cn(
-        'rounded-lg transition-[box-shadow,background-color] duration-200 ease-out',
-        focusedField === side && 'ring-2 ring-primary/55 ring-offset-2 ring-offset-background',
-        swapPulse && 'scale-[0.99] opacity-95 sm:scale-100'
-      )}
-    >
-      {children}
-    </div>
-  )
-
-  const leftPickerMode = left.type === 'crypto' ? 'coin' : 'vs'
-  const rightPickerMode = right.type === 'crypto' ? 'coin' : 'vs'
+  const inputDisabled = !hasStalePrices && isLoading
 
   return (
     <div className="flex flex-1 flex-col bg-background">
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <div className="mb-8 flex items-start gap-3">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-6 sm:py-10">
+        {/* Header */}
+        <div className="mb-8 flex items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/35 bg-primary/10 text-primary">
             <Calculator className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
               Crypto Calculator
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-              Search any CoinGecko coin and quote currency — type to find assets
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div
+              className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500"
+              aria-live="polite"
+            >
+              {isLoading && !hasStalePrices && (
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 className="size-3 animate-spin" />
+                  Loading…
+                </span>
+              )}
               {isFetching && hasStalePrices && (
-                <span className="inline-flex items-center gap-1 font-medium text-primary">
-                  <Loader2 className="size-3.5 animate-spin" />
+                <span className="inline-flex items-center gap-1 text-primary">
+                  <Loader2 className="size-3 animate-spin" />
                   Updating…
                 </span>
               )}
               {secondsSinceUpdate != null && hasStalePrices && (
-                <span className="tabular-nums" suppressHydrationWarning>
-                  Last updated {secondsSinceUpdate}s ago
+                <span suppressHydrationWarning>Last updated {secondsSinceUpdate}s ago</span>
+              )}
+              {changePct != null && Number.isFinite(changePct) && unitRate != null && (
+                <span
+                  className={cn(
+                    'font-medium tabular-nums',
+                    changePct >= 0 ? 'text-emerald-400' : 'text-red-400'
+                  )}
+                >
+                  {changePct >= 0 ? '+' : ''}
+                  {changePct.toFixed(2)}%
                 </span>
               )}
             </div>
-            {changePct != null && Number.isFinite(changePct) && unitRate != null && (
-              <p
-                className={cn(
-                  'mt-2 text-xs font-medium tabular-nums',
-                  changePct >= 0 ? 'text-emerald-400' : 'text-red-400'
-                )}
-              >
-                Price vs. previous tick: {changePct >= 0 ? '+' : ''}
-                {changePct.toFixed(2)}%
-              </p>
-            )}
           </div>
         </div>
 
-        <Card
-          className={cn(
-            'relative border-border/80 bg-card/50 transition-shadow duration-300 ease-out',
-            swapPulse && 'shadow-md shadow-primary/10'
-          )}
-        >
-          <div
-            className="pointer-events-none absolute right-4 top-4 flex items-center gap-1.5 text-xs text-muted-foreground"
-            aria-live="polite"
-          >
-            {isLoading && !hasStalePrices && (
-              <>
-                <Loader2 className="size-3.5 animate-spin" />
-                Loading…
-              </>
-            )}
+        {/* Blocking error */}
+        {blockingError && (
+          <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-foreground">
+            <p>{ERR_MSG}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 border-primary/50 bg-primary/10 text-primary hover:bg-primary/20"
+              onClick={() => void refetch()}
+            >
+              Try again
+            </Button>
           </div>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Converter</CardTitle>
-            <CardDescription>
-              CoinGecko live prices · search coins (2+ letters) or filter quote currencies
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-2">
-            {blockingError && (
-              <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
-                <p>{ERR_MSG}</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 border-primary/50 bg-primary/10 text-primary hover:bg-primary/20"
-                  onClick={() => void refetch()}
-                >
-                  Try again
-                </Button>
-              </div>
-            )}
+        )}
 
-            {softError && (
-              <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
-                {ERR_MSG}{' '}
-                <button
-                  type="button"
-                  className="font-semibold text-primary underline-offset-2 hover:underline"
-                  onClick={() => void refetch()}
-                >
-                  Try again
-                </button>
-              </div>
-            )}
+        {/* Soft error */}
+        {softError && (
+          <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200/80">
+            {ERR_MSG}{' '}
+            <button
+              type="button"
+              className="font-semibold text-primary underline-offset-2 hover:underline"
+              onClick={() => void refetch()}
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
-            {!blockingError && (
-              <div
+        {!blockingError && (
+          <div className="flex flex-col gap-3">
+            <InputCard
+              side="left"
+              asset={left}
+              amount={leftAmount}
+              focused={focusedField === 'left'}
+              swapPulse={swapPulse}
+              disabled={inputDisabled}
+              pickerMode={left.type === 'crypto' ? 'coin' : 'vs'}
+              autoFocus
+              onAmountChange={setLeftAmount}
+              onFocus={() => setFocusedField('left')}
+              onBlur={() => setFocusedField(null)}
+              onLastEdited={setLastEdited}
+              onAssetChange={setLeftAsset}
+            />
+
+            {/* Swap button */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleSwap}
+                title="Swap currencies"
+                aria-label="Swap from and to"
                 className={cn(
-                  'flex flex-col items-stretch gap-4 transition-opacity duration-200 lg:flex-row lg:items-end lg:justify-between',
-                  swapPulse && 'opacity-90'
+                  'flex size-11 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800',
+                  'text-zinc-400 transition-all duration-200 hover:scale-105 hover:border-primary/50 hover:bg-zinc-700 hover:text-primary',
+                  'active:scale-95',
+                  swapPulse && 'rotate-180'
                 )}
               >
-                <div className="min-w-0 flex-1 space-y-2">
-                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {left.type === 'crypto' ? 'Crypto' : 'Quote'}
-                  </label>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    {inputWrap(
-                      'left',
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="Enter amount"
-                        value={leftAmount}
-                        onChange={(e) => {
-                          setLeftAmount(e.target.value)
-                          setLastEdited('left')
-                        }}
-                        onFocus={() => setFocusedField('left')}
-                        onBlur={() => setFocusedField(null)}
-                        disabled={!hasStalePrices && isLoading}
-                        className="min-h-11 border-border bg-secondary font-mono text-base tabular-nums sm:max-w-[200px]"
-                        autoComplete="off"
-                      />
-                    )}
-                    <CalculatorAssetPicker
-                      mode={leftPickerMode}
-                      value={left}
-                      onChange={setLeftAsset}
-                      disabled={!hasStalePrices && isLoading}
-                    />
-                  </div>
-                </div>
+                <ArrowUpDown className="size-5" />
+              </button>
+            </div>
 
-                <div className="flex justify-center lg:px-2">
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    onClick={handleSwap}
-                    className="size-11 shrink-0 rounded-full border-primary/50 bg-primary text-primary-foreground shadow-sm transition-transform duration-200 hover:bg-primary/90 active:scale-95"
-                    title="Swap currencies"
-                    aria-label="Swap from and to"
-                  >
-                    <ArrowLeftRight className="size-5" />
-                  </Button>
-                </div>
+            <InputCard
+              side="right"
+              asset={right}
+              amount={rightAmount}
+              focused={focusedField === 'right'}
+              swapPulse={swapPulse}
+              disabled={inputDisabled}
+              pickerMode={right.type === 'crypto' ? 'coin' : 'vs'}
+              onAmountChange={setRightAmount}
+              onFocus={() => setFocusedField('right')}
+              onBlur={() => setFocusedField(null)}
+              onLastEdited={setLastEdited}
+              onAssetChange={setRightAsset}
+            />
 
-                <div className="min-w-0 flex-1 space-y-2">
-                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {right.type === 'crypto' ? 'Crypto' : 'Quote'}
-                  </label>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    {inputWrap(
-                      'right',
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="Enter amount"
-                        value={rightAmount}
-                        onChange={(e) => {
-                          setRightAmount(e.target.value)
-                          setLastEdited('right')
-                        }}
-                        onFocus={() => setFocusedField('right')}
-                        onBlur={() => setFocusedField(null)}
-                        disabled={!hasStalePrices && isLoading}
-                        className="min-h-11 border-border bg-secondary font-mono text-base tabular-nums sm:max-w-[200px]"
-                        autoComplete="off"
-                      />
-                    )}
-                    <CalculatorAssetPicker
-                      mode={rightPickerMode}
-                      value={right}
-                      onChange={setRightAsset}
-                      disabled={!hasStalePrices && isLoading}
-                    />
-                  </div>
-                </div>
+            {/* Result card */}
+            {referenceLine && hasStalePrices && (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 text-center">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                  Rate
+                </p>
+                <p className="text-xl font-semibold text-foreground">{referenceLine}</p>
               </div>
             )}
-
-            {referenceLine && hasStalePrices && !blockingError && (
-              <p className="border-t border-border/60 pt-4 text-center text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{referenceLine}</span>
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
       </main>
     </div>
   )

@@ -51,7 +51,7 @@ async function fetchCoinSearch(q: string): Promise<CalculatorAsset[]> {
   const res = await fetch(`/api/coingecko/search?q=${encodeURIComponent(q)}`)
   if (!res.ok) throw new Error('search')
   const j = (await res.json()) as {
-    coins?: Array<{ id: string; name: string; symbol: string }>
+    coins?: Array<{ id: string; name: string; symbol: string; image?: string }>
   }
   const coins = Array.isArray(j.coins) ? j.coins : []
   return coins.map((c) => buildCoinAsset(c))
@@ -131,12 +131,23 @@ export function CalculatorAssetPicker({ mode, value, onChange, disabled, classNa
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            'h-11 w-full justify-between border-border bg-secondary font-medium sm:w-[260px]',
+            'h-11 w-full justify-between border-zinc-700 bg-zinc-800 font-medium hover:bg-zinc-700',
             className
           )}
         >
           <span className="flex min-w-0 items-center gap-2">
-            <Coins className="size-4 shrink-0 opacity-70" />
+            {value.image ? (
+              <img
+                src={value.image}
+                alt={value.symbol}
+                className="size-5 shrink-0 rounded-full object-cover"
+                onError={(e) => {
+                  ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                }}
+              />
+            ) : (
+              <Coins className="size-4 shrink-0 opacity-70" />
+            )}
             <span className="truncate text-left">{value.label}</span>
           </span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
@@ -178,6 +189,18 @@ export function CalculatorAssetPicker({ mode, value, onChange, disabled, classNa
                           value.id === a.id && value.type === 'crypto' ? 'opacity-100' : 'opacity-0'
                         )}
                       />
+                      {a.image ? (
+                        <img
+                          src={a.image}
+                          alt={a.symbol}
+                          className="size-5 shrink-0 rounded-full object-cover"
+                          onError={(e) => {
+                            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                          }}
+                        />
+                      ) : (
+                        <Coins className="size-4 shrink-0 opacity-50" />
+                      )}
                       <span className="min-w-0 truncate">{a.label}</span>
                     </CommandItem>
                   ))}
