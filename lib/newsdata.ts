@@ -751,8 +751,9 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
 
   rows.sort((a, b) => {
     if (a.isBreaking !== b.isBreaking) return a.isBreaking ? -1 : 1
-    if (b.scoreFinal !== a.scoreFinal) return b.scoreFinal - a.scoreFinal
-    return b.ts - a.ts
+    /** Prioridade à data de publicação: o sort só por score fazia subir notícias antigas (ex. «há 12 h» no topo). */
+    if (b.ts !== a.ts) return b.ts - a.ts
+    return b.scoreFinal - a.scoreFinal
   })
 
   const todas: NoticiaProcessada[] = []

@@ -66,7 +66,9 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
   const url = new URL(GNEWS_SEARCH)
   url.searchParams.set('q', q)
   url.searchParams.set('lang', 'pt')
-  url.searchParams.set('max', '15')
+  /** Mais recentes primeiro (default da API é relevance → artigos velhos populares no topo). */
+  url.searchParams.set('sortby', 'publishedAt')
+  url.searchParams.set('max', '20')
   url.searchParams.set('token', token)
 
   try {
