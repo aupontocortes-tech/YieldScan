@@ -14,7 +14,7 @@ export type SmartFilterFlags = {
 /** Score para “Melhores oportunidades” e ordenação inteligente (maior = melhor). */
 export function poolSmartScore(pool: Pool, period: PoolAprPeriod, flags: SmartFilterFlags): number {
   const apr = poolDisplayApr(pool, period)
-  const cappedApr = Math.min(Math.max(apr, 0), 500)
+  const cappedApr = Number.isFinite(apr) ? Math.min(Math.max(apr, 0), 500) : 0
   const tvl = pool.tvlUsd ?? 0
   const vol = pool.volumeUsd1d ?? 0
   const logTvl = Math.log10(tvl + 1)
@@ -24,7 +24,7 @@ export function poolSmartScore(pool: Pool, period: PoolAprPeriod, flags: SmartFi
   if (flags.highApr) s += cappedApr * 1.2
   if (flags.highTvl) s += logTvl * 42
   if (flags.lowRisk) {
-    const risk = computePoolRiskLevel(pool, apr)
+    const risk = computePoolRiskLevel(pool, Number.isFinite(apr) ? apr : 0)
     if (risk === 'low') s += 95
     else if (risk === 'medium') s += 40
     if (SAFE_CHAINS.has(canonicalLlamaChain(pool.chain))) s += 22
@@ -103,7 +103,8 @@ export function aggregateProtocols(
     }
     prev.totalTvl += pool.tvlUsd ?? 0
     prev.totalVol += pool.volumeUsd1d ?? 0
-    prev.aprSum += options.aprOf(pool)
+    const ap = options.aprOf(pool)
+    if (Number.isFinite(ap)) prev.aprSum += ap
     prev.count += 1
     map.set(key, prev)
   }

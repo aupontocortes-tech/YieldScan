@@ -124,7 +124,7 @@ export function inferPoolTypes(pool: Pool): PoolTypeFilter[] {
  * continua baseado nos dados DefiLlama já carregados.
  */
 export function passesSafeAprProfile(pool: Pool, displayApr: number): boolean {
-  if (displayApr <= 0 || !Number.isFinite(displayApr)) return false
+  if (!Number.isFinite(displayApr) || displayApr <= 0) return false
   if (getChainCategory(pool.chain) !== 'safe') return false
   if (pool.tvlUsd < 100_000) return false
   const vol = pool.volumeUsd1d ?? 0
@@ -135,6 +135,7 @@ export function passesSafeAprProfile(pool: Pool, displayApr: number): boolean {
 }
 
 export function computePoolRiskLevel(pool: Pool, displayApr: number): 'low' | 'medium' | 'high' {
+  if (!Number.isFinite(displayApr)) return 'high'
   const cat = getChainCategory(pool.chain)
   if (pool.stablecoin && cat === 'safe' && displayApr <= 25 && pool.ilRisk === 'no') return 'low'
   if (displayApr >= 100 || cat === 'opportunity') return 'high'
@@ -160,11 +161,11 @@ export function aprPresetBounds(preset: AprPreset): { min: number; max: number }
 }
 
 export function shouldFlashHighApr(displayApr: number): boolean {
-  return displayApr >= 50
+  return Number.isFinite(displayApr) && displayApr >= 50
 }
 
 export function shouldExtremeAprWarning(displayApr: number): boolean {
-  return displayApr >= 100
+  return Number.isFinite(displayApr) && displayApr >= 100
 }
 
 export function passesChainCategory(pool: Pool, category: ChainCategoryFilter): boolean {

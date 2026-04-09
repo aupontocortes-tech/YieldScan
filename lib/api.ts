@@ -18,6 +18,7 @@ import {
   passesSafeAprProfile,
 } from './pool-classification'
 import { canonicalLlamaChain, normalizePoolChains } from './llama-chain'
+import { poolDisplayApr as poolDisplayAprFromLogic } from './pool-apr'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
 const DEFILLAMA_API = 'https://api.llama.fi'
@@ -280,6 +281,7 @@ export function formatNumber(value: number, decimals = 2): string {
 
 /** Cor da taxa exibida (valor vem como `apy` na API DefiLlama; UI mostra como APR de pool.) */
 export function getAprColorClass(rate: number): string {
+  if (!Number.isFinite(rate)) return 'text-muted-foreground'
   if (rate >= 100) return 'text-destructive'
   if (rate >= 50) return 'text-gold'
   if (rate >= 20) return 'text-[#fcd34d]'
@@ -321,22 +323,9 @@ export function getChainConfig(chainId: string) {
   return SUPPORTED_CHAINS.find(c => c.id === chainId)
 }
 
-/** APR mostrado na tabela conforme o separador (campos DefiLlama). */
+/** APR mostrado na tabela conforme o período (Llama + fallback taxas/TVL). */
 export function poolDisplayApr(pool: Pool, period: PoolAprPeriod): number {
-  switch (period) {
-    case 'current':
-    case '5m':
-    case '10m':
-    case '1h':
-    case '1d':
-      return pool.apy
-    case '7d':
-      return pool.apyBase7d ?? pool.apy
-    case '30d':
-      return pool.apyMean30d ?? pool.apy
-    default:
-      return pool.apy
-  }
+  return poolDisplayAprFromLogic(pool, period)
 }
 
 export function poolHasAprDataForPeriod(pool: Pool, period: PoolAprPeriod): boolean {
@@ -368,10 +357,16 @@ export function sortPools(
     let valueB: number
     
     switch (sortBy) {
-      case 'apr':
+      case 'apr': {
         valueA = poolDisplayApr(a, period)
         valueB = poolDisplayApr(b, period)
+        const fa = Number.isFinite(valueA)
+        const fb = Number.isFinite(valueB)
+        if (!fa && !fb) return 0
+        if (!fa) return direction === 'desc' ? 1 : -1
+        if (!fb) return direction === 'desc' ? -1 : 1
         break
+      }
       case 'apy1d':
         valueA = a.apyPct1D ?? 0
         valueB = b.apyPct1D ?? 0
@@ -396,11 +391,18 @@ export function sortPools(
         valueA = a.apyPct7D ?? 0
         valueB = b.apyPct7D ?? 0
         break
-      default:
+      default: {
         valueA = poolDisplayApr(a, period)
         valueB = poolDisplayApr(b, period)
+        const fa = Number.isFinite(valueA)
+        const fb = Number.isFinite(valueB)
+        if (!fa && !fb) return 0
+        if (!fa) return direction === 'desc' ? 1 : -1
+        if (!fb) return direction === 'desc' ? -1 : 1
+        break
+      }
     }
-    
+
     return direction === 'desc' ? valueB - valueA : valueA - valueB
   })
 }
@@ -465,6 +467,7 @@ export function filterPools(
     if (filters.primaryDexOnly && !isPrimaryDexProject(pool.project)) return false
 
     const displayApr = poolDisplayApr(pool, period)
+    if (!Number.isFinite(displayApr)) return false
     const presetBounds = aprPresetBounds(filters.aprPreset)
     const aprLo = presetBounds?.min ?? filters.aprMin
     const aprHi = presetBounds?.max ?? filters.aprMax
