@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 
 const IDS_DEFAULT = 'bitcoin,ethereum,solana,tether'
 const VS_DEFAULT = 'usd,brl'
@@ -13,11 +14,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'ids e vs obrigatórios' }, { status: 400 })
   }
 
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=${encodeURIComponent(vs)}`
+  const { base, headers } = getCoingeckoRequestParts()
+  const url = `${base}/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=${encodeURIComponent(vs)}`
 
   try {
     const res = await fetch(url, {
-      headers: { Accept: 'application/json' },
+      headers,
       next: { revalidate: 0 },
       cache: 'no-store',
     })

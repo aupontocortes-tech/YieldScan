@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
+import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 
 /**
  * Lista CoinGecko `simple/supported_vs_currencies` (cache 1h).
  */
 export async function GET() {
   try {
-    const res = await fetch('https://api.coingecko.com/api/v3/simple/supported_vs_currencies', {
-      headers: { Accept: 'application/json' },
+    const { base, headers } = getCoingeckoRequestParts()
+    const res = await fetch(`${base}/simple/supported_vs_currencies`, {
+      headers,
       next: { revalidate: 3600 },
     })
     if (!res.ok) {

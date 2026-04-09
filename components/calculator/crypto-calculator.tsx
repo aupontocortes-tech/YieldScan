@@ -424,8 +424,9 @@ export function CryptoCalculator() {
   }, [dataUpdatedAt, nowTick])
 
   const hasStalePrices = typeof unitRate === 'number' && unitRate > 0
-  const blockingError = isError && !hasStalePrices
-  const softError = isError && hasStalePrices
+  /** Erro sem cotação em cache: ainda mostramos o formulário para poder trocar de moeda. */
+  const hardPriceError = isError && !hasStalePrices
+  const softPriceError = isError && hasStalePrices
 
   const inputDisabled = !hasStalePrices && isLoading
 
@@ -475,10 +476,12 @@ export function CryptoCalculator() {
           </div>
         </div>
 
-        {/* Blocking error */}
-        {blockingError && (
+        {hardPriceError && (
           <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-foreground">
             <p>{ERR_MSG}</p>
+            <p className="mt-2 text-xs text-zinc-400">
+              Pode trocar a cripto ou a moeda de cotação abaixo — outro par ou Tentar de novo.
+            </p>
             <Button
               type="button"
               variant="outline"
@@ -491,8 +494,7 @@ export function CryptoCalculator() {
           </div>
         )}
 
-        {/* Soft error */}
-        {softError && (
+        {softPriceError && (
           <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200/80">
             {ERR_MSG}{' '}
             <button
@@ -505,8 +507,7 @@ export function CryptoCalculator() {
           </div>
         )}
 
-        {!blockingError && (
-          <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
             <InputCard
               side="left"
               asset={left}
@@ -565,8 +566,7 @@ export function CryptoCalculator() {
                 <p className="text-xl font-semibold text-foreground">{referenceLine}</p>
               </div>
             )}
-          </div>
-        )}
+        </div>
       </main>
     </div>
   )

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 
 export type CoinSearchHit = { id: string; name: string; symbol: string; image?: string }
 
@@ -11,11 +12,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ coins: [] as CoinSearchHit[] })
   }
 
-  const url = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q.slice(0, 64))}`
+  const { base, headers } = getCoingeckoRequestParts()
+  const url = `${base}/search?query=${encodeURIComponent(q.slice(0, 64))}`
 
   try {
     const res = await fetch(url, {
-      headers: { Accept: 'application/json' },
+      headers,
       next: { revalidate: 120 },
     })
     if (!res.ok) {
