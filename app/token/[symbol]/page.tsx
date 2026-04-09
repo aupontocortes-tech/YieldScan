@@ -26,7 +26,14 @@ import {
   YAxis,
 } from 'recharts'
 import { ChainBadge } from '@/components/chain-badge'
-import { fetchPools, formatCurrency, formatPercent, getAprColorClass, sortPools } from '@/lib/api'
+import {
+  fetchPools,
+  formatCurrency,
+  formatPercent,
+  getAprColorClass,
+  poolMatchesSearchQuery,
+  sortPools,
+} from '@/lib/api'
 import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -64,10 +71,7 @@ export default function TokenPage() {
     if (!pools) return []
     
     return sortPools(
-      pools.filter(pool => 
-        pool.symbol.toUpperCase().includes(symbol) ||
-        pool.underlyingTokens?.some(t => t.toUpperCase().includes(symbol))
-      ),
+      pools.filter((pool) => poolMatchesSearchQuery(pool, symbol)),
       'apr',
       'desc'
     ).slice(0, 20)

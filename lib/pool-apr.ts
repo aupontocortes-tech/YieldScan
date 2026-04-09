@@ -1,6 +1,28 @@
 import type { Pool, PoolAprPeriod } from './types'
 import { getPoolSwapFeeLabel } from './pool-fee'
 
+function isMeteoraDlmmPool(pool: Pick<Pool, 'pool' | 'project'>): boolean {
+  return pool.project === 'meteora-dlmm' || pool.pool.startsWith('meteora-dlmm-')
+}
+
+/**
+ * Soma base + dinâmica no texto Meteora (ex.: "base 0.15% · din 0.05%").
+ * `getPoolSwapFeeLabel` só devolve o primeiro %; aqui agregamos para APR por taxas.
+ */
+function parseMeteoraDlmmMetaFeeFraction(pool: Pool): number {
+  if (!isMeteoraDlmmPool(pool)) return 0
+  const meta = pool.poolMeta ?? ''
+  let totalPct = 0
+  const re = /(?:base|din|dynamic)\s+(\d+(?:\.\d+)?)\s*%/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(meta)) !== null) {
+    const v = parseFloat(m[1]!)
+    if (Number.isFinite(v) && v > 0 && v < 80) totalPct += v
+  }
+  if (totalPct <= 0 || totalPct > 50) return 0
+  return totalPct / 100
+}
+
 /** Horas por período do seletor (5m ≈ 0.0833h, 10m ≈ 0.1666h). Referência extra: 5h = 5. */
 export const APR_PERIOD_HOURS: Record<PoolAprPeriod, number> = {
   '5m': 5 / 60,
@@ -21,6 +43,9 @@ export function calculateAPR(args: { fees: number; tvl: number; hours: number })
 }
 
 function parseSwapFeeFraction(pool: Pool): number {
+  const meteoraFrac = parseMeteoraDlmmMetaFeeFraction(pool)
+  if (meteoraFrac > 0) return meteoraFrac
+
   const label = getPoolSwapFeeLabel(pool)
   if (!label) return 0
   const m = label.match(/(\d+(?:\.\d+)?)\s*%/)
@@ -52,9 +77,9 @@ function apiAprComponentsSum(pool: Pool): number {
 }
 
 function discardIfAbsurd(apr: number): number {
-  if (!Number.isFinite(apr)) return NaN
-  if (apr <= 0) return 0
-  if (apr > 1000) return NaN
+  if (!Number.isFinite(apr) || apr <= 0) return 0
+  /** Acima de 1000%: dado inválido; teto conservador para não esconder a pool nos filtros. */
+  if (apr > 1000) return 300
   return apr
 }
 

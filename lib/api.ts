@@ -18,6 +18,7 @@ import {
   passesSafeAprProfile,
 } from './pool-classification'
 import { canonicalLlamaChain, normalizePoolChains } from './llama-chain'
+import { poolTokenTickers } from './blue-chip-pools'
 import { poolDisplayApr as poolDisplayAprFromLogic } from './pool-apr'
 
 const DEFILLAMA_YIELDS = 'https://yields.llama.fi'
@@ -407,16 +408,51 @@ export function sortPools(
   })
 }
 
+/** Expande nomes comuns → tickers usados em pares (Meteora, Llama, etc.). */
+function expandedPoolSearchTerms(token: string): string[] {
+  const t = token.trim().toLowerCase()
+  if (!t) return []
+  const terms = new Set<string>([t])
+  const ALIASES: Record<string, string[]> = {
+    bitcoin: ['btc', 'wbtc', 'cbbtc'],
+    btc: ['bitcoin', 'wbtc', 'cbbtc'],
+    wbtc: ['btc', 'bitcoin', 'cbbtc'],
+    cbbtc: ['btc', 'bitcoin', 'wbtc'],
+    ethereum: ['eth', 'weth'],
+    eth: ['ethereum', 'weth'],
+    weth: ['eth', 'ethereum'],
+    solana: ['sol', 'wsol'],
+    sol: ['solana', 'wsol'],
+    wsol: ['sol', 'solana'],
+    usd: ['usdc', 'usdt', 'dai'],
+    stable: ['usdc', 'usdt', 'dai', 'pyusd'],
+    tether: ['usdt'],
+    'usd coin': ['usdc'],
+  }
+  for (const x of ALIASES[t] ?? []) terms.add(x)
+  return [...terms]
+}
+
+function poolMatchesSearchTerms(pool: Pool, terms: string[]): boolean {
+  if (terms.length === 0) return true
+  const sym = (pool.symbol ?? '').toLowerCase()
+  const proj = (pool.project ?? '').toLowerCase()
+  const tickers = poolTokenTickers(pool).map((x) => x.toLowerCase())
+  return terms.some(
+    (term) =>
+      sym.includes(term) ||
+      proj.includes(term) ||
+      tickers.some((tk) => tk === term || tk.includes(term) || term.includes(tk))
+  )
+}
+
 /**
- * Busca por um token (ex.: `btc`) ou par com barra (ex.: `BTC/USDT`, `wbtc-usdt`).
+ * Busca por um token (ex.: `btc`, `bitcoin`) ou par com barra (ex.: `BTC/USDT`, `wbtc-usdt`).
  * Compara símbolo da pool sem exigir o caractere `/` literal no nome.
  */
 export function poolMatchesSearchQuery(pool: Pool, rawSearch: string): boolean {
   const q = rawSearch.trim()
   if (!q) return true
-
-  const sym = (pool.symbol ?? '').toLowerCase()
-  const proj = (pool.project ?? '').toLowerCase()
 
   const parts = q
     .split(/[/\\|／]+/)
@@ -424,16 +460,11 @@ export function poolMatchesSearchQuery(pool: Pool, rawSearch: string): boolean {
     .filter(Boolean)
 
   if (parts.length >= 2) {
-    const symCompact = sym.replace(/[^a-z0-9]/g, '')
-    return parts.every((tok) => {
-      const compact = tok.replace(/[^a-z0-9]/g, '')
-      if (!compact) return true
-      return symCompact.includes(compact) || sym.includes(tok) || proj.includes(tok)
-    })
+    return parts.every((tok) => poolMatchesSearchTerms(pool, expandedPoolSearchTerms(tok)))
   }
 
-  const ql = q.toLowerCase()
-  return sym.includes(ql) || proj.includes(ql)
+  const terms = expandedPoolSearchTerms(q.toLowerCase())
+  return poolMatchesSearchTerms(pool, terms)
 }
 
 // Filter pools
@@ -466,8 +497,10 @@ export function filterPools(
 
     if (filters.primaryDexOnly && !isPrimaryDexProject(pool.project)) return false
 
-    const displayApr = poolDisplayApr(pool, period)
-    if (!Number.isFinite(displayApr)) return false
+    let displayApr = poolDisplayApr(pool, period)
+    if (!Number.isFinite(displayApr)) {
+      displayApr = Math.min(Math.max(0, pool.apy ?? 0), 300)
+    }
     const presetBounds = aprPresetBounds(filters.aprPreset)
     const aprLo = presetBounds?.min ?? filters.aprMin
     const aprHi = presetBounds?.max ?? filters.aprMax
