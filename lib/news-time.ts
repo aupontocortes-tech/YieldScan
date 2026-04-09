@@ -45,6 +45,32 @@ export function toBrazilWallClockMs(utcMs: number): number {
   return Date.UTC(year, month - 1, day, hour, minute, second)
 }
 
+/**
+ * Data e hora de publicação no fuso de Brasília (ex.: "09/04/2026 às 14:32").
+ */
+export function formatNewsPublishedDateTimePt(
+  publishedAt: string | null | undefined,
+  nowMs = Date.now()
+): string {
+  if (!publishedAt?.trim()) return ''
+  const pubMs = parseNewsPublishedAt(publishedAt, nowMs)
+  if (!Number.isFinite(pubMs)) return ''
+  try {
+    const s = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: BRAZIL_TZ,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(pubMs))
+    return s.replace(/\s*,\s*/, ' às ')
+  } catch {
+    return ''
+  }
+}
+
 export function formatRelativeNewsTime(
   publishedAt: string | null | undefined,
   nowMs = Date.now()

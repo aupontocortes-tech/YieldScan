@@ -15,7 +15,12 @@ import {
   NEWS_CLIENT_STALE_MS,
   NEWS_RELATIVE_CLOCK_MS,
 } from '@/lib/news-refresh-config'
-import { formatRelativeNewsTime, getNewsAgeHours, getNewsAgeMinutes } from '@/lib/news-time'
+import {
+  formatNewsPublishedDateTimePt,
+  formatRelativeNewsTime,
+  getNewsAgeHours,
+  getNewsAgeMinutes,
+} from '@/lib/news-time'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { cn } from '@/lib/utils'
@@ -154,9 +159,18 @@ function NewsCard({
 
   const meta = (
     <div className="mt-auto flex items-center justify-between border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
-      <span className="min-w-0 truncate">
+      <span
+        className="min-w-0 truncate"
+        title={
+          n.dataPublicacao
+            ? formatRelativeNewsTime(n.dataPublicacao, nowMs)
+            : undefined
+        }
+      >
         {n.fonte}
-        {n.dataPublicacao ? ` · ${formatRelativeNewsTime(n.dataPublicacao, nowMs)}` : ''}
+        {n.dataPublicacao
+          ? ` · ${formatNewsPublishedDateTimePt(n.dataPublicacao, nowMs)}`
+          : ''}
         {n.dataPublicacao ? (() => {
           const label = recencyLabel(n.dataPublicacao, nowMs)
           return label ? ` · ${label}` : ''
