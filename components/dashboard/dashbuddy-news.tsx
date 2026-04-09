@@ -10,6 +10,11 @@ import { useNewsTtsHeard } from '@/hooks/use-news-tts-heard'
 import { kvGetJson, kvSetJson, openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import { ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import { noticiasParaFeed, type ItemFeedNoticia } from '@/lib/market-feed'
+import {
+  NEWS_CLIENT_REFETCH_MS,
+  NEWS_CLIENT_STALE_MS,
+  NEWS_RELATIVE_CLOCK_MS,
+} from '@/lib/news-refresh-config'
 import { formatRelativeNewsTime, getNewsAgeHours, getNewsAgeMinutes } from '@/lib/news-time'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
@@ -27,7 +32,7 @@ interface NewsPayload {
 
 /* ── Data ───────────────────────────────────────────────────────────────── */
 async function fetchNoticias(): Promise<NewsPayload> {
-  const res = await fetch('/api/news')
+  const res = await fetch('/api/news', { cache: 'no-store' })
   const json = (await res.json()) as NewsPayload
   if (!res.ok) throw new Error(json.erro ?? 'Erro ao carregar notícias.')
   return json
@@ -273,7 +278,7 @@ export function DashbuddyNews() {
   }, [filtro, filtroHydrated])
 
   useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    const id = window.setInterval(() => setNowMs(Date.now()), NEWS_RELATIVE_CLOCK_MS)
     return () => window.clearInterval(id)
   }, [])
 
@@ -282,9 +287,10 @@ export function DashbuddyNews() {
     queryFn: fetchNoticias,
     retry: 2,
     retryDelay: 2_000,
-    staleTime: 30_000,
+    staleTime: NEWS_CLIENT_STALE_MS,
     gcTime: 5 * 60_000,
-    refetchInterval: 30_000,
+    refetchInterval: NEWS_CLIENT_REFETCH_MS,
+    refetchIntervalInBackground: true,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   })

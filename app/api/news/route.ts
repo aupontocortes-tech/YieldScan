@@ -1,6 +1,11 @@
 import { unstable_cache } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
 import { noticiasParaFeed } from '@/lib/market-feed'
+import {
+  NEWS_CDN_S_MAXAGE_SECONDS,
+  NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS,
+  NEWS_SERVER_REVALIDATE_SECONDS,
+} from '@/lib/news-refresh-config'
 import { paraJsonInsights, pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
 import type { NoticiaProcessada } from '@/lib/newsdata'
 import { traduzirNoticiasRapido } from '@/lib/traduzir-noticias'
@@ -59,7 +64,7 @@ const AVISO_SEM_FONTES =
 const AVISO_SEM_ARTIGOS =
   'O feed veio vazio neste momento. A fonte pode estar sem artigos recentes/temporariamente limitada; tenta atualizar em 1-2 minutos. Para reforçar volume, usa também CRYPTOPANIC_AUTH_TOKEN.'
 
-/** Agrega fetch + processamento + tradução; cacheia ~30s para vários utilizadores não repetirem o trabalho. */
+/** Agrega fetch + processamento + tradução; ver `lib/news-refresh-config.ts` / `NEWS_SERVER_REVALIDATE_SECONDS`. */
 const montarNoticiasEmCache = unstable_cache(
   async (): Promise<{ traduzidas: NoticiaProcessada[]; aviso?: string }> => {
     const { results, erro } = await pegarTodasNoticias(process.env.NEWSDATA_API_KEY)
@@ -94,8 +99,8 @@ const montarNoticiasEmCache = unstable_cache(
     }
     return { traduzidas: [], aviso: AVISO_SEM_ARTIGOS }
   },
-  ['api-news-montar-v17'],
-  { revalidate: 30, tags: ['news'] }
+  ['api-news-montar-v18'],
+  { revalidate: NEWS_SERVER_REVALIDATE_SECONDS, tags: ['news'] }
 )
 
 /* ── Handler ────────────────────────────────────────────────────────────── */
@@ -127,10 +132,9 @@ export async function GET(req: NextRequest) {
       {
         status: 200,
         headers: {
-          'Cache-Control':
-            'public, s-maxage=30, stale-while-revalidate=90',
-          'CDN-Cache-Control': 'public, s-maxage=30, stale-while-revalidate=90',
-          'Vercel-CDN-Cache-Control': 'public, s-maxage=30, stale-while-revalidate=90',
+          'Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
+          'CDN-Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
+          'Vercel-CDN-Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
         },
       }
     )
