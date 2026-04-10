@@ -49,7 +49,8 @@ export function isMeteoraDlmmPool(pool: Pick<Pool, 'pool' | 'project'>): boolean
   return pool.project === 'meteora-dlmm' || pool.pool.startsWith('meteora-dlmm-')
 }
 
-const POOLS_MERGE_CAP = 9200
+/** Após merge Llama+Meteora; alinhado ao cap máximo de `/api/pools` (12k). */
+const POOLS_MERGE_CAP = 12_000
 
 /** Amostra menor para dashboard/widgets — menos JSON e parse no cliente. */
 export const DASHBOARD_POOLS_MIN_TVL = 25_000
@@ -102,7 +103,7 @@ export async function fetchDashboardMeteoraOnly(): Promise<Pool[]> {
     const base = internalApiBase()
     const q = encodeURIComponent(String(DASHBOARD_POOLS_MIN_TVL))
     const signal = clientTimeoutSignal(60_000)
-    const metaRes = await fetch(`${base}/api/meteora-pools?minTvl=${q}&maxPages=4`, {
+    const metaRes = await fetch(`${base}/api/meteora-pools?minTvl=${q}&maxPages=8`, {
       signal,
     })
     if (!metaRes.ok) return []
@@ -145,13 +146,12 @@ export async function fetchPools(
   const includeMeteora = options?.includeMeteora !== false
   const mergeCap = Math.min(options?.cap ?? POOLS_MERGE_CAP, POOLS_MERGE_CAP)
   const q = encodeURIComponent(String(minTvlUsd))
-  const capQ =
-    options?.cap != null
-      ? `&cap=${encodeURIComponent(String(Math.min(options.cap, 12_000)))}`
-      : ''
+  const llamaRequestCap =
+    options?.cap != null ? Math.min(options.cap, 12_000) : 12_000
   const base = internalApiBase()
-  const llamaUrl = `${base}/api/pools?minTvl=${q}${capQ}`
-  const metaUrl = `${base}/api/meteora-pools?minTvl=${q}`
+  const llamaUrl = `${base}/api/pools?minTvl=${q}&cap=${encodeURIComponent(String(llamaRequestCap))}`
+  const metaPages = mergeCap >= 8000 ? 14 : 8
+  const metaUrl = `${base}/api/meteora-pools?minTvl=${q}&maxPages=${encodeURIComponent(String(metaPages))}`
   const signal = clientTimeoutSignal(90_000)
 
   const [llamaRes, metaRes] = await Promise.all([

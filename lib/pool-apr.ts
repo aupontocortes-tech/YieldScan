@@ -120,6 +120,31 @@ export function poolDisplayApr(pool: Pool, period: PoolAprPeriod): number {
     return discardIfAbsurd(softCapWithFees(apiAprComponentsSum(pool), feeApr24))
   }
 
+  /**
+   * Meteora DLMM: `apy` já passou por sanitize na ingestão; o ramo genérico abaixo usa `apiTrustMax`
+   * pensado em ruído da DefiLlama e pode esmagar APR legítimo (ex.: Orca no topo vs Meteora real).
+   */
+  if (isMeteoraDlmmPool(pool)) {
+    const headline =
+      typeof pool.apy === 'number' && Number.isFinite(pool.apy)
+        ? Math.max(0, pool.apy)
+        : apiAprComponentsSum(pool)
+    if (headline > 0) {
+      const feesWindow = dailyFees * (hours / 24)
+      const feeAprPeriod =
+        tvl > 0 && feesWindow > 0 ? calculateAPR({ fees: feesWindow, tvl, hours }) : feeApr24
+      let candidate = headline
+      if (feeAprPeriod > 0 && headline > feeAprPeriod * 4) {
+        candidate = Math.min(headline, feeAprPeriod * 3)
+      }
+      if (period === '1d' && typeof pool.apyPct1D === 'number' && Number.isFinite(pool.apyPct1D)) {
+        const adj = candidate * (1 + pool.apyPct1D / 100)
+        candidate = Math.min(adj, candidate * 1.5)
+      }
+      return discardIfAbsurd(softCapWithFees(candidate, feeApr24))
+    }
+  }
+
   const feesWindow = dailyFees * (hours / 24)
   const feeAprPeriod =
     tvl > 0 && feesWindow > 0 ? calculateAPR({ fees: feesWindow, tvl, hours }) : feeApr24

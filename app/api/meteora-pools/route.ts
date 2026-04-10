@@ -9,8 +9,8 @@ export async function GET(req: NextRequest) {
   const maxPagesRaw = req.nextUrl.searchParams.get('maxPages')
   const maxPages =
     maxPagesRaw != null
-      ? Math.min(8, Math.max(1, Number(maxPagesRaw) || 4))
-      : 8
+      ? Math.min(16, Math.max(1, Number(maxPagesRaw) || 4))
+      : 14
   const pages = Array.from({ length: maxPages }, (_, i) => i + 1)
 
   try {
