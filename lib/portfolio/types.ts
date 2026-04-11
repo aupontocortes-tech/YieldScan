@@ -3,6 +3,8 @@ export type PortfolioHolding = {
   cmcId: number
   symbol: string
   name: string
+  /** Thumb CoinGecko ou outro URL quando o PNG da CMC não carrega. */
+  iconUrl?: string
   quantity: number
   avgBuyUsd: number
   firstBuyAt: string

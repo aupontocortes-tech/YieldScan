@@ -25,7 +25,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
-type SearchCoin = { id: number; symbol: string; name: string }
+type SearchCoin = { id: number; symbol: string; name: string; iconUrl?: string }
 
 type TxTab = 'buy' | 'sell' | 'transfer'
 
@@ -87,6 +87,7 @@ type AddTransactionDialogProps = {
     cmcId: number
     symbol: string
     name: string
+    iconUrl?: string
     qty: number
     priceUsd: number
     at: string
@@ -288,6 +289,7 @@ export function AddTransactionDialog({
         cmcId: selectedCoin.id,
         symbol: selectedCoin.symbol,
         name: selectedCoin.name,
+        iconUrl: selectedCoin.iconUrl,
         qty: qtyN,
         priceUsd: priceN,
         at,
@@ -400,7 +402,12 @@ export function AddTransactionDialog({
                 >
                   {selectedCoin ? (
                     <>
-                      <CoinAvatar cmcId={selectedCoin.id} symbol={selectedCoin.symbol} size={36} />
+                      <CoinAvatar
+                        cmcId={selectedCoin.id}
+                        symbol={selectedCoin.symbol}
+                        iconUrl={selectedCoin.iconUrl}
+                        size={36}
+                      />
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {selectedCoin.name}{' '}
                         <span className="text-muted-foreground">{selectedCoin.symbol}</span>
@@ -460,7 +467,12 @@ export function AddTransactionDialog({
                                 setPickerOpen(false)
                               }}
                             >
-                              <CoinAvatar cmcId={c.id} symbol={c.symbol} size={32} />
+                              <CoinAvatar
+                                cmcId={c.id}
+                                symbol={c.symbol}
+                                iconUrl={c.iconUrl}
+                                size={32}
+                              />
                               <span className="min-w-0 flex-1 truncate">
                                 <span className="font-medium text-foreground">{c.name}</span>{' '}
                                 <span className="text-muted-foreground">{c.symbol}</span>
@@ -523,7 +535,12 @@ export function AddTransactionDialog({
                           setQtyStr('')
                         }}
                       >
-                        <CoinAvatar cmcId={h.cmcId} symbol={h.symbol} size={32} />
+                        <CoinAvatar
+                          cmcId={h.cmcId}
+                          symbol={h.symbol}
+                          iconUrl={h.iconUrl}
+                          size={32}
+                        />
                         <span className="min-w-0 flex-1 truncate">
                           <span className="font-medium">{h.name}</span>{' '}
                           <span className="text-muted-foreground">{h.symbol}</span>

@@ -11,7 +11,7 @@ type Row = {
   symbol?: string
 }
 
-type CoinOut = { id: number; symbol: string; name: string }
+type CoinOut = { id: number; symbol: string; name: string; iconUrl?: string }
 
 /** Top moedas (ids CMC estáveis) quando não há chave API — pesquisa vazia ainda mostra opções. */
 const FALLBACK_TOP: CoinOut[] = [
@@ -122,7 +122,9 @@ async function quoteMany(
   return out
 }
 
-async function searchCoingecko(q: string): Promise<{ symbol: string; name: string }[]> {
+async function searchCoingecko(
+  q: string,
+): Promise<{ symbol: string; name: string; iconUrl?: string }[]> {
   if (q.length < 2) return []
   const { base, headers } = getCoingeckoRequestParts()
   const url = `${base}/search?query=${encodeURIComponent(q.slice(0, 64))}`
@@ -130,17 +132,19 @@ async function searchCoingecko(q: string): Promise<{ symbol: string; name: strin
     const res = await fetch(url, { headers, cache: 'no-store' })
     if (!res.ok) return []
     const data = (await res.json()) as {
-      coins?: Array<{ name?: string; symbol?: string }>
+      coins?: Array<{ name?: string; symbol?: string; thumb?: string; large?: string }>
     }
     const raw = Array.isArray(data.coins) ? data.coins : []
-    const out: { symbol: string; name: string }[] = []
+    const out: { symbol: string; name: string; iconUrl?: string }[] = []
     for (const c of raw.slice(0, 28)) {
       const symbol = String(c.symbol ?? '')
         .toUpperCase()
         .trim()
       const name = String(c.name ?? '').trim()
       if (!symbol || !/^[A-Z0-9]{2,15}$/.test(symbol)) continue
-      out.push({ symbol, name: name || symbol })
+      const thumb = String(c.thumb ?? c.large ?? '').trim()
+      const iconUrl = /^https?:\/\//i.test(thumb) ? thumb : undefined
+      out.push({ symbol, name: name || symbol, iconUrl })
     }
     return out
   } catch {
@@ -244,6 +248,7 @@ export async function GET(req: NextRequest) {
             id: qd.id,
             symbol: qd.symbol,
             name: qd.name || row.name,
+            iconUrl: row.iconUrl,
           })
         }
       }
@@ -255,6 +260,7 @@ export async function GET(req: NextRequest) {
           id: 0,
           symbol: c.symbol,
           name: c.name,
+          iconUrl: c.iconUrl,
         })),
       })
     }

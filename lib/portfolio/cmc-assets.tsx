@@ -8,28 +8,66 @@ export function cmcCoinPngUrl(cmcId: number, pixelSize: 64 | 128 = 128): string 
   return `https://s2.coinmarketcap.com/static/img/coins/${pixelSize}x${pixelSize}/${cmcId}.png`
 }
 
+/** Ícone por ticker (spothq/cryptocurrency-icons). */
+function cryptoIconUrls(symbol: string): string[] {
+  const slug = symbol.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (!slug) return []
+  return [
+    `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@0.18.1/128/color/${slug}.png`,
+    `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${slug}.png`,
+  ]
+}
+
+function isHttpUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s.trim())
+}
+
 type CoinAvatarProps = {
   cmcId: number
   symbol: string
+  /** URL explícita (ex.: thumb CoinGecko). */
+  iconUrl?: string | null
   /** Largura/altura em px (usa PNG 128 para ≥40, senão 64). */
   size?: number
   className?: string
 }
 
 /**
- * Tenta 128 → 64 → iniciais. `referrerPolicy` reduz bloqueios de hotlink em alguns browsers.
+ * Ordem: iconUrl → CMC 128/64 → ícone por símbolo → iniciais.
+ * Vários CDNs bloqueiam hotlink intermitente; fallbacks cobrem a maior parte dos tickers.
  */
-export function CoinAvatar({ cmcId, symbol, size = 32, className }: CoinAvatarProps) {
+export function CoinAvatar({
+  cmcId,
+  symbol,
+  iconUrl,
+  size = 32,
+  className,
+}: CoinAvatarProps) {
   const pngSizes = useMemo<(64 | 128)[]>(() => (size >= 40 ? [128, 64] : [64]), [size])
+
+  const sources = useMemo(() => {
+    const list: string[] = []
+    const trimmed = iconUrl?.trim()
+    if (trimmed && isHttpUrl(trimmed)) list.push(trimmed)
+    if (Number.isFinite(cmcId) && cmcId > 0) {
+      for (const px of pngSizes) {
+        list.push(cmcCoinPngUrl(cmcId, px))
+      }
+    }
+    list.push(...cryptoIconUrls(symbol))
+    return list.filter(Boolean)
+  }, [cmcId, iconUrl, symbol, pngSizes])
+
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     setAttempt(0)
-  }, [cmcId])
+  }, [cmcId, iconUrl, symbol, size])
 
-  const doneImages = attempt >= pngSizes.length
+  const done = attempt >= sources.length
+  const src = !done ? sources[attempt] : ''
 
-  if (!Number.isFinite(cmcId) || cmcId <= 0 || doneImages) {
+  if (done || !src) {
     return (
       <div
         className={cn(
@@ -43,13 +81,10 @@ export function CoinAvatar({ cmcId, symbol, size = 32, className }: CoinAvatarPr
     )
   }
 
-  const px = pngSizes[Math.min(attempt, pngSizes.length - 1)]!
-  const url = cmcCoinPngUrl(cmcId, px)
-
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- URLs externas CMC; domínio não configurado em next/image
+    // eslint-disable-next-line @next/next/no-img-element -- URLs externas; vários domínios
     <img
-      src={url}
+      src={src}
       alt=""
       width={size}
       height={size}

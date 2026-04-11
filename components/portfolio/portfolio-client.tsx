@@ -489,7 +489,12 @@ export function PortfolioClient() {
                     <TableRow key={h.id} className="border-white/10">
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <CoinAvatar cmcId={h.cmcId} symbol={h.symbol} size={32} />
+                          <CoinAvatar
+                            cmcId={h.cmcId}
+                            symbol={h.symbol}
+                            iconUrl={h.iconUrl}
+                            size={32}
+                          />
                           <div>
                             <div className="font-medium">{h.name}</div>
                             <div className="text-xs text-muted-foreground">{h.symbol}</div>

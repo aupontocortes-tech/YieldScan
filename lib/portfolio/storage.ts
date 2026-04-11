@@ -26,15 +26,23 @@ function normalize(raw: unknown): PortfolioData {
   return {
     version: 1,
     name: typeof o.name === 'string' && o.name.trim() ? o.name.trim() : base.name,
-    holdings: holdings.filter(
-      (h) =>
-        h &&
-        typeof h.id === 'string' &&
-        typeof h.cmcId === 'number' &&
-        typeof h.symbol === 'string' &&
-        typeof h.quantity === 'number' &&
-        typeof h.avgBuyUsd === 'number',
-    ),
+    holdings: holdings
+      .filter(
+        (h) =>
+          h &&
+          typeof h.id === 'string' &&
+          typeof h.cmcId === 'number' &&
+          typeof h.symbol === 'string' &&
+          typeof h.quantity === 'number' &&
+          typeof h.avgBuyUsd === 'number',
+      )
+      .map((h) => ({
+        ...h,
+        iconUrl:
+          typeof h.iconUrl === 'string' && h.iconUrl.trim().startsWith('http')
+            ? h.iconUrl.trim()
+            : undefined,
+      })),
     transactions,
     snapshots: snapshots.filter(
       (s) => s && typeof s.t === 'number' && typeof s.totalUsd === 'number',
@@ -71,6 +79,7 @@ export function addBuy(
     cmcId: number
     symbol: string
     name: string
+    iconUrl?: string
     qty: number
     priceUsd: number
     at: string
@@ -90,6 +99,10 @@ export function addBuy(
         ? (existing.quantity * existing.avgBuyUsd + qty * input.priceUsd) / totalQty
         : input.priceUsd
     const nextCmc = input.cmcId > 0 ? input.cmcId : existing.cmcId
+    const nextIcon =
+      input.iconUrl?.trim().startsWith('http')
+        ? input.iconUrl.trim()
+        : existing.iconUrl
     holdings = data.holdings.map((h) =>
       h.id === existing.id
         ? {
@@ -99,10 +112,13 @@ export function addBuy(
             avgBuyUsd: newAvg,
             symbol: sym,
             name: input.name.trim() || h.name,
+            ...(nextIcon ? { iconUrl: nextIcon } : {}),
           }
         : h,
     )
   } else {
+    const newIcon =
+      input.iconUrl?.trim().startsWith('http') ? input.iconUrl.trim() : undefined
     holdings = [
       ...data.holdings,
       {
@@ -110,6 +126,7 @@ export function addBuy(
         cmcId: input.cmcId,
         symbol: sym,
         name: input.name.trim() || sym,
+        ...(newIcon ? { iconUrl: newIcon } : {}),
         quantity: qty,
         avgBuyUsd: input.priceUsd,
         firstBuyAt: input.at,
