@@ -143,8 +143,47 @@ function uniswapExploreSlugFromChain(chain: string): string | null {
     blast: 'blast',
     zksyncera: 'zksync',
     unichain: 'unichain',
+    worldchain: 'worldchain',
+    'worldchain-mainnet': 'worldchain',
   }
   return map[c] ?? null
+}
+
+/** Pools yields Llama cujo `project` é Uniswap (não Sushi/Pancake “uniswap fork” no nome). */
+function isUniswapPoolProject(project: string): boolean {
+  const p = project.toLowerCase()
+  if (!p.includes('uniswap')) return false
+  if (p.includes('sushiswap') || p.includes('pancakeswap') || p.includes('biswap')) return false
+  return true
+}
+
+/**
+ * `pool.url` que só aponta para o app genérico (home / swap). A API às vezes manda isso em vez da pool;
+ * nesses casos precisamos ignorar e montar `/explore/pools/...`.
+ */
+function isUniswapGenericAppUrl(url: string): boolean {
+  const lower = url.toLowerCase()
+  if (!lower.includes('uniswap.org')) return false
+  if (lower.includes('/explore/pools/')) return false
+  if (lower.includes('#/pool') || lower.includes('#/add') || lower.includes('#/positions')) return false
+  if (
+    lower.includes('currencya=') ||
+    lower.includes('currency_a') ||
+    lower.includes('feeamount') ||
+    lower.includes('pool_id=') ||
+    lower.includes('pool=')
+  ) {
+    return false
+  }
+  try {
+    const { pathname } = new URL(url)
+    const p = (pathname || '/').toLowerCase()
+    if (p === '/' || p === '' || p.startsWith('/swap')) return true
+    if (p.startsWith('/explore') && !p.startsWith('/explore/pools/')) return true
+    return false
+  } catch {
+    return true
+  }
 }
 
 /**
@@ -188,9 +227,11 @@ function buildPoolDeepLinkFromId(
     }
   }
 
-  if (proj.includes('uniswap-v3') && /^0x[a-fA-F0-9]{40}$/i.test(pid)) {
-    const slug = uniswapExploreSlugFromChain(pool.chain)
-    if (slug) return `https://app.uniswap.org/explore/pools/${slug}/${pid}`
+  if (isUniswapPoolProject(proj) && !proj.includes('uniswap-v4')) {
+    if (/^0x[a-fA-F0-9]{40}$/i.test(pid)) {
+      const slug = uniswapExploreSlugFromChain(pool.chain)
+      if (slug) return `https://app.uniswap.org/explore/pools/${slug}/${pid}`
+    }
   }
 
   return null
@@ -214,19 +255,24 @@ const DEX_FALLBACK_HREFS: { hint: string; href: string }[] = [
 export function resolvePoolOrDexUrl(
   pool: Pick<Pool, 'url' | 'project' | 'pool' | 'chain' | 'poolMeta'>
 ): string | null {
+  const proj = (pool.project ?? '').toLowerCase()
   const raw = pool.url?.trim()
-  if (raw) {
-    if (/^https?:\/\//i.test(raw)) return raw
-    if (raw.startsWith('/')) {
-      const proj = (pool.project ?? '').toLowerCase()
-      if (proj.includes('orca')) return `https://www.orca.so${raw}`
-    }
+  const deep = buildPoolDeepLinkFromId(pool)
+
+  if (raw?.startsWith('/') && proj.includes('orca')) {
+    return `https://www.orca.so${raw}`
   }
 
-  const deep = buildPoolDeepLinkFromId(pool)
+  if (raw && /^https?:\/\//i.test(raw)) {
+    if (isUniswapPoolProject(proj) && isUniswapGenericAppUrl(raw)) {
+      if (deep) return deep
+      return raw
+    }
+    return raw
+  }
+
   if (deep) return deep
 
-  const proj = (pool.project ?? '').toLowerCase()
   for (const d of DEX_PLATFORMS) {
     const hint = d.poolFilterHint
     if (hint && proj.includes(hint)) return d.href

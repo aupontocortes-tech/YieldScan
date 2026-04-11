@@ -1,0 +1,742 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as ReTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import {
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Tag,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react'
+import { formatCurrency, formatPercent } from '@/lib/api'
+import { appendSnapshot, defaultPortfolio } from '@/lib/portfolio/storage'
+import { totalsFromHoldings, rowMetrics } from '@/lib/portfolio/metrics'
+import type { CmcQuote, PortfolioHolding } from '@/lib/portfolio/types'
+import { CoinAvatar } from '@/lib/portfolio/cmc-assets'
+import { usePortfolioStore } from '@/hooks/use-portfolio'
+import { AddTransactionDialog } from '@/components/portfolio/add-transaction-dialog'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
+
+const CARD =
+  'rounded-2xl border border-white/[0.06] bg-[#111827] text-card-foreground shadow-lg shadow-black/30'
+const PAGE_BG = 'bg-[#0B0F14]'
+
+async function fetchPrices(symbols: string[]): Promise<{
+  prices: Record<string, CmcQuote>
+  error?: string
+}> {
+  if (!symbols.length) return { prices: {} }
+  const res = await fetch(`/api/prices?symbols=${encodeURIComponent(symbols.join(','))}`)
+  const j = (await res.json()) as {
+    prices?: Record<string, CmcQuote>
+    error?: string
+  }
+  return { prices: j.prices ?? {}, error: j.error }
+}
+
+const PIE_COLORS = ['#3b82f6', '#22c55e', '#a855f7', '#f59e0b', '#06b6d4', '#e11d48', '#d4af37']
+
+function pctTone(v: number) {
+  if (v > 0.0001) return 'text-[#22c55e]'
+  if (v < -0.0001) return 'text-[#ef4444]'
+  return 'text-muted-foreground'
+}
+
+export function PortfolioClient() {
+  const { data, ready, setName, mergePortfolio, addPurchase, editHolding, deleteHolding, sell } =
+    usePortfolioStore()
+
+  const symbols = useMemo(
+    () => [...new Set(data.holdings.map((h) => h.symbol))].sort(),
+    [data.holdings],
+  )
+
+  const {
+    data: pricePayload,
+    isLoading: pricesLoading,
+    isFetching: pricesFetching,
+    dataUpdatedAt,
+  } = useQuery({
+    queryKey: ['portfolio-prices', symbols.join(',')],
+    queryFn: () => fetchPrices(symbols),
+    enabled: ready && symbols.length > 0,
+    refetchInterval: 60_000,
+    staleTime: 45_000,
+  })
+
+  const prices = pricePayload?.prices ?? {}
+
+  const totals = useMemo(
+    () => totalsFromHoldings(data.holdings, prices, data.realizedPnlUsd),
+    [data.holdings, data.realizedPnlUsd, prices],
+  )
+
+  useEffect(() => {
+    if (!ready || symbols.length === 0 || !dataUpdatedAt) return
+    mergePortfolio((prev) => appendSnapshot(prev, totals.valueUsd))
+  }, [ready, dataUpdatedAt, symbols.length, totals.valueUsd, mergePortfolio])
+
+  const [filter, setFilter] = useState<'all' | 'up' | 'down'>('all')
+
+  const rows = useMemo(() => {
+    const list = data.holdings.map((h) => {
+      const q = prices[h.symbol]
+      const m = rowMetrics(h, q)
+      return { h, m, q }
+    })
+    if (filter === 'up') return list.filter((r) => r.m.pnlUsd > 0)
+    if (filter === 'down') return list.filter((r) => r.m.pnlUsd < 0)
+    return list
+  }, [data.holdings, prices, filter])
+
+  const bestWorst = useMemo(() => {
+    const withVal = rows.filter((r) => r.m.valueUsd > 0)
+    if (!withVal.length) return { best: null as null | (typeof rows)[0], worst: null }
+    const byPnl = [...withVal].sort((a, b) => b.m.pnlUsd - a.m.pnlUsd)
+    return { best: byPnl[0] ?? null, worst: byPnl[byPnl.length - 1] ?? null }
+  }, [rows])
+
+  const pieData = useMemo(() => {
+    const t = totals.valueUsd
+    if (t <= 0) return []
+    return data.holdings
+      .map((h) => {
+        const m = rowMetrics(h, prices[h.symbol])
+        return {
+          name: h.symbol,
+          value: m.valueUsd,
+          pct: t > 0 ? (m.valueUsd / t) * 100 : 0,
+        }
+      })
+      .filter((d) => d.value > 0)
+  }, [data.holdings, prices, totals.valueUsd])
+
+  const lineData = useMemo(() => {
+    return [...data.snapshots]
+      .sort((a, b) => a.t - b.t)
+      .map((s) => ({
+        t: s.t,
+        v: s.totalUsd,
+        label: new Date(s.t).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      }))
+  }, [data.snapshots])
+
+  const [addOpen, setAddOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [sellOpen, setSellOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [activeHolding, setActiveHolding] = useState<PortfolioHolding | null>(null)
+
+  const [editQty, setEditQty] = useState('')
+  const [editAvg, setEditAvg] = useState('')
+  const [editDate, setEditDate] = useState('')
+
+  const [sellQty, setSellQty] = useState('')
+  const [sellPrice, setSellPrice] = useState('')
+  const [sellDate, setSellDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [formErr, setFormErr] = useState<string | null>(null)
+
+  const openEdit = (h: PortfolioHolding) => {
+    setActiveHolding(h)
+    setEditQty(String(h.quantity))
+    setEditAvg(String(h.avgBuyUsd))
+    setEditDate(h.firstBuyAt)
+    setEditOpen(true)
+  }
+
+  const submitEdit = () => {
+    if (!activeHolding) return
+    const qty = Number(editQty.replace(',', '.'))
+    const avg = Number(editAvg.replace(',', '.'))
+    if (!Number.isFinite(qty) || qty < 0) return
+    if (!Number.isFinite(avg) || avg < 0) return
+    editHolding(activeHolding.id, {
+      quantity: qty,
+      avgBuyUsd: avg,
+      firstBuyAt: editDate,
+    })
+    setEditOpen(false)
+    setActiveHolding(null)
+  }
+
+  const openSell = (h: PortfolioHolding) => {
+    setActiveHolding(h)
+    setSellQty('')
+    setSellPrice(prices[h.symbol]?.price != null ? String(prices[h.symbol]!.price) : '')
+    setSellDate(new Date().toISOString().slice(0, 10))
+    setFormErr(null)
+    setSellOpen(true)
+  }
+
+  const submitSell = () => {
+    if (!activeHolding) return
+    const qty = Number(sellQty.replace(',', '.'))
+    const px = Number(sellPrice.replace(',', '.'))
+    const err = sell(activeHolding.id, qty, px, sellDate)
+    if (err) {
+      setFormErr(err)
+      return
+    }
+    setSellOpen(false)
+    setActiveHolding(null)
+    setFormErr(null)
+  }
+
+  const openDelete = (h: PortfolioHolding) => {
+    setActiveHolding(h)
+    setDeleteOpen(true)
+  }
+
+  const keyError =
+    pricePayload?.error === 'server_missing_cmc_key'
+      ? 'Defina COINMARKETCAP_API_KEY (ou CMC_PRO_API_KEY) no servidor para preços ao vivo.'
+      : null
+
+  if (!ready) {
+    return (
+      <div className={cn('flex flex-1 flex-col', PAGE_BG)}>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <Skeleton className="mb-6 h-32 rounded-2xl bg-white/5" />
+          <Skeleton className="h-96 rounded-2xl bg-white/5" />
+        </main>
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('flex min-h-0 flex-1 flex-col', PAGE_BG)}>
+      <main className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        {keyError && (
+          <div
+            className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+            role="status"
+          >
+            {keyError}
+          </div>
+        )}
+
+        {/* Header */}
+        <div className={cn('mb-6 flex flex-col gap-4 p-6 sm:flex-row sm:items-end sm:justify-between', CARD)}>
+          <div className="flex items-start gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-[#3b82f6]">
+              <Wallet className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Portfólio
+              </p>
+              <div
+                className="mt-1 flex flex-wrap items-center gap-2"
+                data-no-swipe-nav
+              >
+                <Input
+                  value={data.name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={(e) => {
+                    const t = e.currentTarget.value.trim()
+                    setName(t.length > 0 ? t : defaultPortfolio().name)
+                  }}
+                  placeholder={defaultPortfolio().name}
+                  autoComplete="off"
+                  className="h-9 max-w-[220px] border-white/10 bg-black/20 font-semibold"
+                />
+                {pricesFetching && symbols.length > 0 && (
+                  <span className="text-xs text-[#3b82f6]">A atualizar…</span>
+                )}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Lucro realizado acumulado:{' '}
+                <span className={cn('font-mono font-medium', pctTone(data.realizedPnlUsd))}>
+                  {formatCurrency(data.realizedPnlUsd, false)}
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <span className="text-xs text-muted-foreground">Valor total (USD)</span>
+            <span className="font-mono text-3xl font-bold tracking-tight text-foreground">
+              {pricesLoading && symbols.length > 0 ? '—' : formatCurrency(totals.valueUsd, false)}
+            </span>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">P&amp;L total</span>
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 font-mono font-semibold',
+                  pctTone(totals.totalPnlUsd),
+                )}
+              >
+                {totals.totalPnlUsd >= 0 ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
+                {formatCurrency(totals.totalPnlUsd, false)}
+                <span className="text-muted-foreground">({formatPercent(totals.totalPnlPct)})</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {(bestWorst.best || bestWorst.worst) && (
+          <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {bestWorst.best && (
+              <span className="rounded-full border border-white/10 bg-[#111827] px-3 py-1">
+                Melhor posição:{' '}
+                <strong className="text-[#22c55e]">{bestWorst.best.h.symbol}</strong> (
+                {formatCurrency(bestWorst.best.m.pnlUsd, false)})
+              </span>
+            )}
+            {bestWorst.worst && bestWorst.worst.h.id !== bestWorst.best?.h.id && (
+              <span className="rounded-full border border-white/10 bg-[#111827] px-3 py-1">
+                Pior posição:{' '}
+                <strong className="text-[#ef4444]">{bestWorst.worst.h.symbol}</strong> (
+                {formatCurrency(bestWorst.worst.m.pnlUsd, false)})
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mb-8 grid gap-6 lg:grid-cols-2">
+          <Card className={CARD}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Alocação</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[280px]">
+              {pieData.length === 0 ? (
+                <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Adicione ativos para ver a distribuição.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={2}
+                    >
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <ReTooltip
+                      formatter={(value: number, _n, item) => {
+                        const payload = item?.payload as { pct?: number }
+                        const pct = payload?.pct ?? 0
+                        return [`${formatCurrency(value, false)} (${pct.toFixed(1)}%)`, 'Valor']
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className={CARD}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Evolução do portfólio</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[280px]">
+              {lineData.length < 2 ? (
+                <p className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                  O gráfico preenche após atualizações de preço (ex.: 1 minuto com a chave CMC ativa).
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      tickFormatter={(v) => {
+                        if (!Number.isFinite(v)) return ''
+                        if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+                        if (v >= 1e3) return `${(v / 1e3).toFixed(1)}k`
+                        return v.toFixed(0)
+                      }}
+                    />
+                    <ReTooltip
+                      formatter={(v: number) => formatCurrency(v, false)}
+                      labelFormatter={(_, p) => {
+                        const row = p?.[0]?.payload as { t?: number }
+                        return row?.t
+                          ? new Date(row.t).toLocaleString('pt-BR')
+                          : ''
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="v"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: '#3b82f6' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+            <TabsList className="border border-white/10 bg-[#111827]">
+              <TabsTrigger
+                value="all"
+                className="data-[state=active]:bg-[#3b82f6]/20 data-[state=active]:text-[#60a5fa]"
+              >
+                Todos
+              </TabsTrigger>
+              <TabsTrigger
+                value="up"
+                className="data-[state=active]:bg-[#22c55e]/15 data-[state=active]:text-[#22c55e]"
+              >
+                Em lucro
+              </TabsTrigger>
+              <TabsTrigger
+                value="down"
+                className="data-[state=active]:bg-[#ef4444]/15 data-[state=active]:text-[#ef4444]"
+              >
+                Em prejuízo
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            onClick={() => setAddOpen(true)}
+            className="bg-[#3b82f6] text-white hover:bg-[#2563eb]"
+          >
+            <Plus className="size-4" />
+            Adicionar transação
+          </Button>
+        </div>
+
+        <Card className={cn(CARD, 'min-h-0 flex-1')}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold">Ativos</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 pb-4 sm:px-4">
+            {data.holdings.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">
+                Ainda não tem posições. Usa &quot;Adicionar transação&quot; para começar.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead>Ativo</TableHead>
+                    <TableHead className="text-right">Preço</TableHead>
+                    <TableHead className="text-right">24h</TableHead>
+                    <TableHead className="text-right">7d</TableHead>
+                    <TableHead className="text-right">Qtd</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead className="text-right">Preço médio</TableHead>
+                    <TableHead className="text-right">P&amp;L</TableHead>
+                    <TableHead className="w-12" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map(({ h, m }) => (
+                    <TableRow key={h.id} className="border-white/10">
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <CoinAvatar cmcId={h.cmcId} symbol={h.symbol} size={32} />
+                          <div>
+                            <div className="font-medium">{h.name}</div>
+                            <div className="text-xs text-muted-foreground">{h.symbol}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {m.price > 0 ? formatCurrency(m.price, false) : '—'}
+                      </TableCell>
+                      <TableCell className={cn('text-right font-mono text-sm', pctTone(m.pct24h))}>
+                        {m.price > 0 ? formatPercent(m.pct24h) : '—'}
+                      </TableCell>
+                      <TableCell className={cn('text-right font-mono text-sm', pctTone(m.pct7d))}>
+                        {m.price > 0 ? formatPercent(m.pct7d) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {h.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatCurrency(m.valueUsd, false)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatCurrency(h.avgBuyUsd, false)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className={cn('font-mono text-sm font-semibold', pctTone(m.pnlUsd))}>
+                          {formatCurrency(m.pnlUsd, false)}
+                        </div>
+                        <div className={cn('text-xs', pctTone(m.pnlPct))}>
+                          {formatPercent(m.pnlPct)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="border-white/10 bg-[#111827]">
+                            <DropdownMenuItem onClick={() => openEdit(h)}>
+                              <Pencil className="size-4" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openSell(h)}>
+                              <Tag className="size-4" />
+                              Registrar venda
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[#ef4444] focus:text-[#ef4444]"
+                              onClick={() => openDelete(h)}
+                            >
+                              <Trash2 className="size-4" />
+                              Remover
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <AddTransactionDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          holdings={data.holdings}
+          spotPrices={prices}
+          onBuy={addPurchase}
+          onSell={sell}
+        />
+
+        {/* Edit */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="border-white/10 bg-[#111827] sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar posição</DialogTitle>
+            </DialogHeader>
+            {activeHolding && (
+              <div className="grid gap-3 py-2">
+                <p className="text-sm text-muted-foreground">
+                  {activeHolding.name} ({activeHolding.symbol})
+                </p>
+                <div className="grid gap-1">
+                  <Label>Quantidade</Label>
+                  <Input
+                    value={editQty}
+                    onChange={(e) => setEditQty(e.target.value)}
+                    className="border-white/10 bg-black/25"
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Preço médio de compra (USD)</Label>
+                  <Input
+                    value={editAvg}
+                    onChange={(e) => setEditAvg(e.target.value)}
+                    className="border-white/10 bg-black/25"
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Data (referência)</Label>
+                  <Input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="border-white/10 bg-black/25"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setEditOpen(false)}>
+                Cancelar
+              </Button>
+              <Button className="bg-[#3b82f6] hover:bg-[#2563eb]" onClick={submitEdit}>
+                Guardar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Sell */}
+        <Dialog open={sellOpen} onOpenChange={setSellOpen}>
+          <DialogContent className="border-white/10 bg-[#111827] sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Registrar venda</DialogTitle>
+            </DialogHeader>
+            {activeHolding && (
+              <div className="grid gap-3 py-2">
+                <p className="text-sm text-muted-foreground">
+                  Disponível: {activeHolding.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}{' '}
+                  {activeHolding.symbol}
+                </p>
+                <div className="grid gap-1">
+                  <Label>Quantidade vendida</Label>
+                  <Input
+                    value={sellQty}
+                    onChange={(e) => setSellQty(e.target.value)}
+                    className="border-white/10 bg-black/25"
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Preço de venda (USD)</Label>
+                  <Input
+                    value={sellPrice}
+                    onChange={(e) => setSellPrice(e.target.value)}
+                    className="border-white/10 bg-black/25"
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Data</Label>
+                  <Input
+                    type="date"
+                    value={sellDate}
+                    onChange={(e) => setSellDate(e.target.value)}
+                    className="border-white/10 bg-black/25"
+                  />
+                </div>
+                {formErr && <p className="text-sm text-[#ef4444]">{formErr}</p>}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => (setSellOpen(false), setFormErr(null))}>
+                Cancelar
+              </Button>
+              <Button className="bg-[#3b82f6] hover:bg-[#2563eb]" onClick={submitSell}>
+                Confirmar venda
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {data.transactions.length > 0 && (
+          <Card className={cn(CARD, 'mt-8')}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Histórico recente</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm">
+                {data.transactions.slice(0, 8).map((tx) => (
+                  <li
+                    key={tx.id}
+                    className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 py-2 last:border-0"
+                  >
+                    <span className="text-muted-foreground">
+                      {tx.at}{' '}
+                      <span className="font-medium text-foreground">
+                        {tx.type === 'buy' ? 'Compra' : 'Venda'} {tx.symbol}
+                      </span>
+                    </span>
+                    <span className="text-right font-mono text-xs">
+                      <span className="block">
+                        {tx.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} @{' '}
+                        {formatCurrency(tx.priceUsd, false)}
+                        {tx.realizedPnlUsd != null && (
+                          <span className={cn(' ml-2', pctTone(tx.realizedPnlUsd))}>
+                            ({formatCurrency(tx.realizedPnlUsd, false)})
+                          </span>
+                        )}
+                      </span>
+                      {tx.feeUsd != null && tx.feeUsd > 0 && (
+                        <span className="mt-0.5 block text-muted-foreground">
+                          Taxa {formatCurrency(tx.feeUsd, false)}
+                        </span>
+                      )}
+                      {tx.note && (
+                        <span className="mt-0.5 block max-w-[220px] truncate text-muted-foreground" title={tx.note}>
+                          {tx.note}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent className="border-white/10 bg-[#111827]">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover ativo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {activeHolding
+                  ? `Isto remove ${activeHolding.symbol} da carteira. O histórico de compras/vendas em memória mantém-se, mas a posição deixa de aparecer.`
+                  : ''}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-white/10 bg-transparent">Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-[#ef4444] hover:bg-[#dc2626]"
+                onClick={() => {
+                  if (activeHolding) deleteHolding(activeHolding.id)
+                  setDeleteOpen(false)
+                  setActiveHolding(null)
+                }}
+              >
+                Remover
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </main>
+    </div>
+  )
+}

@@ -13,6 +13,7 @@ import {
   LineChart,
   Newspaper,
   Sparkles,
+  Wallet,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -37,6 +38,7 @@ import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 const MAIN_NAV = [
   { name: 'Dashboard', href: '/dashboard', icon: Activity },
   { name: 'Notícias', href: '/news', icon: Newspaper },
+  { name: 'Wallet', href: '/portfolio', icon: Wallet },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
   { name: 'Indicator', href: '/indicator', icon: LineChart },
   { name: 'Calculator', href: '/calculator', icon: Calculator },
@@ -47,6 +49,7 @@ const MAIN_NAV = [
 function pageTitle(pathname: string): string {
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Dashboard'
   if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
+  if (pathname.startsWith('/portfolio')) return 'Wallet'
   if (pathname.startsWith('/pools')) return 'Pools'
   if (pathname.startsWith('/indicator')) return 'Indicator'
   if (pathname.startsWith('/calculator')) return 'Calculator'
@@ -133,7 +136,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       isActive={
                         item.href === '/news'
                           ? pathname === '/news' || pathname.startsWith('/news/')
-                          : item.href === '/pools'
+                          : item.href === '/portfolio'
+                            ? pathname.startsWith('/portfolio')
+                            : item.href === '/pools'
                             ? pathname.startsWith('/pools')
                             : item.href === '/indicator'
                               ? pathname.startsWith('/indicator')
