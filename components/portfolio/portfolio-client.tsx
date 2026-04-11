@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Cell,
@@ -98,10 +98,13 @@ export function PortfolioClient() {
   const { data, ready, setName, mergePortfolio, addPurchase, editHolding, deleteHolding, sell } =
     usePortfolioStore()
 
-  const symbols = useMemo(
-    () => [...new Set(data.holdings.map((h) => h.symbol))].sort(),
-    [data.holdings],
-  )
+  const [addDialogSymbol, setAddDialogSymbol] = useState<string | null>(null)
+
+  const symbols = useMemo(() => {
+    const s = new Set(data.holdings.map((h) => h.symbol))
+    if (addDialogSymbol) s.add(addDialogSymbol)
+    return [...s].sort()
+  }, [data.holdings, addDialogSymbol])
 
   const {
     data: pricePayload,
@@ -174,6 +177,11 @@ export function PortfolioClient() {
   }, [data.snapshots])
 
   const [addOpen, setAddOpen] = useState(false)
+
+  const handleAddDialogOpen = useCallback((next: boolean) => {
+    setAddOpen(next)
+    if (!next) setAddDialogSymbol(null)
+  }, [])
   const [editOpen, setEditOpen] = useState(false)
   const [sellOpen, setSellOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -563,9 +571,10 @@ export function PortfolioClient() {
 
         <AddTransactionDialog
           open={addOpen}
-          onOpenChange={setAddOpen}
+          onOpenChange={handleAddDialogOpen}
           holdings={data.holdings}
           spotPrices={prices}
+          onActiveBuySymbolChange={setAddDialogSymbol}
           onBuy={addPurchase}
           onSell={sell}
         />

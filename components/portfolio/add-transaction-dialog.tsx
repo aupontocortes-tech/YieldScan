@@ -83,6 +83,8 @@ type AddTransactionDialogProps = {
   onOpenChange: (open: boolean) => void
   holdings: PortfolioHolding[]
   spotPrices: Record<string, CmcQuote>
+  /** Símbolo em “Comprar” para a página incluir na query de preços (cotação imediata). */
+  onActiveBuySymbolChange?: (symbol: string | null) => void
   onBuy: (input: {
     cmcId: number
     symbol: string
@@ -108,6 +110,7 @@ export function AddTransactionDialog({
   onOpenChange,
   holdings,
   spotPrices,
+  onActiveBuySymbolChange,
   onBuy,
   onSell,
 }: AddTransactionDialogProps) {
@@ -124,9 +127,8 @@ export function AddTransactionDialog({
   const [selectedCoin, setSelectedCoin] = useState<SearchCoin | null>(null)
   const [sellHoldingId, setSellHoldingId] = useState<string | null>(null)
 
-  const [manualSym, setManualSym] = useState('')
-  const [manualErr, setManualErr] = useState<string | null>(null)
-  const [manualLoading, setManualLoading] = useState(false)
+  /** Se true, não sobrescrever o preço com cotação ao vivo. */
+  const skipAutoPrice = useRef(false)
 
   const [qtyStr, setQtyStr] = useState('')
   const [priceStr, setPriceStr] = useState('')
@@ -146,8 +148,7 @@ export function AddTransactionDialog({
     setSearchHits([])
     setSelectedCoin(null)
     setSellHoldingId(null)
-    setManualSym('')
-    setManualErr(null)
+    skipAutoPrice.current = false
     setQtyStr('')
     setPriceStr('')
     setDatetimeStr(toDatetimeLocalValue(new Date()))
@@ -196,27 +197,63 @@ export function AddTransactionDialog({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
+  useEffect(() => {
+    if (!onActiveBuySymbolChange) return
+    if (!open || txTab !== 'buy') {
+      onActiveBuySymbolChange(null)
+      return
+    }
+    onActiveBuySymbolChange(selectedCoin?.symbol ?? null)
+  }, [open, txTab, selectedCoin?.symbol, onActiveBuySymbolChange])
+
   const selectedHolding = useMemo(
     () => holdings.find((h) => h.id === sellHoldingId) ?? null,
     [holdings, sellHoldingId],
   )
 
   useEffect(() => {
-    if (txTab !== 'buy' || !selectedCoin) return
+    skipAutoPrice.current = false
+  }, [selectedCoin?.symbol])
+
+  useEffect(() => {
+    if (!open || txTab !== 'buy' || !selectedCoin || skipAutoPrice.current) return
     let cancelled = false
+    const apply = (p: number) => {
+      if (cancelled || skipAutoPrice.current) return
+      setPriceStr(
+        p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+      )
+    }
+    const spot = spotPrices[selectedCoin.symbol]?.price
+    if (spot != null && spot > 0) apply(spot)
     void fetchPrices([selectedCoin.symbol]).then(({ prices }) => {
-      if (cancelled) return
       const p = prices[selectedCoin.symbol]?.price
-      if (p != null && p > 0) {
-        setPriceStr(
-          p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
-        )
-      }
+      if (p != null && p > 0) apply(p)
     })
     return () => {
       cancelled = true
     }
-  }, [selectedCoin, txTab])
+  }, [open, txTab, selectedCoin, spotPrices])
+
+  useEffect(() => {
+    if (!open || txTab !== 'buy' || !selectedCoin) return
+    const id = window.setInterval(() => {
+      if (skipAutoPrice.current) return
+      void fetchPrices([selectedCoin.symbol]).then(({ prices }) => {
+        if (skipAutoPrice.current) return
+        const p = prices[selectedCoin.symbol]?.price
+        if (p != null && p > 0) {
+          setPriceStr(
+            p.toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 8,
+            }),
+          )
+        }
+      })
+    }, 30_000)
+    return () => window.clearInterval(id)
+  }, [open, txTab, selectedCoin])
 
   useEffect(() => {
     if (txTab !== 'sell' || !selectedHolding) return
@@ -236,33 +273,6 @@ export function AddTransactionDialog({
   const gross = qtyN > 0 && priceN >= 0 ? qtyN * priceN : 0
   const buyTotal = gross + feeN
   const sellNet = Math.max(0, gross - feeN)
-
-  const resolveManual = useCallback(async () => {
-    const sym = manualSym.trim().toUpperCase()
-    if (sym.length < 2) {
-      setManualErr('Símbolo curto demais.')
-      return
-    }
-    setManualLoading(true)
-    setManualErr(null)
-    try {
-      const { prices: p, error } = await fetchPrices([sym])
-      if (error || !p[sym]?.cmcId) {
-        setManualErr('Moeda não encontrada na CoinMarketCap.')
-        setManualLoading(false)
-        return
-      }
-      const row = p[sym]
-      setSelectedCoin({ id: row.cmcId, symbol: sym, name: row.name })
-      setManualSym('')
-      setManualErr(null)
-      setManualLoading(false)
-      setPickerOpen(false)
-    } catch {
-      setManualErr('Falha na rede.')
-      setManualLoading(false)
-    }
-  }, [manualSym])
 
   const submit = useCallback(() => {
     setFormErr(null)
@@ -446,11 +456,7 @@ export function AddTransactionDialog({
                             <p>
                               Confirma <code className="rounded bg-black/40 px-1 py-0.5">COINMARKETCAP_API_KEY</code>{' '}
                               no <code className="rounded bg-black/40 px-1 py-0.5">.env.local</code> e reinicia o
-                              servidor (preços e enriquecimento CMC).
-                            </p>
-                            <p>
-                              Ou usa <span className="text-foreground/90">Símbolo na CMC</span> abaixo (ex.: BTC) e
-                              <span className="text-foreground/90"> Buscar</span>.
+                              servidor.
                             </p>
                           </div>
                         ) : (
@@ -481,32 +487,6 @@ export function AddTransactionDialog({
                           ))
                         )}
                       </div>
-                    </div>
-                    <div className="border-t border-white/[0.06] p-2">
-                      <p className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Símbolo na CMC
-                      </p>
-                      <div className="flex gap-2">
-                        <Input
-                          value={manualSym}
-                          onChange={(e) => setManualSym(e.target.value)}
-                          placeholder="HYPE"
-                          className="h-9 flex-1 border-white/10 bg-black/30"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          className="shrink-0"
-                          disabled={manualLoading}
-                          onClick={() => void resolveManual()}
-                        >
-                          {manualLoading ? '…' : 'Buscar'}
-                        </Button>
-                      </div>
-                      {manualErr && (
-                        <p className="mt-1 text-xs text-[#ef4444]">{manualErr}</p>
-                      )}
                     </div>
                   </div>
                 )}
@@ -567,14 +547,19 @@ export function AddTransactionDialog({
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">Preço por moeda (USD)</Label>
+                <Label className="text-xs text-muted-foreground">
+                  {txTab === 'buy' ? 'Preço unitário (USD)' : 'Preço por moeda (USD)'}
+                </Label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     $
                   </span>
                   <Input
                     value={priceStr}
-                    onChange={(e) => setPriceStr(e.target.value)}
+                    onChange={(e) => {
+                      if (txTab === 'buy') skipAutoPrice.current = true
+                      setPriceStr(e.target.value)
+                    }}
                     placeholder="0,00"
                     data-no-swipe-nav
                     className="h-11 rounded-xl border-white/[0.08] bg-[#13161f] pl-7 font-mono"
@@ -582,6 +567,13 @@ export function AddTransactionDialog({
                 </div>
               </div>
             </div>
+            {txTab === 'buy' && selectedCoin && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Ao escolheres o ativo, o preço segue a cotação atual (atualiza a cada ~30s). A{' '}
+                <span className="text-foreground/90">quantidade × preço</span> entra no total abaixo — podes editar o
+                preço se quiseres outro valor.
+              </p>
+            )}
 
             <div className="flex flex-wrap items-stretch gap-2">
               <div className="grid min-w-0 flex-1 gap-1">
@@ -655,6 +647,23 @@ export function AddTransactionDialog({
                   ? formatCurrency(buyTotal, false)
                   : formatCurrency(gross, false)}
               </p>
+              {txTab === 'buy' &&
+                selectedCoin &&
+                qtyN > 0 &&
+                Number.isFinite(priceN) &&
+                priceN >= 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {qtyN.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}{' '}
+                    <span className="text-foreground/80">{selectedCoin.symbol}</span> ×{' '}
+                    {formatCurrency(priceN, false)} = {formatCurrency(gross, false)}
+                    {feeN > 0 && (
+                      <>
+                        {' '}
+                        + taxa {formatCurrency(feeN, false)}
+                      </>
+                    )}
+                  </p>
+                )}
               {txTab === 'sell' && feeN > 0 && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   Após taxa: {formatCurrency(sellNet, false)}
