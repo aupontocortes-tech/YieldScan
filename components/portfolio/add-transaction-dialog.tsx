@@ -29,10 +29,25 @@ type SearchCoin = { id: number; symbol: string; name: string; iconUrl?: string }
 
 type TxTab = 'buy' | 'sell' | 'transfer'
 
-async function fetchPrices(symbols: string[]): Promise<{
+async function fetchCmcQuotes(params: {
+  symbols?: string[]
+  ids?: number[]
+}): Promise<{
   prices: Record<string, CmcQuote>
+  byCmcId?: Record<string, CmcQuote>
   error?: string
 }> {
+  const ids = (params.ids ?? []).filter((id) => id > 0)
+  if (ids.length) {
+    const res = await fetch(`/api/prices?ids=${encodeURIComponent(ids.join(','))}`)
+    const j = (await res.json()) as {
+      prices?: Record<string, CmcQuote>
+      byCmcId?: Record<string, CmcQuote>
+      error?: string
+    }
+    return { prices: j.prices ?? {}, byCmcId: j.byCmcId, error: j.error }
+  }
+  const symbols = params.symbols ?? []
   if (!symbols.length) return { prices: {} }
   const res = await fetch(`/api/prices?symbols=${encodeURIComponent(symbols.join(','))}`)
   const j = (await res.json()) as {
@@ -40,6 +55,23 @@ async function fetchPrices(symbols: string[]): Promise<{
     error?: string
   }
   return { prices: j.prices ?? {}, error: j.error }
+}
+
+function quoteUsdFromPayload(
+  symbol: string,
+  cmcId: number,
+  payload: {
+    prices: Record<string, CmcQuote>
+    byCmcId?: Record<string, CmcQuote>
+  },
+): number | undefined {
+  if (cmcId > 0) {
+    const byId = payload.byCmcId?.[String(cmcId)]?.price
+    if (byId != null && byId > 0) return byId
+  }
+  const p = payload.prices[symbol]?.price
+  if (p != null && p > 0) return p
+  return undefined
 }
 
 /** Pesquisa unificada no servidor (map CMC + fallbacks CoinGecko / quotes). */
@@ -63,19 +95,26 @@ function toDatetimeLocalValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+/** Aceita decimais (ex.: 0,0005), formato pt-BR/US e notação científica. */
 function parseNum(raw: string): number {
   const t = String(raw)
     .trim()
     .replace(/\$/g, '')
     .replace(/\s/g, '')
-  if (!t) return NaN
+    .replace(/−/g, '-')
+  if (!t || t === '.' || t === ',') return NaN
+  if (/^[-+]?(\d+\.?\d*|\d*\.?\d+)[eE][-+]?\d+$/.test(t)) {
+    const n = Number(t)
+    return Number.isFinite(n) ? n : NaN
+  }
   if (t.includes('.') && t.includes(',')) {
     return Number(t.replace(/\./g, '').replace(',', '.'))
   }
   if (t.includes(',') && !t.includes('.')) {
     return Number(t.replace(',', '.'))
   }
-  return Number(t)
+  const n = Number(t)
+  return Number.isFinite(n) ? n : NaN
 }
 
 type AddTransactionDialogProps = {
@@ -226,9 +265,11 @@ export function AddTransactionDialog({
     }
     const spot = spotPrices[selectedCoin.symbol]?.price
     if (spot != null && spot > 0) apply(spot)
-    void fetchPrices([selectedCoin.symbol]).then(({ prices }) => {
-      const p = prices[selectedCoin.symbol]?.price
-      if (p != null && p > 0) apply(p)
+    const q =
+      selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
+    void fetchCmcQuotes(q).then((payload) => {
+      const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
+      if (p != null) apply(p)
     })
     return () => {
       cancelled = true
@@ -239,10 +280,12 @@ export function AddTransactionDialog({
     if (!open || txTab !== 'buy' || !selectedCoin) return
     const id = window.setInterval(() => {
       if (skipAutoPrice.current) return
-      void fetchPrices([selectedCoin.symbol]).then(({ prices }) => {
+      const q =
+        selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
+      void fetchCmcQuotes(q).then((payload) => {
         if (skipAutoPrice.current) return
-        const p = prices[selectedCoin.symbol]?.price
-        if (p != null && p > 0) {
+        const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
+        if (p != null) {
           setPriceStr(
             p.toLocaleString('pt-BR', {
               minimumFractionDigits: 2,
@@ -267,12 +310,28 @@ export function AddTransactionDialog({
     }
   }, [txTab, selectedHolding, spotPrices])
 
-  const qtyN = parseNum(qtyStr)
-  const priceN = parseNum(priceStr)
-  const feeN = Math.max(0, parseNum(feeStr) || 0)
-  const gross = qtyN > 0 && priceN >= 0 ? qtyN * priceN : 0
-  const buyTotal = gross + feeN
-  const sellNet = Math.max(0, gross - feeN)
+  /** Derivado em tempo real a partir de quantidade, preço unitário e taxa (sem alterar o layout). */
+  const { qtyN, priceN, feeN, gross, buyTotal, sellNet } = useMemo(() => {
+    const qty = parseNum(qtyStr)
+    const price = parseNum(priceStr)
+    const feeRaw = parseNum(feeStr)
+    const fee = Number.isFinite(feeRaw) ? Math.max(0, feeRaw) : 0
+    const g =
+      Number.isFinite(qty) &&
+      qty > 0 &&
+      Number.isFinite(price) &&
+      price >= 0
+        ? qty * price
+        : 0
+    return {
+      qtyN: qty,
+      priceN: price,
+      feeN: fee,
+      gross: g,
+      buyTotal: g + fee,
+      sellNet: Math.max(0, g - fee),
+    }
+  }, [qtyStr, priceStr, feeStr])
 
   const submit = useCallback(() => {
     setFormErr(null)
@@ -679,7 +738,13 @@ export function AddTransactionDialog({
           <Button
             type="button"
             className="h-11 w-full rounded-xl bg-[#3861fb] text-[15px] font-semibold text-white hover:bg-[#2f56e0]"
-            disabled={txTab === 'transfer'}
+            disabled={
+              txTab === 'transfer' ||
+              (txTab === 'buy' &&
+                (!selectedCoin || !Number.isFinite(qtyN) || qtyN <= 0)) ||
+              (txTab === 'sell' &&
+                (!selectedHolding || !Number.isFinite(qtyN) || qtyN <= 0))
+            }
             onClick={submit}
           >
             {txTab === 'buy'
