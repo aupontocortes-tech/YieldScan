@@ -39,6 +39,8 @@ export type PortfolioData = {
   transactions: PortfolioTransaction[]
   snapshots: PortfolioSnapshot[]
   realizedPnlUsd: number
+  /** Meta de alocação (% da carteira, 0–100) por id da posição. */
+  allocationTargetsPct?: Record<string, number>
 }
 
 export type CmcQuote = {

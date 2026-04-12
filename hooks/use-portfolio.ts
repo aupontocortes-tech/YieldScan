@@ -53,6 +53,18 @@ export function usePortfolioStore() {
     setData((d) => removeHolding(d, id))
   }, [])
 
+  const setAllocationTargets = useCallback((pctByHoldingId: Record<string, number>) => {
+    setData((d) => {
+      const ids = new Set(d.holdings.map((h) => h.id))
+      const cleaned: Record<string, number> = {}
+      for (const [k, v] of Object.entries(pctByHoldingId)) {
+        if (!ids.has(k)) continue
+        if (typeof v === 'number' && Number.isFinite(v)) cleaned[k] = Math.max(0, Math.min(100, v))
+      }
+      return { ...d, allocationTargetsPct: cleaned }
+    })
+  }, [])
+
   const sell = useCallback(
     (
       holdingId: string,
@@ -83,6 +95,7 @@ export function usePortfolioStore() {
     addPurchase,
     editHolding,
     deleteHolding,
+    setAllocationTargets,
     sell,
   }
 }

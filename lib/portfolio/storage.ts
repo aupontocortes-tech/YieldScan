@@ -10,6 +10,7 @@ export function defaultPortfolio(): PortfolioData {
     transactions: [],
     snapshots: [],
     realizedPnlUsd: 0,
+    allocationTargetsPct: {},
   }
 }
 
@@ -23,6 +24,16 @@ function normalize(raw: unknown): PortfolioData {
     ? (o.transactions as PortfolioTransaction[])
     : []
   const snapshots = Array.isArray(o.snapshots) ? (o.snapshots as PortfolioData['snapshots']) : []
+  const allocationTargetsPct: Record<string, number> = {}
+  const rawTargets = o.allocationTargetsPct
+  if (rawTargets && typeof rawTargets === 'object' && !Array.isArray(rawTargets)) {
+    for (const [k, v] of Object.entries(rawTargets)) {
+      if (typeof k !== 'string' || k.length > 80) continue
+      const n = typeof v === 'number' ? v : Number(v)
+      if (!Number.isFinite(n)) continue
+      allocationTargetsPct[k] = Math.max(0, Math.min(100, n))
+    }
+  }
   return {
     version: 1,
     name: typeof o.name === 'string' && o.name.trim() ? o.name.trim() : base.name,
@@ -52,6 +63,8 @@ function normalize(raw: unknown): PortfolioData {
       (s) => s && typeof s.t === 'number' && typeof s.totalUsd === 'number',
     ),
     realizedPnlUsd: typeof o.realizedPnlUsd === 'number' ? o.realizedPnlUsd : 0,
+    allocationTargetsPct:
+      Object.keys(allocationTargetsPct).length > 0 ? allocationTargetsPct : {},
   }
 }
 
@@ -180,9 +193,12 @@ export function updateHolding(
 }
 
 export function removeHolding(data: PortfolioData, id: string): PortfolioData {
+  const nextTargets = { ...(data.allocationTargetsPct ?? {}) }
+  delete nextTargets[id]
   return {
     ...data,
     holdings: data.holdings.filter((h) => h.id !== id),
+    allocationTargetsPct: nextTargets,
   }
 }
 
@@ -220,12 +236,16 @@ export function registerSell(
     feeUsd: fee,
     note,
   }
+  const nextTargets = { ...(data.allocationTargetsPct ?? {}) }
+  if (newQty < 1e-10) delete nextTargets[holdingId]
+
   return {
     data: {
       ...data,
       holdings,
       realizedPnlUsd: data.realizedPnlUsd + realized,
       transactions: [tx, ...data.transactions],
+      allocationTargetsPct: nextTargets,
     },
   }
 }

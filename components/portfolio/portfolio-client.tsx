@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   Tag,
+  Target,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -32,6 +33,7 @@ import { totalsFromHoldings, rowMetrics, quoteForHolding } from '@/lib/portfolio
 import type { CmcQuote, PortfolioHolding } from '@/lib/portfolio/types'
 import { CoinAvatar } from '@/lib/portfolio/cmc-assets'
 import { usePortfolioStore } from '@/hooks/use-portfolio'
+import { AllocationGoalsDialog } from '@/components/portfolio/allocation-goals-dialog'
 import { AddTransactionDialog } from '@/components/portfolio/add-transaction-dialog'
 import { PortfolioTransactionRow } from '@/components/portfolio/transaction-row'
 import { cn } from '@/lib/utils'
@@ -138,6 +140,8 @@ type PieSlice = {
   value: number
   pct: number
   color: string
+  /** Meta % guardada (opcional). */
+  targetPct?: number
 }
 
 function pctTone(v: number) {
@@ -147,8 +151,17 @@ function pctTone(v: number) {
 }
 
 export function PortfolioClient() {
-  const { data, ready, setName, mergePortfolio, addPurchase, editHolding, deleteHolding, sell } =
-    usePortfolioStore()
+  const {
+    data,
+    ready,
+    setName,
+    mergePortfolio,
+    addPurchase,
+    editHolding,
+    deleteHolding,
+    setAllocationTargets,
+    sell,
+  } = usePortfolioStore()
 
   const [addDialogSymbol, setAddDialogSymbol] = useState<string | null>(null)
 
@@ -236,8 +249,9 @@ export function PortfolioClient() {
     return rows.map((r, i) => ({
       ...r,
       color: PIE_COLORS[i % PIE_COLORS.length],
+      targetPct: data.allocationTargetsPct?.[r.id],
     }))
-  }, [data.holdings, prices, byGeckoId, totals.valueUsd])
+  }, [data.holdings, data.allocationTargetsPct, prices, byGeckoId, totals.valueUsd])
 
   const lineData = useMemo(() => {
     return [...data.snapshots]
@@ -271,6 +285,7 @@ export function PortfolioClient() {
   const [sellDate, setSellDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [formErr, setFormErr] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [goalsOpen, setGoalsOpen] = useState(false)
   const historyPanelRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -444,7 +459,24 @@ export function PortfolioClient() {
         <Card className={cn(CARD, 'mb-8')}>
           <CardHeader className="pb-0">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base font-semibold">Carteira</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-base font-semibold">Carteira</CardTitle>
+                {overviewTab === 'allocation' && pieSlices.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label="Definir metas de alocação por ativo"
+                    onClick={() => setGoalsOpen(true)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur-sm transition-colors',
+                      'hover:border-white/[0.12] hover:bg-white/[0.08] hover:text-foreground',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/45',
+                    )}
+                  >
+                    <Target className="size-3.5 opacity-80" aria-hidden />
+                    Metas
+                  </button>
+                )}
+              </div>
               <Tabs
                 value={overviewTab}
                 onValueChange={(v) => {
@@ -549,9 +581,14 @@ export function PortfolioClient() {
                             formatter={(value: number, _n, item) => {
                               const payload = item?.payload as PieSlice | undefined
                               const pct = payload?.pct ?? 0
+                              const meta = payload?.targetPct
                               const label = payload?.displayName ?? payload?.name ?? ''
+                              const metaLine =
+                                meta != null && Number.isFinite(meta)
+                                  ? ` · Meta ${meta.toFixed(2)}%`
+                                  : ''
                               return [
-                                `${formatCurrency(value, false)} · ${pct.toFixed(2)}%`,
+                                `${formatCurrency(value, false)} · Alocação ${pct.toFixed(2)}%${metaLine}`,
                                 label,
                               ]
                             }}
@@ -563,35 +600,47 @@ export function PortfolioClient() {
                 </div>
                 <div className="flex flex-1 flex-col justify-center lg:min-w-0 lg:pl-2">
                   {pieSlices.length > 0 && (
-                    <ul className="space-y-0.5">
-                      {pieSlices.map((row, i) => (
-                        <li key={row.id}>
-                          <button
-                            type="button"
-                            className={cn(
-                              'flex w-full items-center justify-between gap-3 rounded-lg py-2.5 pl-1 pr-2 text-left transition-colors',
-                              allocHover === i ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]',
-                            )}
-                            onMouseEnter={() => setAllocHover(i)}
-                            onMouseLeave={() => setAllocHover(null)}
-                          >
-                            <span className="flex min-w-0 items-center gap-3">
-                              <span
-                                className="size-2.5 shrink-0 rounded-full ring-1 ring-white/10"
-                                style={{ backgroundColor: row.color }}
-                                aria-hidden
-                              />
-                              <span className="truncate text-sm font-medium text-foreground">
-                                {row.displayName}
+                    <div className="w-full max-w-md">
+                      <div className="mb-1 grid grid-cols-[minmax(0,1fr)_4.75rem_4.75rem] items-end gap-2 border-b border-white/[0.06] pb-2 pl-1 pr-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span />
+                        <span className="text-right">Alocação</span>
+                        <span className="text-right text-sky-400/95">Meta</span>
+                      </div>
+                      <ul className="space-y-0.5">
+                        {pieSlices.map((row, i) => (
+                          <li key={row.id}>
+                            <button
+                              type="button"
+                              className={cn(
+                                'grid w-full grid-cols-[minmax(0,1fr)_4.75rem_4.75rem] items-center gap-2 rounded-lg py-2.5 pl-1 pr-2 text-left transition-colors',
+                                allocHover === i ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]',
+                              )}
+                              onMouseEnter={() => setAllocHover(i)}
+                              onMouseLeave={() => setAllocHover(null)}
+                            >
+                              <span className="flex min-w-0 items-center gap-3">
+                                <span
+                                  className="size-2.5 shrink-0 rounded-full ring-1 ring-white/10"
+                                  style={{ backgroundColor: row.color }}
+                                  aria-hidden
+                                />
+                                <span className="truncate text-sm font-medium text-foreground">
+                                  {row.displayName}
+                                </span>
                               </span>
-                            </span>
-                            <span className="shrink-0 tabular-nums text-sm font-mono text-muted-foreground">
-                              {row.pct.toFixed(2)}%
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                              <span className="shrink-0 text-right text-sm font-mono tabular-nums text-muted-foreground">
+                                {row.pct.toFixed(2)}%
+                              </span>
+                              <span className="shrink-0 text-right text-sm font-mono tabular-nums text-sky-400/95">
+                                {row.targetPct != null && Number.isFinite(row.targetPct)
+                                  ? `${row.targetPct.toFixed(2)}%`
+                                  : '—'}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </div>
@@ -741,6 +790,19 @@ export function PortfolioClient() {
           onActiveBuySymbolChange={setAddDialogSymbol}
           onBuy={addPurchase}
           onSell={sell}
+        />
+
+        <AllocationGoalsDialog
+          open={goalsOpen}
+          onOpenChange={setGoalsOpen}
+          slices={pieSlices.map((s) => ({
+            id: s.id,
+            symbol: s.name,
+            displayName: s.displayName,
+            currentPct: s.pct,
+          }))}
+          targets={data.allocationTargetsPct ?? {}}
+          onSave={setAllocationTargets}
         />
 
         {/* Edit */}
