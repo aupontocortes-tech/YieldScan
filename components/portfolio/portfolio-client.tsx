@@ -112,7 +112,29 @@ async function fetchPrices(
   }
 }
 
-const PIE_COLORS = ['#3b82f6', '#22c55e', '#a855f7', '#f59e0b', '#06b6d4', '#e11d48', '#d4af37']
+const PIE_COLORS = [
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#fb7185',
+  '#06b6d4',
+  '#a855f7',
+  '#e11d48',
+  '#d4af37',
+  '#84cc16',
+  '#ec4899',
+  '#14b8a6',
+  '#8b5cf6',
+]
+
+type PieSlice = {
+  id: string
+  name: string
+  displayName: string
+  value: number
+  pct: number
+  color: string
+}
 
 function pctTone(v: number) {
   if (v > 0.0001) return 'text-[#22c55e]'
@@ -191,19 +213,26 @@ export function PortfolioClient() {
     return { best: byPnl[0] ?? null, worst: byPnl[byPnl.length - 1] ?? null }
   }, [rows])
 
-  const pieData = useMemo(() => {
+  const pieSlices = useMemo((): PieSlice[] => {
     const t = totals.valueUsd
     if (t <= 0) return []
-    return data.holdings
+    const rows = data.holdings
       .map((h) => {
         const m = rowMetrics(h, quoteForHolding(h, prices, byGeckoId))
         return {
+          id: h.id,
           name: h.symbol,
+          displayName: (h.name || h.symbol).trim() || h.symbol,
           value: m.valueUsd,
           pct: t > 0 ? (m.valueUsd / t) * 100 : 0,
         }
       })
       .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value)
+    return rows.map((r, i) => ({
+      ...r,
+      color: PIE_COLORS[i % PIE_COLORS.length],
+    }))
   }, [data.holdings, prices, byGeckoId, totals.valueUsd])
 
   const lineData = useMemo(() => {
@@ -217,6 +246,8 @@ export function PortfolioClient() {
   }, [data.snapshots])
 
   const [addOpen, setAddOpen] = useState(false)
+  const [overviewTab, setOverviewTab] = useState<'history' | 'allocation'>('allocation')
+  const [allocHover, setAllocHover] = useState<number | null>(null)
 
   const handleAddDialogOpen = useCallback((next: boolean) => {
     setAddOpen(next)
@@ -395,89 +426,163 @@ export function PortfolioClient() {
           </div>
         )}
 
-        <div className="mb-8 grid gap-6 lg:grid-cols-2">
-          <Card className={CARD}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold">Alocação</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[280px]">
-              {pieData.length === 0 ? (
-                <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Adicione ativos para ver a distribuição.
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={58}
-                      outerRadius={88}
-                      paddingAngle={2}
-                    >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />
+        <Card className={cn(CARD, 'mb-8')}>
+          <CardHeader className="pb-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base font-semibold">Carteira</CardTitle>
+              <Tabs
+                value={overviewTab}
+                onValueChange={(v) => {
+                  setOverviewTab(v as 'history' | 'allocation')
+                  setAllocHover(null)
+                }}
+              >
+                <TabsList className="h-9 border border-white/10 bg-[#0d1117] p-1">
+                  <TabsTrigger
+                    value="history"
+                    className="rounded-md px-4 text-xs font-medium data-[state=active]:bg-[#252936] data-[state=active]:text-white data-[state=inactive]:text-muted-foreground"
+                  >
+                    Histórico
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="allocation"
+                    className="rounded-md px-4 text-xs font-medium data-[state=active]:bg-[#252936] data-[state=active]:text-white data-[state=inactive]:text-muted-foreground"
+                  >
+                    Alocação
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-5">
+            {overviewTab === 'history' ? (
+              <div className="h-[300px] sm:h-[320px]">
+                {lineData.length < 2 ? (
+                  <p className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                    O gráfico preenche após atualizações de preço (ex.: a cada minuto com CoinGecko).
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        tickFormatter={(v) => {
+                          if (!Number.isFinite(v)) return ''
+                          if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+                          if (v >= 1e3) return `${(v / 1e3).toFixed(1)}k`
+                          return v.toFixed(0)
+                        }}
+                      />
+                      <ReTooltip
+                        formatter={(v: number) => formatCurrency(v, false)}
+                        labelFormatter={(_, p) => {
+                          const row = p?.[0]?.payload as { t?: number }
+                          return row?.t
+                            ? new Date(row.t).toLocaleString('pt-BR')
+                            : ''
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="v"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4, fill: '#3b82f6' }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            ) : (
+              <div className="flex min-h-[300px] flex-col gap-8 lg:flex-row lg:items-center lg:gap-10">
+                <div className="flex flex-1 items-center justify-center lg:max-w-[min(100%,360px)]">
+                  {pieSlices.length === 0 ? (
+                    <p className="py-12 text-center text-sm text-muted-foreground">
+                      Adiciona ativos para ver a distribuição e as percentagens.
+                    </p>
+                  ) : (
+                    <div className="aspect-square w-full max-w-[280px] sm:max-w-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={pieSlices}
+                            dataKey="value"
+                            nameKey="displayName"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius="52%"
+                            outerRadius="78%"
+                            paddingAngle={2}
+                            stroke="transparent"
+                            onMouseEnter={(_, i) => setAllocHover(i)}
+                            onMouseLeave={() => setAllocHover(null)}
+                          >
+                            {pieSlices.map((slice, i) => (
+                              <Cell
+                                key={slice.id}
+                                fill={slice.color}
+                                fillOpacity={
+                                  allocHover === null ? 1 : allocHover === i ? 1 : 0.35
+                                }
+                                className="outline-none transition-[fill-opacity] duration-150"
+                              />
+                            ))}
+                          </Pie>
+                          <ReTooltip
+                            formatter={(value: number, _n, item) => {
+                              const payload = item?.payload as PieSlice | undefined
+                              const pct = payload?.pct ?? 0
+                              const label = payload?.displayName ?? payload?.name ?? ''
+                              return [
+                                `${formatCurrency(value, false)} · ${pct.toFixed(2)}%`,
+                                label,
+                              ]
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col justify-center lg:min-w-0 lg:pl-2">
+                  {pieSlices.length > 0 && (
+                    <ul className="space-y-0.5">
+                      {pieSlices.map((row, i) => (
+                        <li key={row.id}>
+                          <button
+                            type="button"
+                            className={cn(
+                              'flex w-full items-center justify-between gap-3 rounded-lg py-2.5 pl-1 pr-2 text-left transition-colors',
+                              allocHover === i ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]',
+                            )}
+                            onMouseEnter={() => setAllocHover(i)}
+                            onMouseLeave={() => setAllocHover(null)}
+                          >
+                            <span className="flex min-w-0 items-center gap-3">
+                              <span
+                                className="size-2.5 shrink-0 rounded-full ring-1 ring-white/10"
+                                style={{ backgroundColor: row.color }}
+                                aria-hidden
+                              />
+                              <span className="truncate text-sm font-medium text-foreground">
+                                {row.displayName}
+                              </span>
+                            </span>
+                            <span className="shrink-0 tabular-nums text-sm font-mono text-muted-foreground">
+                              {row.pct.toFixed(2)}%
+                            </span>
+                          </button>
+                        </li>
                       ))}
-                    </Pie>
-                    <ReTooltip
-                      formatter={(value: number, _n, item) => {
-                        const payload = item?.payload as { pct?: number }
-                        const pct = payload?.pct ?? 0
-                        return [`${formatCurrency(value, false)} (${pct.toFixed(1)}%)`, 'Valor']
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={CARD}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold">Evolução do portfólio</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[280px]">
-              {lineData.length < 2 ? (
-                <p className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
-                  O gráfico preenche após atualizações de preço (ex.: a cada minuto com CoinGecko).
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={lineData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: '#94a3b8' }}
-                      tickFormatter={(v) => {
-                        if (!Number.isFinite(v)) return ''
-                        if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
-                        if (v >= 1e3) return `${(v / 1e3).toFixed(1)}k`
-                        return v.toFixed(0)
-                      }}
-                    />
-                    <ReTooltip
-                      formatter={(v: number) => formatCurrency(v, false)}
-                      labelFormatter={(_, p) => {
-                        const row = p?.[0]?.payload as { t?: number }
-                        return row?.t
-                          ? new Date(row.t).toLocaleString('pt-BR')
-                          : ''
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="v"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, fill: '#3b82f6' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
