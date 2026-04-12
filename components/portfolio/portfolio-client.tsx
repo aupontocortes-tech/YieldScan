@@ -150,6 +150,11 @@ function pctTone(v: number) {
   return 'text-muted-foreground'
 }
 
+function holdingAllocationPct(valueUsd: number, totalUsd: number): number {
+  if (!(totalUsd > 0) || !Number.isFinite(valueUsd)) return 0
+  return (valueUsd / totalUsd) * 100
+}
+
 export function PortfolioClient() {
   const {
     data,
@@ -369,7 +374,7 @@ export function PortfolioClient() {
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', PAGE_BG)}>
-      <main className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <main className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
         {priceBanner && (
           <div
             className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
@@ -380,8 +385,13 @@ export function PortfolioClient() {
         )}
 
         {/* Header */}
-        <div className={cn('mb-6 flex flex-col gap-4 p-6 sm:flex-row sm:items-end sm:justify-between', CARD)}>
-          <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            'mb-5 flex flex-col gap-4 p-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:p-6',
+            CARD,
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-start gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-[#3b82f6]">
               <Wallet className="size-5" />
             </div>
@@ -402,7 +412,7 @@ export function PortfolioClient() {
                   }}
                   placeholder={defaultPortfolio().name}
                   autoComplete="off"
-                  className="h-9 max-w-[220px] border-white/10 bg-black/20 font-semibold"
+                  className="h-10 w-full max-w-full border-white/10 bg-black/20 font-semibold sm:h-9 sm:max-w-[220px]"
                 />
                 {pricesFetching && symbols.length > 0 && (
                   <span className="text-xs text-[#3b82f6]">A atualizar…</span>
@@ -416,9 +426,9 @@ export function PortfolioClient() {
               </p>
             </div>
           </div>
-          <div className="flex flex-col items-start gap-1 sm:items-end">
+          <div className="flex w-full flex-col items-start gap-1 border-t border-white/[0.06] pt-4 sm:w-auto sm:border-t-0 sm:pt-0 sm:items-end">
             <span className="text-xs text-muted-foreground">Valor total (USD)</span>
-            <span className="font-mono text-3xl font-bold tracking-tight text-foreground">
+            <span className="font-mono text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
               {pricesLoading && symbols.length > 0 ? '—' : formatCurrency(totals.valueUsd, false)}
             </span>
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -456,9 +466,9 @@ export function PortfolioClient() {
           </div>
         )}
 
-        <Card className={cn(CARD, 'mb-8')}>
-          <CardHeader className="pb-0">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <Card className={cn(CARD, 'mb-6 sm:mb-8')}>
+          <CardHeader className="px-4 pb-0 pt-5 sm:px-6 sm:pt-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-base font-semibold">Carteira</CardTitle>
                 {overviewTab === 'allocation' && pieSlices.length > 0 && (
@@ -467,7 +477,7 @@ export function PortfolioClient() {
                     aria-label="Definir metas de alocação por ativo"
                     onClick={() => setGoalsOpen(true)}
                     className={cn(
-                      'inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur-sm transition-colors',
+                      'inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur-sm transition-colors touch-manipulation',
                       'hover:border-white/[0.12] hover:bg-white/[0.08] hover:text-foreground',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/45',
                     )}
@@ -483,17 +493,18 @@ export function PortfolioClient() {
                   setOverviewTab(v as 'history' | 'allocation')
                   setAllocHover(null)
                 }}
+                className="w-full sm:w-auto"
               >
-                <TabsList className="h-9 border border-white/10 bg-[#0d1117] p-1">
+                <TabsList className="flex h-10 w-full border border-white/10 bg-[#0d1117] p-1 sm:h-9 sm:w-auto">
                   <TabsTrigger
                     value="history"
-                    className="rounded-md px-4 text-xs font-medium data-[state=active]:bg-[#252936] data-[state=active]:text-white data-[state=inactive]:text-muted-foreground"
+                    className="flex-1 rounded-md px-3 text-xs font-medium touch-manipulation data-[state=active]:bg-[#252936] data-[state=active]:text-white data-[state=inactive]:text-muted-foreground sm:flex-initial sm:px-4"
                   >
                     Histórico
                   </TabsTrigger>
                   <TabsTrigger
                     value="allocation"
-                    className="rounded-md px-4 text-xs font-medium data-[state=active]:bg-[#252936] data-[state=active]:text-white data-[state=inactive]:text-muted-foreground"
+                    className="flex-1 rounded-md px-3 text-xs font-medium touch-manipulation data-[state=active]:bg-[#252936] data-[state=active]:text-white data-[state=inactive]:text-muted-foreground sm:flex-initial sm:px-4"
                   >
                     Alocação
                   </TabsTrigger>
@@ -501,7 +512,7 @@ export function PortfolioClient() {
               </Tabs>
             </div>
           </CardHeader>
-          <CardContent className="pt-5">
+          <CardContent className="px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6">
             {overviewTab === 'history' ? (
               <div className="h-[300px] sm:h-[320px]">
                 {lineData.length < 2 ? (
@@ -543,14 +554,14 @@ export function PortfolioClient() {
                 )}
               </div>
             ) : (
-              <div className="flex min-h-[300px] flex-col gap-8 lg:flex-row lg:items-center lg:gap-10">
+              <div className="flex min-h-[260px] flex-col gap-6 sm:min-h-[300px] sm:gap-8 lg:flex-row lg:items-center lg:gap-10">
                 <div className="flex flex-1 items-center justify-center lg:max-w-[min(100%,360px)]">
                   {pieSlices.length === 0 ? (
                     <p className="py-12 text-center text-sm text-muted-foreground">
                       Adiciona ativos para ver a distribuição e as percentagens.
                     </p>
                   ) : (
-                    <div className="aspect-square w-full max-w-[280px] sm:max-w-[300px]">
+                    <div className="aspect-square w-full max-w-[min(92vw,260px)] sm:max-w-[280px] md:max-w-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -612,8 +623,8 @@ export function PortfolioClient() {
                             <button
                               type="button"
                               className={cn(
-                                'grid w-full grid-cols-[minmax(0,1fr)_4.75rem_4.75rem] items-center gap-2 rounded-lg py-2.5 pl-1 pr-2 text-left transition-colors',
-                                allocHover === i ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]',
+                                'grid w-full grid-cols-[minmax(0,1fr)_4.75rem_4.75rem] items-center gap-2 rounded-lg py-3 pl-1 pr-2 text-left transition-colors touch-manipulation sm:py-2.5',
+                                allocHover === i ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04] active:bg-white/[0.06]',
                               )}
                               onMouseEnter={() => setAllocHover(i)}
                               onMouseLeave={() => setAllocHover(null)}
@@ -648,24 +659,24 @@ export function PortfolioClient() {
           </CardContent>
         </Card>
 
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-            <TabsList className="border border-white/10 bg-[#111827]">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)} className="w-full md:w-auto">
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-white/10 bg-[#111827] p-1 md:inline-flex md:w-auto">
               <TabsTrigger
                 value="all"
-                className="data-[state=active]:bg-[#3b82f6]/20 data-[state=active]:text-[#60a5fa]"
+                className="touch-manipulation py-2.5 text-xs data-[state=active]:bg-[#3b82f6]/20 data-[state=active]:text-[#60a5fa] md:py-1.5 md:text-sm"
               >
                 Todos
               </TabsTrigger>
               <TabsTrigger
                 value="up"
-                className="data-[state=active]:bg-[#22c55e]/15 data-[state=active]:text-[#22c55e]"
+                className="touch-manipulation py-2.5 text-xs data-[state=active]:bg-[#22c55e]/15 data-[state=active]:text-[#22c55e] md:py-1.5 md:text-sm"
               >
                 Em lucro
               </TabsTrigger>
               <TabsTrigger
                 value="down"
-                className="data-[state=active]:bg-[#ef4444]/15 data-[state=active]:text-[#ef4444]"
+                className="touch-manipulation py-2.5 text-xs data-[state=active]:bg-[#ef4444]/15 data-[state=active]:text-[#ef4444] md:py-1.5 md:text-sm"
               >
                 Em prejuízo
               </TabsTrigger>
@@ -673,7 +684,7 @@ export function PortfolioClient() {
           </Tabs>
           <Button
             onClick={() => setAddOpen(true)}
-            className="bg-[#3b82f6] text-white hover:bg-[#2563eb]"
+            className="h-11 w-full touch-manipulation bg-[#3b82f6] text-white hover:bg-[#2563eb] md:h-10 md:w-auto"
           >
             <Plus className="size-4" />
             Adicionar transação
@@ -681,102 +692,266 @@ export function PortfolioClient() {
         </div>
 
         <Card className={cn(CARD, 'min-h-0 flex-1')}>
-          <CardHeader className="pb-2">
+          <CardHeader className="px-4 pb-2 pt-5 sm:px-6 sm:pt-6">
             <CardTitle className="text-base font-semibold">Ativos</CardTitle>
+            <p className="text-xs text-muted-foreground md:hidden">
+              Cada posição num cartão; toca em (⋯) para editar, vender ou remover.
+            </p>
           </CardHeader>
-          <CardContent className="px-2 pb-4 sm:px-4">
+          <CardContent className="px-3 pb-4 sm:px-4 md:px-6">
             {data.holdings.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">
                 Ainda não tem posições. Usa &quot;Adicionar transação&quot; para começar.
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead>Ativo</TableHead>
-                    <TableHead className="text-right">Preço</TableHead>
-                    <TableHead className="text-right">24h</TableHead>
-                    <TableHead className="text-right">7d</TableHead>
-                    <TableHead className="text-right">Qtd</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead className="text-right">Preço médio</TableHead>
-                    <TableHead className="text-right">P&amp;L</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(({ h, m }) => (
-                    <TableRow key={h.id} className="border-white/10">
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <CoinAvatar
-                            cmcId={h.cmcId}
-                            symbol={h.symbol}
-                            iconUrl={h.iconUrl}
-                            size={32}
-                          />
+              <>
+                <div className="flex flex-col gap-3 md:hidden">
+                  {rows.map(({ h, m }) => {
+                    const allocPct = holdingAllocationPct(m.valueUsd, totals.valueUsd)
+                    const metaPct = data.allocationTargetsPct?.[h.id]
+                    return (
+                      <div
+                        key={h.id}
+                        className="rounded-2xl border border-white/[0.08] bg-[#13161f]/90 p-4 shadow-sm shadow-black/20"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <CoinAvatar
+                              cmcId={h.cmcId}
+                              symbol={h.symbol}
+                              iconUrl={h.iconUrl}
+                              size={40}
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate font-semibold text-foreground">{h.name}</div>
+                              <div className="text-xs text-muted-foreground">{h.symbol}</div>
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-10 shrink-0 touch-manipulation text-muted-foreground"
+                              >
+                                <MoreHorizontal className="size-5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="border-white/10 bg-[#111827]">
+                              <DropdownMenuItem onClick={() => openEdit(h)}>
+                                <Pencil className="size-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openSell(h)}>
+                                <Tag className="size-4" />
+                                Registrar venda
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[#ef4444] focus:text-[#ef4444]"
+                                onClick={() => openDelete(h)}
+                              >
+                                <Trash2 className="size-4" />
+                                Remover
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3">
                           <div>
-                            <div className="font-medium">{h.name}</div>
-                            <div className="text-xs text-muted-foreground">{h.symbol}</div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Preço
+                            </p>
+                            <p className="font-mono text-sm text-foreground">
+                              {m.price > 0 ? formatCurrency(m.price, false) : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Valor
+                            </p>
+                            <p className="font-mono text-sm text-foreground">
+                              {formatCurrency(m.valueUsd, false)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              24h
+                            </p>
+                            <p className={cn('font-mono text-sm', pctTone(m.pct24h))}>
+                              {m.price > 0 ? formatPercent(m.pct24h) : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              7d
+                            </p>
+                            <p className={cn('font-mono text-sm', pctTone(m.pct7d))}>
+                              {m.price > 0 ? formatPercent(m.pct7d) : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Qtd
+                            </p>
+                            <p className="break-all font-mono text-sm text-foreground">
+                              {h.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Preço médio
+                            </p>
+                            <p className="font-mono text-sm text-foreground">
+                              {formatCurrency(h.avgBuyUsd, false)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Alocação
+                            </p>
+                            <p className="font-mono text-sm tabular-nums text-muted-foreground">
+                              {allocPct.toFixed(2)}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-400/90">
+                              Meta
+                            </p>
+                            <p className="font-mono text-sm tabular-nums text-sky-400/95">
+                              {metaPct != null && Number.isFinite(metaPct)
+                                ? `${metaPct.toFixed(2)}%`
+                                : '—'}
+                            </p>
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {m.price > 0 ? formatCurrency(m.price, false) : '—'}
-                      </TableCell>
-                      <TableCell className={cn('text-right font-mono text-sm', pctTone(m.pct24h))}>
-                        {m.price > 0 ? formatPercent(m.pct24h) : '—'}
-                      </TableCell>
-                      <TableCell className={cn('text-right font-mono text-sm', pctTone(m.pct7d))}>
-                        {m.price > 0 ? formatPercent(m.pct7d) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {h.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatCurrency(m.valueUsd, false)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatCurrency(h.avgBuyUsd, false)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className={cn('font-mono text-sm font-semibold', pctTone(m.pnlUsd))}>
-                          {formatCurrency(m.pnlUsd, false)}
+                        <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3">
+                          <span className="text-xs font-medium text-muted-foreground">P&amp;L</span>
+                          <div className="text-right">
+                            <div className={cn('font-mono text-base font-semibold', pctTone(m.pnlUsd))}>
+                              {formatCurrency(m.pnlUsd, false)}
+                            </div>
+                            <div className={cn('font-mono text-xs', pctTone(m.pnlPct))}>
+                              {formatPercent(m.pnlPct)}
+                            </div>
+                          </div>
                         </div>
-                        <div className={cn('text-xs', pctTone(m.pnlPct))}>
-                          {formatPercent(m.pnlPct)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="border-white/10 bg-[#111827]">
-                            <DropdownMenuItem onClick={() => openEdit(h)}>
-                              <Pencil className="size-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openSell(h)}>
-                              <Tag className="size-4" />
-                              Registrar venda
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-[#ef4444] focus:text-[#ef4444]"
-                              onClick={() => openDelete(h)}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="hidden md:block md:overflow-x-auto md:rounded-xl md:ring-1 md:ring-white/[0.06]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/10 hover:bg-transparent">
+                        <TableHead className="whitespace-nowrap">Ativo</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">Preço</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">24h</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">7d</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">Qtd</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">Valor</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">Alocação</TableHead>
+                        <TableHead className="whitespace-nowrap text-right text-sky-400/90">Meta</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">Preço médio</TableHead>
+                        <TableHead className="whitespace-nowrap text-right">P&amp;L</TableHead>
+                        <TableHead className="w-12" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map(({ h, m }) => {
+                        const allocPct = holdingAllocationPct(m.valueUsd, totals.valueUsd)
+                        const metaPct = data.allocationTargetsPct?.[h.id]
+                        return (
+                          <TableRow key={h.id} className="border-white/10">
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <CoinAvatar
+                                  cmcId={h.cmcId}
+                                  symbol={h.symbol}
+                                  iconUrl={h.iconUrl}
+                                  size={32}
+                                />
+                                <div>
+                                  <div className="font-medium">{h.name}</div>
+                                  <div className="text-xs text-muted-foreground">{h.symbol}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                              {m.price > 0 ? formatCurrency(m.price, false) : '—'}
+                            </TableCell>
+                            <TableCell
+                              className={cn('text-right font-mono text-sm whitespace-nowrap', pctTone(m.pct24h))}
                             >
-                              <Trash2 className="size-4" />
-                              Remover
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                              {m.price > 0 ? formatPercent(m.pct24h) : '—'}
+                            </TableCell>
+                            <TableCell
+                              className={cn('text-right font-mono text-sm whitespace-nowrap', pctTone(m.pct7d))}
+                            >
+                              {m.price > 0 ? formatPercent(m.pct7d) : '—'}
+                            </TableCell>
+                            <TableCell className="max-w-[7rem] text-right font-mono text-sm break-all">
+                              {h.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                              {formatCurrency(m.valueUsd, false)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm tabular-nums text-muted-foreground whitespace-nowrap">
+                              {allocPct.toFixed(2)}%
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm tabular-nums text-sky-400/95 whitespace-nowrap">
+                              {metaPct != null && Number.isFinite(metaPct)
+                                ? `${metaPct.toFixed(2)}%`
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                              {formatCurrency(h.avgBuyUsd, false)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className={cn('font-mono text-sm font-semibold', pctTone(m.pnlUsd))}>
+                                {formatCurrency(m.pnlUsd, false)}
+                              </div>
+                              <div className={cn('text-xs', pctTone(m.pnlPct))}>
+                                {formatPercent(m.pnlPct)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-9 touch-manipulation text-muted-foreground"
+                                  >
+                                    <MoreHorizontal className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="border-white/10 bg-[#111827]">
+                                  <DropdownMenuItem onClick={() => openEdit(h)}>
+                                    <Pencil className="size-4" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openSell(h)}>
+                                    <Tag className="size-4" />
+                                    Registrar venda
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-[#ef4444] focus:text-[#ef4444]"
+                                    onClick={() => openDelete(h)}
+                                  >
+                                    <Trash2 className="size-4" />
+                                    Remover
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -915,7 +1090,7 @@ export function PortfolioClient() {
                 aria-expanded={historyOpen}
                 onClick={() => setHistoryOpen((v) => !v)}
                 className={cn(
-                  'group inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111827] px-5 py-3 text-sm font-semibold text-foreground shadow-lg shadow-black/20 transition-colors',
+                  'group inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111827] px-5 py-3 text-sm font-semibold text-foreground shadow-lg shadow-black/20 transition-colors touch-manipulation',
                   'hover:border-[#3b82f6]/35 hover:bg-[#161e2e] hover:text-[#93c5fd]',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/50',
                   historyOpen && 'border-[#3b82f6]/30 bg-[#161e2e] text-[#93c5fd]',
@@ -944,14 +1119,14 @@ export function PortfolioClient() {
               )}
             >
               <div className="flex max-h-[min(65vh,640px)] min-h-0 flex-col">
-                <div className="shrink-0 border-b border-white/[0.06] px-5 py-4 sm:px-6">
+                <div className="shrink-0 border-b border-white/[0.06] px-4 py-3 sm:px-6 sm:py-4">
                   <h3 className="text-base font-semibold text-foreground sm:text-lg">Histórico recente</h3>
                   <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
                     {data.transactions.length}{' '}
                     {data.transactions.length === 1 ? 'transação' : 'transações'} na carteira.
                   </p>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4">
                   <ul className="flex flex-col gap-2">
                     {data.transactions.map((tx) => (
                       <li key={tx.id}>
