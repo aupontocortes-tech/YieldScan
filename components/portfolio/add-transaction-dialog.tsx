@@ -88,12 +88,42 @@ function quoteUsdFromPayload(
 
 function priceFetchErrMessage(err: string | undefined): string | null {
   if (err === 'coingecko_429') {
-    return 'CoinGecko limitou pedidos (429). Configura COINGECKO_DEMO_API_KEY ou indica o preço manualmente.'
+    return 'A API CoinGecko limitou pedidos (429). Adiciona COINGECKO_DEMO_API_KEY no servidor ou indica o preço à mão.'
   }
   if (err?.startsWith('coingecko_')) {
     return 'Cotação indisponível momentaneamente. Indica o preço manualmente ou tenta de novo.'
   }
   return null
+}
+
+/** Stablecoins USD: fallback ~1 USD quando a cotação automática falha (ex.: 429). */
+const USD_STABLE_GECKO_IDS = new Set([
+  'tether',
+  'usd-coin',
+  'dai',
+  'binance-usd',
+  'true-usd',
+  'first-digital-usd',
+  'paypal-usd',
+  'gemini-dollar',
+  'liquity-usd',
+  'usdd',
+])
+const USD_STABLE_SYMBOLS = new Set([
+  'USDT',
+  'USDC',
+  'DAI',
+  'BUSD',
+  'TUSD',
+  'FDUSD',
+  'PYUSD',
+  'USDP',
+  'GUSD',
+])
+
+function isUsdStableCoin(coin: SearchCoin): boolean {
+  if (USD_STABLE_GECKO_IDS.has(coin.id.trim().toLowerCase())) return true
+  return USD_STABLE_SYMBOLS.has(coin.symbol.trim().toUpperCase())
 }
 
 function spotPriceForCoin(
@@ -159,6 +189,20 @@ function parseNum(raw: string): number {
 function hasValidUnitPrice(priceStr: string): boolean {
   const p = parseNum(priceStr)
   return Number.isFinite(p) && p > 0
+}
+
+/**
+ * Quando não há preço da API e o campo ainda está vazio/0: stable → 1 USD; senão mensagem de erro.
+ */
+function resolveAutoPriceFailure(
+  err: string | undefined,
+  coin: SearchCoin,
+  currentPriceStr: string,
+): { fallbackUsd: number | null; formMessage: string | null } {
+  if (hasValidUnitPrice(currentPriceStr)) return { fallbackUsd: null, formMessage: null }
+  if (isUsdStableCoin(coin)) return { fallbackUsd: 1, formMessage: null }
+  const msg = priceFetchErrMessage(err)
+  return { fallbackUsd: null, formMessage: msg }
 }
 
 function formatCryptoQty(q: number): string {
@@ -330,16 +374,24 @@ export function AddTransactionDialog({
       setFormErr(null)
     }
     void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
-      const msg = priceFetchErrMessage(payload.error)
-      if (msg) {
-        if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
-        return
-      }
+      if (cancelled || skipAutoPrice.current) return
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
       if (p != null && p > 0) {
         apply(p)
         setFormErr(null)
+        return
       }
+      const { fallbackUsd, formMessage } = resolveAutoPriceFailure(
+        payload.error,
+        selectedCoin,
+        latestPriceStrRef.current,
+      )
+      if (fallbackUsd != null) {
+        apply(fallbackUsd)
+        setFormErr(null)
+        return
+      }
+      if (formMessage) setFormErr(formMessage)
     })
     return () => {
       cancelled = true
@@ -356,18 +408,27 @@ export function AddTransactionDialog({
     let cancelled = false
     void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
       if (cancelled || skipAutoPrice.current) return
-      const msg = priceFetchErrMessage(payload.error)
-      if (msg) {
-        if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
-        return
-      }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
       if (p != null && p > 0) {
         setFormErr(null)
         setPriceStr(
           p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
         )
+        return
       }
+      const { fallbackUsd, formMessage } = resolveAutoPriceFailure(
+        payload.error,
+        selectedCoin,
+        latestPriceStrRef.current,
+      )
+      if (fallbackUsd != null) {
+        setFormErr(null)
+        setPriceStr(
+          fallbackUsd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+        )
+        return
+      }
+      if (formMessage) setFormErr(formMessage)
     })
     return () => {
       cancelled = true
@@ -396,11 +457,6 @@ export function AddTransactionDialog({
       if (cancelled || skipAutoPrice.current) return
       void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
         if (cancelled || skipAutoPrice.current) return
-        const msg = priceFetchErrMessage(payload.error)
-        if (msg) {
-          if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
-          return
-        }
         const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
         if (pr != null && pr > 0) {
           setFormErr(null)
@@ -410,7 +466,24 @@ export function AddTransactionDialog({
             )
           }
           setQtyStr(formatCryptoQty(inv / pr))
+          return
         }
+        const { fallbackUsd, formMessage } = resolveAutoPriceFailure(
+          payload.error,
+          selectedCoin,
+          latestPriceStrRef.current,
+        )
+        if (fallbackUsd != null) {
+          setFormErr(null)
+          if (!skipAutoPrice.current) {
+            setPriceStr(
+              fallbackUsd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+            )
+          }
+          setQtyStr(formatCryptoQty(inv / fallbackUsd))
+          return
+        }
+        if (formMessage) setFormErr(formMessage)
       })
     }, 320)
     return () => {
@@ -429,6 +502,20 @@ export function AddTransactionDialog({
         if (p != null && p > 0) {
           setPriceStr(
             p.toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 8,
+            }),
+          )
+          return
+        }
+        const { fallbackUsd } = resolveAutoPriceFailure(
+          payload.error,
+          selectedCoin,
+          latestPriceStrRef.current,
+        )
+        if (fallbackUsd != null) {
+          setPriceStr(
+            fallbackUsd.toLocaleString('pt-BR', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 8,
             }),
@@ -486,22 +573,35 @@ export function AddTransactionDialog({
       return
     }
     void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
-      const msg = priceFetchErrMessage(payload.error)
-      if (msg) {
-        if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
-        return
-      }
       const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
-      if (pr == null || pr <= 0) {
-        setFormErr('Não foi possível obter o preço. Indica o preço unitário ou tenta de novo.')
+      if (pr != null && pr > 0) {
+        setFormErr(null)
+        skipAutoPrice.current = false
+        setPriceStr(
+          pr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+        )
+        setQtyStr(formatCryptoQty(inv / pr))
         return
       }
-      setFormErr(null)
-      skipAutoPrice.current = false
-      setPriceStr(
-        pr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+      const { fallbackUsd, formMessage } = resolveAutoPriceFailure(
+        payload.error,
+        selectedCoin,
+        latestPriceStrRef.current,
       )
-      setQtyStr(formatCryptoQty(inv / pr))
+      if (fallbackUsd != null) {
+        setFormErr(null)
+        skipAutoPrice.current = false
+        setPriceStr(
+          fallbackUsd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+        )
+        setQtyStr(formatCryptoQty(inv / fallbackUsd))
+        return
+      }
+      if (formMessage) {
+        setFormErr(formMessage)
+        return
+      }
+      setFormErr('Não foi possível obter o preço. Indica o preço unitário ou tenta de novo.')
     })
   }, [selectedCoin, txTab, totalUsdInputStr, priceStr])
 
