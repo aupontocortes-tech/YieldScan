@@ -39,6 +39,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -269,6 +270,7 @@ export function PortfolioClient() {
   const [sellPrice, setSellPrice] = useState('')
   const [sellDate, setSellDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [formErr, setFormErr] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const openEdit = (h: PortfolioHolding) => {
     setActiveHolding(h)
@@ -832,39 +834,57 @@ export function PortfolioClient() {
         </Dialog>
 
         {data.transactions.length > 0 && (
-          <Card className={cn(CARD, 'mt-8')}>
-            <CardHeader className="pb-3">
-              <Link
-                href="/portfolio/historico"
-                aria-label="Ver histórico completo de transações"
-                className="group -m-1 rounded-xl p-1 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-[#3b82f6]/45"
+          <>
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={historyOpen}
+                className={cn(
+                  'group inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111827] px-5 py-3 text-sm font-semibold text-foreground shadow-lg shadow-black/20 transition-colors',
+                  'hover:border-[#3b82f6]/35 hover:bg-[#161e2e] hover:text-[#93c5fd]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/50',
+                )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <CardTitle className="text-base font-semibold transition-colors group-hover:text-[#93c5fd]">
-                        Histórico recente
-                      </CardTitle>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[#93c5fd]" />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Últimas {Math.min(8, data.transactions.length)} movimentações · clica para ver todo o
-                      histórico
-                    </p>
-                  </div>
+                Histórico recente
+                <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[#93c5fd]" />
+              </button>
+            </div>
+
+            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+              <DialogContent
+                showCloseButton
+                className={cn(
+                  'flex max-h-[min(85vh,760px)] w-[calc(100%-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden border-white/10 bg-[#111827] p-0 sm:max-w-xl',
+                )}
+              >
+                <DialogHeader className="shrink-0 border-b border-white/[0.06] px-5 py-4 text-left sm:px-6">
+                  <DialogTitle className="text-base sm:text-lg">Histórico recente</DialogTitle>
+                  <DialogDescription className="text-xs sm:text-sm">
+                    {data.transactions.length}{' '}
+                    {data.transactions.length === 1 ? 'transação' : 'transações'} na carteira.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+                  <ul className="flex flex-col gap-2">
+                    {data.transactions.map((tx) => (
+                      <li key={tx.id}>
+                        <PortfolioTransactionRow tx={tx} holdings={data.holdings} />
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </Link>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <ul className="flex flex-col gap-2">
-                {data.transactions.slice(0, 8).map((tx) => (
-                  <li key={tx.id}>
-                    <PortfolioTransactionRow tx={tx} holdings={data.holdings} />
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+                <DialogFooter className="shrink-0 border-t border-white/[0.06] bg-[#0d1117]/80 px-5 py-3 sm:px-6 sm:justify-center">
+                  <Button variant="ghost" size="sm" className="text-[#93c5fd] hover:text-[#bfdbfe]" asChild>
+                    <Link href="/portfolio/historico" onClick={() => setHistoryOpen(false)}>
+                      Abrir histórico na página dedicada
+                    </Link>
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </>
         )}
 
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
