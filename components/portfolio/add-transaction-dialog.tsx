@@ -119,6 +119,14 @@ function parseNum(raw: string): number {
   return Number.isFinite(n) ? n : NaN
 }
 
+function formatCryptoQty(q: number): string {
+  if (!Number.isFinite(q) || q <= 0) return ''
+  return new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: 18,
+    minimumFractionDigits: 0,
+  }).format(q)
+}
+
 type AddTransactionDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -177,10 +185,16 @@ export function AddTransactionDialog({
 
   const [feeStr, setFeeStr] = useState('')
   const [noteStr, setNoteStr] = useState('')
+  /** Comprar: valor total em USD opcional → calcula quantidade (qtd = total / preço). */
+  const [totalUsdInputStr, setTotalUsdInputStr] = useState('')
   const [feeOpen, setFeeOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
 
   const [formErr, setFormErr] = useState<string | null>(null)
+
+  /** Valor atual do campo “total USD” para efeitos que só devem reagir a mudanças de preço. */
+  const totalUsdBudgetRef = useRef('')
+  totalUsdBudgetRef.current = totalUsdInputStr
 
   const resetForm = useCallback(() => {
     setTxTab('buy')
@@ -195,6 +209,7 @@ export function AddTransactionDialog({
     setDatetimeStr(toDatetimeLocalValue(new Date()))
     setFeeStr('')
     setNoteStr('')
+    setTotalUsdInputStr('')
     setFeeOpen(false)
     setNoteOpen(false)
     setFormErr(null)
@@ -278,6 +293,41 @@ export function AddTransactionDialog({
     }
   }, [open, txTab, selectedCoin, spotPrices])
 
+  /** Com quantidade > 0 e ainda sem preço válido, ir buscar cotação (ordem: qtd primeiro, depois preço). */
+  useEffect(() => {
+    if (!open || txTab !== 'buy' || !selectedCoin || skipAutoPrice.current) return
+    const q = parseNum(qtyStr)
+    if (!Number.isFinite(q) || q <= 0) return
+    const existing = parseNum(priceStr)
+    if (Number.isFinite(existing) && existing > 0) return
+    let cancelled = false
+    const params =
+      selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
+    void fetchCmcQuotes(params).then((payload) => {
+      if (cancelled || skipAutoPrice.current) return
+      const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
+      if (p != null && p > 0) {
+        setPriceStr(
+          p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+        )
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, txTab, selectedCoin, qtyStr, priceStr])
+
+  /** Total em USD fixo: quando a cotação muda, recalcula só a quantidade (sem reagir a cada tecla no total). */
+  useEffect(() => {
+    if (!open || txTab !== 'buy') return
+    const raw = totalUsdBudgetRef.current.trim()
+    if (!raw) return
+    const inv = parseNum(raw)
+    const p = parseNum(priceStr)
+    if (!(inv > 0) || !(p > 0)) return
+    setQtyStr(formatCryptoQty(inv / p))
+  }, [open, txTab, priceStr])
+
   useEffect(() => {
     if (!open || txTab !== 'buy' || !selectedCoin) return
     const id = window.setInterval(() => {
@@ -332,6 +382,36 @@ export function AddTransactionDialog({
       priceOk: pOk,
     }
   }, [qtyStr, priceStr, feeStr])
+
+  /** Total em USD (opcional): calcula quantidade = total / preço; se não houver preço, busca na API. */
+  const applyTotalUsdToQty = useCallback(() => {
+    if (!selectedCoin || txTab !== 'buy') return
+    const inv = parseNum(totalUsdInputStr)
+    if (!(inv > 0)) return
+    const pLocal = parseNum(priceStr)
+    if (pLocal > 0) {
+      setFormErr(null)
+      setQtyStr(formatCryptoQty(inv / pLocal))
+      return
+    }
+    const params =
+      selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
+    void fetchCmcQuotes(params).then((payload) => {
+      const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
+      if (pr == null || pr <= 0) {
+        setFormErr(
+          'Não foi possível obter o preço. Configura COINMARKETCAP_API_KEY ou indica o preço unitário.',
+        )
+        return
+      }
+      setFormErr(null)
+      skipAutoPrice.current = false
+      setPriceStr(
+        pr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+      )
+      setQtyStr(formatCryptoQty(inv / pr))
+    })
+  }, [selectedCoin, txTab, totalUsdInputStr, priceStr])
 
   const submit = useCallback(() => {
     setFormErr(null)
@@ -530,6 +610,7 @@ export function AddTransactionDialog({
                               onClick={() => {
                                 setSelectedCoin(c)
                                 setPickerOpen(false)
+                                setTotalUsdInputStr('')
                               }}
                             >
                               <CoinAvatar
@@ -599,7 +680,10 @@ export function AddTransactionDialog({
                 <Label className="text-xs text-muted-foreground">Quantidade</Label>
                 <Input
                   value={qtyStr}
-                  onChange={(e) => setQtyStr(e.target.value)}
+                  onChange={(e) => {
+                    if (txTab === 'buy') setTotalUsdInputStr('')
+                    setQtyStr(e.target.value)
+                  }}
                   placeholder="0,00"
                   data-no-swipe-nav
                   className="h-11 rounded-xl border-white/[0.08] bg-[#13161f] font-mono"
@@ -627,10 +711,36 @@ export function AddTransactionDialog({
               </div>
             </div>
             {txTab === 'buy' && selectedCoin && (
+              <div className="grid gap-1.5">
+                <Label className="text-xs text-muted-foreground">Total em USD (opcional)</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    value={totalUsdInputStr}
+                    onChange={(e) => setTotalUsdInputStr(e.target.value)}
+                    onBlur={() => applyTotalUsdToQty()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        applyTotalUsdToQty()
+                      }
+                    }}
+                    placeholder="Calcula a quantidade pelo valor"
+                    data-no-swipe-nav
+                    className="h-11 rounded-xl border-white/[0.08] bg-[#13161f] pl-7 font-mono"
+                  />
+                </div>
+              </div>
+            )}
+            {txTab === 'buy' && selectedCoin && (
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Ao escolheres o ativo, o preço segue a cotação atual (atualiza a cada ~30s). A{' '}
-                <span className="text-foreground/90">quantidade × preço</span> entra no total abaixo — podes editar o
-                preço se quiseres outro valor.
+                Escolhe a moeda: o <span className="text-foreground/90">preço unitário</span> vem da API (CoinMarketCap)
+                e podes alterá-lo. Com <span className="text-foreground/90">quantidade</span>, o total em USD aparece
+                em baixo; se ainda não houver preço, é buscado ao meteres a quantidade. Em alternativa, usa{' '}
+                <span className="text-foreground/90">Total em USD</span> para calcular a quantidade automaticamente. A
+                taxa continua opcional.
               </p>
             )}
 
