@@ -192,10 +192,6 @@ export function AddTransactionDialog({
 
   const [formErr, setFormErr] = useState<string | null>(null)
 
-  /** Valor atual do campo “total USD” para efeitos que só devem reagir a mudanças de preço. */
-  const totalUsdBudgetRef = useRef('')
-  totalUsdBudgetRef.current = totalUsdInputStr
-
   const resetForm = useCallback(() => {
     setTxTab('buy')
     setPickerOpen(false)
@@ -280,13 +276,26 @@ export function AddTransactionDialog({
         p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
       )
     }
-    const spot = spotPrices[selectedCoin.symbol]?.price
-    if (spot != null && spot > 0) apply(spot)
+    const symUpper = selectedCoin.symbol.trim().toUpperCase()
+    const spot = spotPrices[symUpper]?.price ?? spotPrices[selectedCoin.symbol]?.price
+    if (spot != null && spot > 0) {
+      apply(spot)
+      setFormErr(null)
+    }
     const q =
       selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
     void fetchCmcQuotes(q).then((payload) => {
+      if (payload.error === 'server_missing_cmc_key') {
+        setFormErr(
+          'Sem chave CMC no servidor. Define COINMARKETCAP_API_KEY no .env ou indica o preço manualmente.',
+        )
+        return
+      }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
-      if (p != null) apply(p)
+      if (p != null && p > 0) {
+        apply(p)
+        setFormErr(null)
+      }
     })
     return () => {
       cancelled = true
@@ -305,8 +314,15 @@ export function AddTransactionDialog({
       selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
     void fetchCmcQuotes(params).then((payload) => {
       if (cancelled || skipAutoPrice.current) return
+      if (payload.error === 'server_missing_cmc_key') {
+        setFormErr(
+          'Sem chave CMC no servidor. Define COINMARKETCAP_API_KEY no .env ou indica o preço manualmente.',
+        )
+        return
+      }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
       if (p != null && p > 0) {
+        setFormErr(null)
         setPriceStr(
           p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
         )
@@ -317,16 +333,53 @@ export function AddTransactionDialog({
     }
   }, [open, txTab, selectedCoin, qtyStr, priceStr])
 
-  /** Total em USD fixo: quando a cotação muda, recalcula só a quantidade (sem reagir a cada tecla no total). */
+  /**
+   * Total em USD (opcional): atualiza a quantidade em tempo real.
+   * Se o preço ainda for 0, faz debounce e busca na API antes de calcular qtd.
+   */
   useEffect(() => {
-    if (!open || txTab !== 'buy') return
-    const raw = totalUsdBudgetRef.current.trim()
+    if (!open || txTab !== 'buy' || !selectedCoin) return
+    const raw = totalUsdInputStr.trim()
     if (!raw) return
-    const inv = parseNum(raw)
+    const inv = parseNum(totalUsdInputStr)
+    if (!(inv > 0)) return
+
     const p = parseNum(priceStr)
-    if (!(inv > 0) || !(p > 0)) return
-    setQtyStr(formatCryptoQty(inv / p))
-  }, [open, txTab, priceStr])
+    if (p > 0) {
+      setQtyStr(formatCryptoQty(inv / p))
+      return
+    }
+
+    let cancelled = false
+    const tid = window.setTimeout(() => {
+      if (cancelled || skipAutoPrice.current) return
+      const params =
+        selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
+      void fetchCmcQuotes(params).then((payload) => {
+        if (cancelled || skipAutoPrice.current) return
+        if (payload.error === 'server_missing_cmc_key') {
+          setFormErr(
+            'Sem chave CMC no servidor. Define COINMARKETCAP_API_KEY ou indica o preço unitário.',
+          )
+          return
+        }
+        const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
+        if (pr != null && pr > 0) {
+          setFormErr(null)
+          if (!skipAutoPrice.current) {
+            setPriceStr(
+              pr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+            )
+          }
+          setQtyStr(formatCryptoQty(inv / pr))
+        }
+      })
+    }, 320)
+    return () => {
+      cancelled = true
+      window.clearTimeout(tid)
+    }
+  }, [open, txTab, selectedCoin, totalUsdInputStr, priceStr])
 
   useEffect(() => {
     if (!open || txTab !== 'buy' || !selectedCoin) return
@@ -337,7 +390,7 @@ export function AddTransactionDialog({
       void fetchCmcQuotes(q).then((payload) => {
         if (skipAutoPrice.current) return
         const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
-        if (p != null) {
+        if (p != null && p > 0) {
           setPriceStr(
             p.toLocaleString('pt-BR', {
               minimumFractionDigits: 2,
@@ -369,7 +422,8 @@ export function AddTransactionDialog({
     const feeRaw = parseNum(feeStr)
     const fee = Number.isFinite(feeRaw) ? Math.max(0, feeRaw) : 0
     const qOk = Number.isFinite(qty) && qty > 0
-    const pOk = Number.isFinite(price) && price >= 0
+    /** Preço 0 não conta como cotação válida — evita travar a busca na API e o total em USD. */
+    const pOk = Number.isFinite(price) && price > 0
     const g = qOk && pOk ? qty * price : 0
     return {
       qtyN: qty,
@@ -430,8 +484,8 @@ export function AddTransactionDialog({
         setFormErr('Quantidade inválida.')
         return
       }
-      if (!Number.isFinite(priceN) || priceN < 0) {
-        setFormErr('Preço inválido.')
+      if (!Number.isFinite(priceN) || priceN <= 0) {
+        setFormErr('Indica um preço unitário maior que zero (ou aguarda a cotação da API).')
         return
       }
       onBuy({
@@ -458,8 +512,8 @@ export function AddTransactionDialog({
         setFormErr('Quantidade inválida.')
         return
       }
-      if (!Number.isFinite(priceN) || priceN < 0) {
-        setFormErr('Preço inválido.')
+      if (!Number.isFinite(priceN) || priceN <= 0) {
+        setFormErr('Indica um preço unitário maior que zero.')
         return
       }
       const err = onSell(selectedHolding.id, qtyN, priceN, at, { feeUsd, note })
@@ -826,8 +880,18 @@ export function AddTransactionDialog({
               )}
               {txTab === 'buy' && selectedCoin && qtyOk && !priceOk && priceStr.trim() !== '' && (
                 <p className="mt-2 text-xs text-[#ef4444]">
-                  Preço não reconhecido. Usa <span className="font-mono">12345,67</span> ou{' '}
-                  <span className="font-mono">12345.67</span> (USD por moeda).
+                  {parseNum(priceStr) === 0 ? (
+                    <>
+                      Preço ainda a <span className="font-mono">0</span>. Confirma{' '}
+                      <span className="font-mono">COINMARKETCAP_API_KEY</span> no servidor ou indica o preço
+                      manualmente.
+                    </>
+                  ) : (
+                    <>
+                      Preço não reconhecido. Usa <span className="font-mono">12345,67</span> ou{' '}
+                      <span className="font-mono">12345.67</span> (USD por moeda).
+                    </>
+                  )}
                 </p>
               )}
               {txTab === 'buy' && selectedCoin && qtyOk && !priceOk && priceStr.trim() === '' && (
