@@ -93,6 +93,97 @@ function rowFromMarket(m: MarketRow): {
   }
 }
 
+type QuoteOut = ReturnType<typeof rowFromMarket>
+
+function buildPricesPayload(
+  geckoIds: string[],
+  marketById: Record<string, MarketRow>,
+): { prices: Record<string, QuoteOut>; byGeckoId: Record<string, QuoteOut> } {
+  const byGeckoId: Record<string, QuoteOut> = {}
+  const prices: Record<string, QuoteOut> = {}
+  for (const id of geckoIds) {
+    const m = marketById[id]
+    if (!m) continue
+    const row = rowFromMarket(m)
+    byGeckoId[id] = row
+    const sym = String(m.symbol ?? '').toUpperCase()
+    if (sym) prices[sym] = row
+  }
+  return { prices, byGeckoId }
+}
+
+/** Reduz 429: vários clientes / efeitos partilham a mesma resposta durante ~90s. */
+const marketsResponseCache = new Map<
+  string,
+  { at: number; payload: { prices: Record<string, QuoteOut>; byGeckoId: Record<string, QuoteOut> } }
+>()
+const MARKETS_FRESH_TTL_MS = 90_000
+const MARKETS_STALE_ON_429_MS = 4 * 60 * 60 * 1000
+const MARKETS_CACHE_MAX_KEYS = 100
+
+function marketsCacheKey(geckoIds: string[]): string {
+  return [...geckoIds].sort().join(',')
+}
+
+function trimMarketsResponseCache() {
+  if (marketsResponseCache.size <= MARKETS_CACHE_MAX_KEYS) return
+  const sorted = [...marketsResponseCache.entries()].sort((a, b) => a[1].at - b[1].at)
+  const remove = sorted.length - Math.floor(MARKETS_CACHE_MAX_KEYS * 0.75)
+  for (let i = 0; i < remove; i++) {
+    marketsResponseCache.delete(sorted[i]![0])
+  }
+}
+
+/** Sem cache: carteira só com stables ainda mostra totais ~corretos quando CG devolve 429. */
+const STABLE_GECKO_IDS = new Set([
+  'tether',
+  'usd-coin',
+  'dai',
+  'binance-usd',
+  'true-usd',
+  'first-digital-usd',
+  'paypal-usd',
+  'gemini-dollar',
+  'liquity-usd',
+  'usdd',
+])
+
+const STABLE_GECKO_META: Record<string, { sym: string; name: string }> = {
+  tether: { sym: 'USDT', name: 'Tether' },
+  'usd-coin': { sym: 'USDC', name: 'USD Coin' },
+  dai: { sym: 'DAI', name: 'Dai' },
+  'binance-usd': { sym: 'BUSD', name: 'Binance USD' },
+  'true-usd': { sym: 'TUSD', name: 'TrueUSD' },
+  'first-digital-usd': { sym: 'FDUSD', name: 'First Digital USD' },
+  'paypal-usd': { sym: 'PYUSD', name: 'PayPal USD' },
+  'gemini-dollar': { sym: 'GUSD', name: 'Gemini Dollar' },
+  'liquity-usd': { sym: 'LUSD', name: 'Liquity USD' },
+  usdd: { sym: 'USDD', name: 'USDD' },
+}
+
+function syntheticStableOnlyPayload(
+  geckoIds: string[],
+): { prices: Record<string, QuoteOut>; byGeckoId: Record<string, QuoteOut> } | null {
+  const ids = [...new Set(geckoIds)]
+  if (!ids.length || !ids.every((id) => STABLE_GECKO_IDS.has(id))) return null
+  const prices: Record<string, QuoteOut> = {}
+  const byGeckoId: Record<string, QuoteOut> = {}
+  for (const id of ids) {
+    const meta = STABLE_GECKO_META[id] ?? { sym: id.toUpperCase().slice(0, 12), name: id }
+    const row: QuoteOut = {
+      price: 1,
+      pct24h: 0,
+      pct7d: 0,
+      name: meta.name,
+      geckoId: id,
+      cmcId: 0,
+    }
+    byGeckoId[id] = row
+    prices[meta.sym] = row
+  }
+  return { prices, byGeckoId }
+}
+
 async function fetchMarketsForIds(
   geckoIds: string[],
 ): Promise<{ prices: Record<string, MarketRow> } | { error: string; status: number }> {
@@ -137,45 +228,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ prices: {}, error: 'missing_symbols_or_ids' }, { status: 400 })
   }
 
+  const key = marketsCacheKey(geckoIds)
+  const now = Date.now()
+  const hit = marketsResponseCache.get(key)
+  if (hit && now - hit.at < MARKETS_FRESH_TTL_MS) {
+    return NextResponse.json(hit.payload)
+  }
+
   const result = await fetchMarketsForIds(geckoIds)
   if ('error' in result) {
+    if (result.status === 429 && hit && now - hit.at <= MARKETS_STALE_ON_429_MS) {
+      return NextResponse.json({ ...hit.payload, stale: true })
+    }
+    if (result.status === 429) {
+      const syn = syntheticStableOnlyPayload(geckoIds)
+      if (syn) {
+        marketsResponseCache.set(key, { at: now, payload: syn })
+        trimMarketsResponseCache()
+        return NextResponse.json({ ...syn, approximate: true })
+      }
+    }
     return NextResponse.json(
       { prices: {}, error: result.error },
       { status: result.status },
     )
   }
 
-  const byGeckoId: Record<
-    string,
-    {
-      price: number
-      pct24h: number
-      pct7d: number
-      name: string
-      geckoId: string
-      cmcId: number
-    }
-  > = {}
-  const prices: Record<
-    string,
-    {
-      price: number
-      pct24h: number
-      pct7d: number
-      name: string
-      geckoId: string
-      cmcId: number
-    }
-  > = {}
+  const payload = buildPricesPayload(geckoIds, result.prices)
+  marketsResponseCache.set(key, { at: now, payload })
+  trimMarketsResponseCache()
 
-  for (const id of geckoIds) {
-    const m = result.prices[id]
-    if (!m) continue
-    const row = rowFromMarket(m)
-    byGeckoId[id] = row
-    const sym = String(m.symbol ?? '').toUpperCase()
-    if (sym) prices[sym] = row
-  }
-
-  return NextResponse.json({ prices, byGeckoId })
+  return NextResponse.json(payload)
 }

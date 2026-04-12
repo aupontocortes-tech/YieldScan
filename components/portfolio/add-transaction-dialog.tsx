@@ -522,7 +522,7 @@ export function AddTransactionDialog({
           )
         }
       })
-    }, 30_000)
+    }, 90_000)
     return () => window.clearInterval(id)
   }, [open, txTab, selectedCoin])
 

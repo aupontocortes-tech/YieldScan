@@ -197,7 +197,7 @@ export function PortfolioClient() {
     queryFn: () =>
       fetchPrices(data.holdings, addDialogSymbol ? [addDialogSymbol] : []),
     enabled: ready && symbols.length > 0,
-    refetchInterval: 60_000,
+    refetchInterval: 90_000,
     staleTime: 45_000,
   })
 
