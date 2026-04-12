@@ -193,9 +193,21 @@ export function TokenPoolsSearch() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <div>
+                            <div className="flex flex-col gap-0.5">
                               <div className="font-medium text-foreground">{pool.symbol}</div>
-                              <div className="text-xs text-muted-foreground">{pool.project}</div>
+                              {dexHref ? (
+                                <a
+                                  href={dexHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Abrir esta pool na corretora (nova aba)"
+                                  className="w-fit text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                >
+                                  {pool.project}
+                                </a>
+                              ) : (
+                                <div className="text-xs text-muted-foreground">{pool.project}</div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>

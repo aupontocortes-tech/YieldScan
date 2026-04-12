@@ -34,7 +34,9 @@ import {
   poolMatchesSearchQuery,
   sortPools,
 } from '@/lib/api'
-import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown } from 'lucide-react'
+import { resolvePoolOrDexUrl } from '@/lib/dex'
+import { getDexScreenerUrl } from '@/lib/dexscreener'
+import { ArrowLeft, ExternalLink, LineChart, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Mock price data generator
@@ -213,16 +215,30 @@ export default function TokenPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tokenPools.map((pool, index) => (
+                  {tokenPools.map((pool, index) => {
+                    const dexHref = resolvePoolOrDexUrl(pool)
+                    return (
                     <TableRow 
                       key={pool.pool}
                       className="table-row-animate border-border hover:bg-secondary/30"
                       style={{ animationDelay: `${index * 30}ms` }}
                     >
                       <TableCell>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-0.5">
                           <span className="font-medium text-foreground">{pool.symbol}</span>
-                          <span className="text-xs text-muted-foreground">{pool.project}</span>
+                          {dexHref ? (
+                            <a
+                              href={dexHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir esta pool na corretora (nova aba)"
+                              className="w-fit text-xs font-medium text-primary underline-offset-2 hover:underline"
+                            >
+                              {pool.project}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">{pool.project}</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -239,20 +255,40 @@ export default function TokenPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {pool.url ? (
-                          <a href={pool.url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-cyan" />
-                            </Button>
-                          </a>
-                        ) : (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
-                            <ExternalLink className="h-4 w-4 text-muted-foreground/50" />
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0 text-gold hover:bg-gold/10 hover:text-gold"
+                            title="Gráfico DexScreener (nova aba)"
+                            onClick={() =>
+                              window.open(getDexScreenerUrl(pool), '_blank', 'noopener,noreferrer')
+                            }
+                          >
+                            <LineChart className="h-4 w-4" />
                           </Button>
-                        )}
+                          {dexHref ? (
+                            <a
+                              href={dexHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir na corretora (nova aba)"
+                            >
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-cyan" />
+                              </Button>
+                            </a>
+                          ) : (
+                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
+                              <ExternalLink className="h-4 w-4 text-muted-foreground/50" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             )}

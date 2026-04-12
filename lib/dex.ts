@@ -157,6 +157,55 @@ function isUniswapPoolProject(project: string): boolean {
   return true
 }
 
+const UNISWAP_V3_FEE_TIERS: { pct: number; tier: number }[] = [
+  { pct: 0.01, tier: 100 },
+  { pct: 0.05, tier: 500 },
+  { pct: 0.3, tier: 3000 },
+  { pct: 1, tier: 10000 },
+]
+
+function uniswapV3FeeTierFromPoolMeta(meta: string | null | undefined): number {
+  if (!meta?.trim()) return 3000
+  if (/epoch|rewards?\s+fee|staking|validator|commission/i.test(meta)) return 3000
+  const m = meta.match(/(\d+(?:\.\d+)?)\s*%/)
+  if (!m) return 3000
+  const v = parseFloat(m[1]!)
+  if (!Number.isFinite(v)) return 3000
+  let best = 3000
+  let bestDiff = Infinity
+  for (const { pct, tier } of UNISWAP_V3_FEE_TIERS) {
+    const d = Math.abs(v - pct)
+    if (d < bestDiff) {
+      bestDiff = d
+      best = tier
+    }
+  }
+  return best
+}
+
+/**
+ * DefiLlama usa UUID em `pool.pool` para muitas pools Uniswap v3; com `underlyingTokens` (EVM)
+ * abrimos a UI Uniswap já no par + fee tier (nova posição v3).
+ */
+function buildUniswapV3NewPositionUrl(
+  pool: Pick<Pool, 'chain' | 'underlyingTokens' | 'poolMeta' | 'project'>,
+): string | null {
+  const proj = (pool.project ?? '').toLowerCase()
+  if (!isUniswapPoolProject(pool.project ?? '') || proj.includes('uniswap-v4')) return null
+  const chain = uniswapExploreSlugFromChain(pool.chain)
+  if (!chain) return null
+  const tokens = (pool.underlyingTokens ?? [])
+    .map((a) => (typeof a === 'string' ? a.trim() : ''))
+    .filter((a) => /^0x[a-fA-F0-9]{40}$/i.test(a))
+    .map((a) => a.toLowerCase())
+  const uniq = [...new Set(tokens)].sort((x, y) => x.localeCompare(y))
+  if (uniq.length < 2) return null
+  const fee = uniswapV3FeeTierFromPoolMeta(pool.poolMeta)
+  const a = uniq[0]!
+  const b = uniq[1]!
+  return `https://app.uniswap.org/positions/create/v3?chain=${encodeURIComponent(chain)}&currencyA=${encodeURIComponent(a)}&currencyB=${encodeURIComponent(b)}&fee=${fee}`
+}
+
 /**
  * `pool.url` que só aponta para o app genérico (home / swap). A API às vezes manda isso em vez da pool;
  * nesses casos precisamos ignorar e montar `/explore/pools/...`.
@@ -190,7 +239,7 @@ function isUniswapGenericAppUrl(url: string): boolean {
  * Monta URL da pool quando `pool.url` falta (API incompleta ou campo vazio) — espelha os adaptadores DefiLlama.
  */
 function buildPoolDeepLinkFromId(
-  pool: Pick<Pool, 'project' | 'pool' | 'chain' | 'poolMeta'>
+  pool: Pick<Pool, 'project' | 'pool' | 'chain' | 'poolMeta' | 'underlyingTokens'>
 ): string | null {
   const proj = (pool.project ?? '').toLowerCase()
   const pid = (pool.pool ?? '').trim()
@@ -230,8 +279,10 @@ function buildPoolDeepLinkFromId(
   if (isUniswapPoolProject(proj) && !proj.includes('uniswap-v4')) {
     if (/^0x[a-fA-F0-9]{40}$/i.test(pid)) {
       const slug = uniswapExploreSlugFromChain(pool.chain)
-      if (slug) return `https://app.uniswap.org/explore/pools/${slug}/${pid}`
+      if (slug) return `https://app.uniswap.org/explore/pools/${slug}/${pid.toLowerCase()}`
     }
+    const pos = buildUniswapV3NewPositionUrl(pool)
+    if (pos) return pos
   }
 
   return null
@@ -253,7 +304,7 @@ const DEX_FALLBACK_HREFS: { hint: string; href: string }[] = [
  * e por fim a página oficial da DEX.
  */
 export function resolvePoolOrDexUrl(
-  pool: Pick<Pool, 'url' | 'project' | 'pool' | 'chain' | 'poolMeta'>
+  pool: Pick<Pool, 'url' | 'project' | 'pool' | 'chain' | 'poolMeta' | 'underlyingTokens'>
 ): string | null {
   const proj = (pool.project ?? '').toLowerCase()
   const raw = pool.url?.trim()
