@@ -31,13 +31,17 @@ function normalize(raw: unknown): PortfolioData {
         (h) =>
           h &&
           typeof h.id === 'string' &&
-          typeof h.cmcId === 'number' &&
           typeof h.symbol === 'string' &&
           typeof h.quantity === 'number' &&
           typeof h.avgBuyUsd === 'number',
       )
       .map((h) => ({
         ...h,
+        cmcId: typeof h.cmcId === 'number' ? h.cmcId : 0,
+        geckoId:
+          typeof h.geckoId === 'string' && h.geckoId.trim()
+            ? h.geckoId.trim().toLowerCase()
+            : undefined,
         iconUrl:
           typeof h.iconUrl === 'string' && h.iconUrl.trim().startsWith('http')
             ? h.iconUrl.trim()
@@ -77,6 +81,7 @@ export function addBuy(
   data: PortfolioData,
   input: {
     cmcId: number
+    geckoId?: string
     symbol: string
     name: string
     iconUrl?: string
@@ -91,6 +96,7 @@ export function addBuy(
   if (qty <= 0) return data
   const sym = input.symbol.trim().toUpperCase()
   const existing = data.holdings.find((h) => h.symbol === sym)
+  const inputGecko = input.geckoId?.trim().toLowerCase() || undefined
   let holdings: PortfolioHolding[]
   if (existing) {
     const totalQty = existing.quantity + qty
@@ -99,6 +105,7 @@ export function addBuy(
         ? (existing.quantity * existing.avgBuyUsd + qty * input.priceUsd) / totalQty
         : input.priceUsd
     const nextCmc = input.cmcId > 0 ? input.cmcId : existing.cmcId
+    const nextGecko = inputGecko ?? existing.geckoId
     const nextIcon =
       input.iconUrl?.trim().startsWith('http')
         ? input.iconUrl.trim()
@@ -108,6 +115,7 @@ export function addBuy(
         ? {
             ...h,
             cmcId: nextCmc,
+            ...(nextGecko ? { geckoId: nextGecko } : {}),
             quantity: totalQty,
             avgBuyUsd: newAvg,
             symbol: sym,
@@ -124,6 +132,7 @@ export function addBuy(
       {
         id: crypto.randomUUID(),
         cmcId: input.cmcId,
+        ...(inputGecko ? { geckoId: inputGecko } : {}),
         symbol: sym,
         name: input.name.trim() || sym,
         ...(newIcon ? { iconUrl: newIcon } : {}),
@@ -139,6 +148,7 @@ export function addBuy(
     id: crypto.randomUUID(),
     type: 'buy',
     cmcId: input.cmcId,
+    ...(inputGecko ? { geckoId: inputGecko } : {}),
     symbol: sym,
     name: input.name.trim() || sym,
     quantity: qty,
@@ -200,6 +210,7 @@ export function registerSell(
     id: crypto.randomUUID(),
     type: 'sell',
     cmcId: h.cmcId,
+    ...(h.geckoId ? { geckoId: h.geckoId } : {}),
     symbol: h.symbol,
     name: h.name,
     quantity: qty,

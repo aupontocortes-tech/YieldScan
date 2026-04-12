@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { formatCurrency, formatPercent } from '@/lib/api'
 import { appendSnapshot, defaultPortfolio } from '@/lib/portfolio/storage'
-import { totalsFromHoldings, rowMetrics } from '@/lib/portfolio/metrics'
+import { totalsFromHoldings, rowMetrics, quoteForHolding } from '@/lib/portfolio/metrics'
 import type { CmcQuote, PortfolioHolding } from '@/lib/portfolio/types'
 import { CoinAvatar } from '@/lib/portfolio/cmc-assets'
 import { usePortfolioStore } from '@/hooks/use-portfolio'
@@ -73,17 +73,43 @@ const CARD =
   'rounded-2xl border border-white/[0.06] bg-[#111827] text-card-foreground shadow-lg shadow-black/30'
 const PAGE_BG = 'bg-[#0B0F14]'
 
-async function fetchPrices(symbols: string[]): Promise<{
+async function fetchPrices(
+  holdings: Pick<PortfolioHolding, 'symbol' | 'geckoId'>[],
+  extraSymbols: string[],
+): Promise<{
   prices: Record<string, CmcQuote>
+  byGeckoId?: Record<string, CmcQuote>
   error?: string
 }> {
-  if (!symbols.length) return { prices: {} }
-  const res = await fetch(`/api/prices?symbols=${encodeURIComponent(symbols.join(','))}`)
+  const symbols = new Set<string>()
+  const geckoIds = new Set<string>()
+  for (const h of holdings) {
+    const s = h.symbol.trim().toUpperCase()
+    if (s) symbols.add(s)
+    const g = h.geckoId?.trim().toLowerCase()
+    if (g) geckoIds.add(g)
+  }
+  for (const s of extraSymbols) {
+    const u = s.trim().toUpperCase()
+    if (u) symbols.add(u)
+  }
+  const symList = [...symbols]
+  const idList = [...geckoIds]
+  if (!symList.length && !idList.length) return { prices: {} }
+  const sp = new URLSearchParams()
+  if (idList.length) sp.set('ids', idList.join(','))
+  if (symList.length) sp.set('symbols', symList.join(','))
+  const res = await fetch(`/api/prices?${sp.toString()}`)
   const j = (await res.json()) as {
     prices?: Record<string, CmcQuote>
+    byGeckoId?: Record<string, CmcQuote>
     error?: string
   }
-  return { prices: j.prices ?? {}, error: j.error }
+  return {
+    prices: j.prices ?? {},
+    byGeckoId: j.byGeckoId,
+    error: j.error,
+  }
 }
 
 const PIE_COLORS = ['#3b82f6', '#22c55e', '#a855f7', '#f59e0b', '#06b6d4', '#e11d48', '#d4af37']
@@ -106,24 +132,38 @@ export function PortfolioClient() {
     return [...s].sort()
   }, [data.holdings, addDialogSymbol])
 
+  const priceQueryKey = useMemo(() => {
+    const gecko = [
+      ...new Set(
+        data.holdings
+          .map((h) => h.geckoId?.trim().toLowerCase())
+          .filter((g): g is string => Boolean(g)),
+      ),
+    ].sort()
+    return ['portfolio-prices', symbols.join(','), gecko.join(',')] as const
+  }, [data.holdings, symbols])
+
   const {
     data: pricePayload,
     isLoading: pricesLoading,
     isFetching: pricesFetching,
     dataUpdatedAt,
   } = useQuery({
-    queryKey: ['portfolio-prices', symbols.join(',')],
-    queryFn: () => fetchPrices(symbols),
+    queryKey: priceQueryKey,
+    queryFn: () =>
+      fetchPrices(data.holdings, addDialogSymbol ? [addDialogSymbol] : []),
     enabled: ready && symbols.length > 0,
     refetchInterval: 60_000,
     staleTime: 45_000,
   })
 
   const prices = pricePayload?.prices ?? {}
+  const byGeckoId = pricePayload?.byGeckoId
 
   const totals = useMemo(
-    () => totalsFromHoldings(data.holdings, prices, data.realizedPnlUsd),
-    [data.holdings, data.realizedPnlUsd, prices],
+    () =>
+      totalsFromHoldings(data.holdings, prices, data.realizedPnlUsd, byGeckoId),
+    [data.holdings, data.realizedPnlUsd, prices, byGeckoId],
   )
 
   useEffect(() => {
@@ -135,14 +175,14 @@ export function PortfolioClient() {
 
   const rows = useMemo(() => {
     const list = data.holdings.map((h) => {
-      const q = prices[h.symbol]
+      const q = quoteForHolding(h, prices, byGeckoId)
       const m = rowMetrics(h, q)
       return { h, m, q }
     })
     if (filter === 'up') return list.filter((r) => r.m.pnlUsd > 0)
     if (filter === 'down') return list.filter((r) => r.m.pnlUsd < 0)
     return list
-  }, [data.holdings, prices, filter])
+  }, [data.holdings, prices, byGeckoId, filter])
 
   const bestWorst = useMemo(() => {
     const withVal = rows.filter((r) => r.m.valueUsd > 0)
@@ -156,7 +196,7 @@ export function PortfolioClient() {
     if (t <= 0) return []
     return data.holdings
       .map((h) => {
-        const m = rowMetrics(h, prices[h.symbol])
+        const m = rowMetrics(h, quoteForHolding(h, prices, byGeckoId))
         return {
           name: h.symbol,
           value: m.valueUsd,
@@ -164,7 +204,7 @@ export function PortfolioClient() {
         }
       })
       .filter((d) => d.value > 0)
-  }, [data.holdings, prices, totals.valueUsd])
+  }, [data.holdings, prices, byGeckoId, totals.valueUsd])
 
   const lineData = useMemo(() => {
     return [...data.snapshots]
@@ -222,7 +262,8 @@ export function PortfolioClient() {
   const openSell = (h: PortfolioHolding) => {
     setActiveHolding(h)
     setSellQty('')
-    setSellPrice(prices[h.symbol]?.price != null ? String(prices[h.symbol]!.price) : '')
+    const sq = quoteForHolding(h, prices, byGeckoId)
+    setSellPrice(sq?.price != null ? String(sq.price) : '')
     setSellDate(new Date().toISOString().slice(0, 10))
     setFormErr(null)
     setSellOpen(true)
@@ -247,10 +288,12 @@ export function PortfolioClient() {
     setDeleteOpen(true)
   }
 
-  const keyError =
-    pricePayload?.error === 'server_missing_cmc_key'
-      ? 'Defina COINMARKETCAP_API_KEY (ou CMC_PRO_API_KEY) no servidor para preços ao vivo.'
-      : null
+  const priceBanner =
+    pricePayload?.error === 'coingecko_429'
+      ? 'CoinGecko está a limitar pedidos (429). Adiciona COINGECKO_DEMO_API_KEY ou COINGECKO_PRO_API_KEY no servidor para limites mais altos.'
+      : pricePayload?.error?.startsWith('coingecko_')
+        ? 'Não foi possível obter preços ao vivo. Tenta de novo dentro de instantes.'
+        : null
 
   if (!ready) {
     return (
@@ -266,12 +309,12 @@ export function PortfolioClient() {
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', PAGE_BG)}>
       <main className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        {keyError && (
+        {priceBanner && (
           <div
             className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
             role="status"
           >
-            {keyError}
+            {priceBanner}
           </div>
         )}
 
@@ -397,7 +440,7 @@ export function PortfolioClient() {
             <CardContent className="h-[280px]">
               {lineData.length < 2 ? (
                 <p className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
-                  O gráfico preenche após atualizações de preço (ex.: 1 minuto com a chave CMC ativa).
+                  O gráfico preenche após atualizações de preço (ex.: a cada minuto com CoinGecko).
                 </p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -574,6 +617,7 @@ export function PortfolioClient() {
           onOpenChange={handleAddDialogOpen}
           holdings={data.holdings}
           spotPrices={prices}
+          spotByGeckoId={byGeckoId}
           onActiveBuySymbolChange={setAddDialogSymbol}
           onBuy={addPurchase}
           onSell={sell}

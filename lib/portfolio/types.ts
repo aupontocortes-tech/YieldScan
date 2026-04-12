@@ -1,6 +1,8 @@
 export type PortfolioHolding = {
   id: string
   cmcId: number
+  /** Id CoinGecko (ex.: bitcoin) — usado em /api/prices. Legado pode não ter. */
+  geckoId?: string
   symbol: string
   name: string
   /** Thumb CoinGecko ou outro URL quando o PNG da CMC não carrega. */
@@ -14,6 +16,7 @@ export type PortfolioTransaction = {
   id: string
   type: 'buy' | 'sell'
   cmcId: number
+  geckoId?: string
   symbol: string
   name: string
   quantity: number
@@ -43,5 +46,6 @@ export type CmcQuote = {
   pct24h: number
   pct7d: number
   name: string
+  geckoId?: string
   cmcId: number
 }

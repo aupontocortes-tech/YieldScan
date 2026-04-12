@@ -11,6 +11,7 @@ import {
 import { formatCurrency } from '@/lib/api'
 import { CoinAvatar } from '@/lib/portfolio/cmc-assets'
 import type { CmcQuote, PortfolioHolding } from '@/lib/portfolio/types'
+import { quoteForHolding } from '@/lib/portfolio/metrics'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,56 +26,92 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
-type SearchCoin = { id: number; symbol: string; name: string; iconUrl?: string }
+type SearchCoin = { id: string; symbol: string; name: string; iconUrl?: string }
 
 type TxTab = 'buy' | 'sell' | 'transfer'
 
-async function fetchCmcQuotes(params: {
+function quoteParamsFromCoin(coin: SearchCoin): { geckoIds?: string[]; symbols?: string[] } {
+  const gid = coin.id.trim().toLowerCase()
+  if (gid) return { geckoIds: [gid] }
+  return { symbols: [coin.symbol.trim().toUpperCase()] }
+}
+
+async function fetchSpotQuotes(params: {
   symbols?: string[]
-  ids?: number[]
+  geckoIds?: string[]
 }): Promise<{
   prices: Record<string, CmcQuote>
-  byCmcId?: Record<string, CmcQuote>
+  byGeckoId?: Record<string, CmcQuote>
   error?: string
 }> {
-  const ids = (params.ids ?? []).filter((id) => id > 0)
-  if (ids.length) {
-    const res = await fetch(`/api/prices?ids=${encodeURIComponent(ids.join(','))}`)
+  const geckoIds = [...new Set((params.geckoIds ?? []).map((id) => id.trim().toLowerCase()))].filter(
+    Boolean,
+  )
+  if (geckoIds.length) {
+    const res = await fetch(`/api/prices?ids=${encodeURIComponent(geckoIds.join(','))}`)
     const j = (await res.json()) as {
       prices?: Record<string, CmcQuote>
-      byCmcId?: Record<string, CmcQuote>
+      byGeckoId?: Record<string, CmcQuote>
       error?: string
     }
-    return { prices: j.prices ?? {}, byCmcId: j.byCmcId, error: j.error }
+    return { prices: j.prices ?? {}, byGeckoId: j.byGeckoId, error: j.error }
   }
   const symbols = params.symbols ?? []
   if (!symbols.length) return { prices: {} }
   const res = await fetch(`/api/prices?symbols=${encodeURIComponent(symbols.join(','))}`)
   const j = (await res.json()) as {
     prices?: Record<string, CmcQuote>
+    byGeckoId?: Record<string, CmcQuote>
     error?: string
   }
-  return { prices: j.prices ?? {}, error: j.error }
+  return { prices: j.prices ?? {}, byGeckoId: j.byGeckoId, error: j.error }
 }
 
 function quoteUsdFromPayload(
   symbol: string,
-  cmcId: number,
+  geckoId: string | undefined,
   payload: {
     prices: Record<string, CmcQuote>
-    byCmcId?: Record<string, CmcQuote>
+    byGeckoId?: Record<string, CmcQuote>
   },
 ): number | undefined {
-  if (cmcId > 0) {
-    const byId = payload.byCmcId?.[String(cmcId)]?.price
+  const gid = geckoId?.trim().toLowerCase()
+  if (gid) {
+    const byId = payload.byGeckoId?.[gid]?.price
     if (byId != null && byId > 0) return byId
   }
-  const p = payload.prices[symbol]?.price
+  const sym = symbol.trim().toUpperCase()
+  const p = payload.prices[sym]?.price
   if (p != null && p > 0) return p
   return undefined
 }
 
-/** Pesquisa unificada no servidor (map CMC + fallbacks CoinGecko / quotes). */
+function priceFetchErrMessage(err: string | undefined): string | null {
+  if (err === 'coingecko_429') {
+    return 'CoinGecko limitou pedidos (429). Configura COINGECKO_DEMO_API_KEY ou indica o preço manualmente.'
+  }
+  if (err?.startsWith('coingecko_')) {
+    return 'Cotação indisponível momentaneamente. Indica o preço manualmente ou tenta de novo.'
+  }
+  return null
+}
+
+function spotPriceForCoin(
+  coin: SearchCoin,
+  spotPrices: Record<string, CmcQuote>,
+  spotByGeckoId?: Record<string, CmcQuote>,
+): number | undefined {
+  const gid = coin.id.trim().toLowerCase()
+  if (gid && spotByGeckoId?.[gid]?.price != null && spotByGeckoId[gid].price > 0) {
+    return spotByGeckoId[gid].price
+  }
+  const sym = coin.symbol.trim().toUpperCase()
+  const p = spotPrices[sym]?.price
+  if (p != null && p > 0) return p
+  return undefined
+}
+
+/** Pesquisa no servidor (CoinGecko /search + lista fixa quando vazio). */
 async function fetchSearch(q: string, signal?: AbortSignal): Promise<SearchCoin[]> {
   const trimmed = q.trim()
   try {
@@ -83,7 +120,7 @@ async function fetchSearch(q: string, signal?: AbortSignal): Promise<SearchCoin[
       { signal },
     )
     const j = (await res.json()) as { coins?: SearchCoin[]; error?: string }
-    return (j.coins ?? []).filter((c) => c.symbol && (c.id > 0 || c.name))
+    return (j.coins ?? []).filter((c) => c.symbol && c.id && c.name)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') return []
     return []
@@ -132,10 +169,12 @@ type AddTransactionDialogProps = {
   onOpenChange: (open: boolean) => void
   holdings: PortfolioHolding[]
   spotPrices: Record<string, CmcQuote>
+  spotByGeckoId?: Record<string, CmcQuote>
   /** Símbolo em “Comprar” para a página incluir na query de preços (cotação imediata). */
   onActiveBuySymbolChange?: (symbol: string | null) => void
   onBuy: (input: {
     cmcId: number
+    geckoId: string
     symbol: string
     name: string
     iconUrl?: string
@@ -159,6 +198,7 @@ export function AddTransactionDialog({
   onOpenChange,
   holdings,
   spotPrices,
+  spotByGeckoId,
   onActiveBuySymbolChange,
   onBuy,
   onSell,
@@ -265,7 +305,7 @@ export function AddTransactionDialog({
 
   useEffect(() => {
     skipAutoPrice.current = false
-  }, [selectedCoin?.symbol])
+  }, [selectedCoin?.symbol, selectedCoin?.id])
 
   useEffect(() => {
     if (!open || txTab !== 'buy' || !selectedCoin || skipAutoPrice.current) return
@@ -276,19 +316,15 @@ export function AddTransactionDialog({
         p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
       )
     }
-    const symUpper = selectedCoin.symbol.trim().toUpperCase()
-    const spot = spotPrices[symUpper]?.price ?? spotPrices[selectedCoin.symbol]?.price
+    const spot = spotPriceForCoin(selectedCoin, spotPrices, spotByGeckoId)
     if (spot != null && spot > 0) {
       apply(spot)
       setFormErr(null)
     }
-    const q =
-      selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
-    void fetchCmcQuotes(q).then((payload) => {
-      if (payload.error === 'server_missing_cmc_key') {
-        setFormErr(
-          'Sem chave CMC no servidor. Define COINMARKETCAP_API_KEY no .env ou indica o preço manualmente.',
-        )
+    void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
+      const msg = priceFetchErrMessage(payload.error)
+      if (msg) {
+        setFormErr(msg)
         return
       }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -300,7 +336,7 @@ export function AddTransactionDialog({
     return () => {
       cancelled = true
     }
-  }, [open, txTab, selectedCoin, spotPrices])
+  }, [open, txTab, selectedCoin, spotPrices, spotByGeckoId])
 
   /** Com quantidade > 0 e ainda sem preço válido, ir buscar cotação (ordem: qtd primeiro, depois preço). */
   useEffect(() => {
@@ -310,14 +346,11 @@ export function AddTransactionDialog({
     const existing = parseNum(priceStr)
     if (Number.isFinite(existing) && existing > 0) return
     let cancelled = false
-    const params =
-      selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
-    void fetchCmcQuotes(params).then((payload) => {
+    void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
       if (cancelled || skipAutoPrice.current) return
-      if (payload.error === 'server_missing_cmc_key') {
-        setFormErr(
-          'Sem chave CMC no servidor. Define COINMARKETCAP_API_KEY no .env ou indica o preço manualmente.',
-        )
+      const msg = priceFetchErrMessage(payload.error)
+      if (msg) {
+        setFormErr(msg)
         return
       }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -353,14 +386,11 @@ export function AddTransactionDialog({
     let cancelled = false
     const tid = window.setTimeout(() => {
       if (cancelled || skipAutoPrice.current) return
-      const params =
-        selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
-      void fetchCmcQuotes(params).then((payload) => {
+      void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
         if (cancelled || skipAutoPrice.current) return
-        if (payload.error === 'server_missing_cmc_key') {
-          setFormErr(
-            'Sem chave CMC no servidor. Define COINMARKETCAP_API_KEY ou indica o preço unitário.',
-          )
+        const msg = priceFetchErrMessage(payload.error)
+        if (msg) {
+          setFormErr(msg)
           return
         }
         const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -385,9 +415,7 @@ export function AddTransactionDialog({
     if (!open || txTab !== 'buy' || !selectedCoin) return
     const id = window.setInterval(() => {
       if (skipAutoPrice.current) return
-      const q =
-        selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
-      void fetchCmcQuotes(q).then((payload) => {
+      void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
         if (skipAutoPrice.current) return
         const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
         if (p != null && p > 0) {
@@ -407,13 +435,14 @@ export function AddTransactionDialog({
     if (txTab !== 'sell' || !selectedHolding) return
     if (sellPrefillHoldingId.current === selectedHolding.id) return
     sellPrefillHoldingId.current = selectedHolding.id
-    const p = spotPrices[selectedHolding.symbol]?.price
+    const q = quoteForHolding(selectedHolding, spotPrices, spotByGeckoId)
+    const p = q?.price
     if (p != null && p > 0) {
       setPriceStr(
         p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
       )
     }
-  }, [txTab, selectedHolding, spotPrices])
+  }, [txTab, selectedHolding, spotPrices, spotByGeckoId])
 
   /** Derivado em tempo real a partir de quantidade, preço unitário e taxa (sem alterar o layout). */
   const { qtyN, priceN, feeN, gross, buyTotal, sellNet, qtyOk, priceOk } = useMemo(() => {
@@ -448,14 +477,15 @@ export function AddTransactionDialog({
       setQtyStr(formatCryptoQty(inv / pLocal))
       return
     }
-    const params =
-      selectedCoin.id > 0 ? { ids: [selectedCoin.id] } : { symbols: [selectedCoin.symbol] }
-    void fetchCmcQuotes(params).then((payload) => {
+    void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
+      const msg = priceFetchErrMessage(payload.error)
+      if (msg) {
+        setFormErr(msg)
+        return
+      }
       const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
       if (pr == null || pr <= 0) {
-        setFormErr(
-          'Não foi possível obter o preço. Configura COINMARKETCAP_API_KEY ou indica o preço unitário.',
-        )
+        setFormErr('Não foi possível obter o preço. Indica o preço unitário ou tenta de novo.')
         return
       }
       setFormErr(null)
@@ -489,7 +519,8 @@ export function AddTransactionDialog({
         return
       }
       onBuy({
-        cmcId: selectedCoin.id,
+        cmcId: 0,
+        geckoId: selectedCoin.id.trim().toLowerCase(),
         symbol: selectedCoin.symbol,
         name: selectedCoin.name,
         iconUrl: selectedCoin.iconUrl,
@@ -606,7 +637,7 @@ export function AddTransactionDialog({
                   {selectedCoin ? (
                     <>
                       <CoinAvatar
-                        cmcId={selectedCoin.id}
+                        cmcId={0}
                         symbol={selectedCoin.symbol}
                         iconUrl={selectedCoin.iconUrl}
                         size={36}
@@ -647,9 +678,7 @@ export function AddTransactionDialog({
                           <div className="space-y-2 p-3 text-xs leading-relaxed text-muted-foreground">
                             <p>Nenhum resultado para &quot;{searchQ.trim() || '…'}&quot;.</p>
                             <p>
-                              Confirma <code className="rounded bg-black/40 px-1 py-0.5">COINMARKETCAP_API_KEY</code>{' '}
-                              no <code className="rounded bg-black/40 px-1 py-0.5">.env.local</code> e reinicia o
-                              servidor.
+                              Tenta outro termo (mín. 2 caracteres) ou verifica a ligação à API CoinGecko.
                             </p>
                           </div>
                         ) : (
@@ -668,7 +697,7 @@ export function AddTransactionDialog({
                               }}
                             >
                               <CoinAvatar
-                                cmcId={c.id}
+                                cmcId={0}
                                 symbol={c.symbol}
                                 iconUrl={c.iconUrl}
                                 size={32}
@@ -882,8 +911,8 @@ export function AddTransactionDialog({
                 <p className="mt-2 text-xs text-[#ef4444]">
                   {parseNum(priceStr) === 0 ? (
                     <>
-                      Preço ainda a <span className="font-mono">0</span>. Confirma{' '}
-                      <span className="font-mono">COINMARKETCAP_API_KEY</span> no servidor ou indica o preço
+                      Preço ainda a <span className="font-mono">0</span>. Aguarda a cotação, configura{' '}
+                      <span className="font-mono">COINGECKO_DEMO_API_KEY</span> se houver 429, ou indica o preço
                       manualmente.
                     </>
                   ) : (

@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 
-const CMC_QUOTES = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
-
-type CmcDataEntry = {
-  id?: number
-  name?: string
+type MarketRow = {
+  id?: string
   symbol?: string
-  quote?: {
-    USD?: {
-      price?: number
-      percent_change_24h?: number
-      percent_change_7d?: number
-    }
-  }
+  name?: string
+  current_price?: number | null
+  price_change_percentage_24h?: number | null
+  price_change_percentage_7d?: number | null
+  price_change_percentage_7d_in_currency?: number | null
 }
 
 function parseSymbols(raw: string): string[] {
@@ -23,111 +19,163 @@ function parseSymbols(raw: string): string[] {
   return [...new Set(parts)].slice(0, 120)
 }
 
-function parseIds(raw: string): number[] {
+/** IDs internos CoinGecko (ex.: bitcoin, solana). */
+function parseGeckoIds(raw: string): string[] {
   const parts = raw
     .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const ids = [...new Set(parts.map((p) => Number(p)).filter((n) => Number.isFinite(n) && n > 0))]
-  return ids.slice(0, 120)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => /^[a-z0-9_-]{1,80}$/.test(s))
+  return [...new Set(parts)].slice(0, 150)
+}
+
+type ListRow = { id: string; symbol: string; name: string }
+
+let coinsListCache: { at: number; rows: ListRow[] } | null = null
+const LIST_TTL_MS = 60 * 60 * 1000
+
+async function loadCoinsList(): Promise<ListRow[]> {
+  if (coinsListCache && Date.now() - coinsListCache.at < LIST_TTL_MS) {
+    return coinsListCache.rows
+  }
+  const { base, headers } = getCoingeckoRequestParts()
+  const res = await fetch(`${base}/coins/list`, {
+    headers,
+    next: { revalidate: 3600 },
+  })
+  if (!res.ok) {
+    return coinsListCache?.rows ?? []
+  }
+  const data = (await res.json()) as Array<{ id?: string; symbol?: string; name?: string }>
+  const rows: ListRow[] = Array.isArray(data)
+    ? data
+        .map((r) => ({
+          id: String(r.id ?? '').trim().toLowerCase(),
+          symbol: String(r.symbol ?? '').trim(),
+          name: String(r.name ?? '').trim(),
+        }))
+        .filter((r) => r.id && r.symbol)
+    : []
+  coinsListCache = { at: Date.now(), rows }
+  return rows
+}
+
+async function symbolsToGeckoIds(symbols: string[]): Promise<string[]> {
+  const list = await loadCoinsList()
+  const out: string[] = []
+  for (const sym of symbols) {
+    const u = sym.toUpperCase()
+    const hit = list.find((r) => r.symbol.toUpperCase() === u)
+    if (hit) out.push(hit.id)
+  }
+  return [...new Set(out)]
+}
+
+function rowFromMarket(m: MarketRow): {
+  price: number
+  pct24h: number
+  pct7d: number
+  name: string
+  geckoId: string
+  cmcId: number
+} {
+  const geckoId = String(m.id ?? '').toLowerCase()
+  const sym = String(m.symbol ?? '').toUpperCase()
+  const pct7Raw =
+    m.price_change_percentage_7d_in_currency ?? m.price_change_percentage_7d ?? 0
+  const pct7 = Number(pct7Raw)
+  return {
+    price: Number(m.current_price) || 0,
+    pct24h: Number(m.price_change_percentage_24h) || 0,
+    pct7d: Number.isFinite(pct7) ? pct7 : 0,
+    name: String(m.name ?? sym),
+    geckoId,
+    cmcId: 0,
+  }
+}
+
+async function fetchMarketsForIds(
+  geckoIds: string[],
+): Promise<{ prices: Record<string, MarketRow> } | { error: string; status: number }> {
+  if (!geckoIds.length) return { prices: {} }
+  const { base, headers } = getCoingeckoRequestParts()
+  const chunkSize = 120
+  const merged: MarketRow[] = []
+  for (let i = 0; i < geckoIds.length; i += chunkSize) {
+    const chunk = geckoIds.slice(i, i + chunkSize)
+    const url = `${base}/coins/markets?vs_currency=usd&ids=${encodeURIComponent(chunk.join(','))}&price_change_percentage=24h,7d&per_page=250&page=1`
+    const res = await fetch(url, { headers, cache: 'no-store' })
+    if (!res.ok) {
+      return { error: `coingecko_${res.status}`, status: res.status === 429 ? 429 : 502 }
+    }
+    const batch = (await res.json()) as MarketRow[]
+    if (Array.isArray(batch)) merged.push(...batch)
+  }
+  const prices: Record<string, MarketRow> = {}
+  for (const m of merged) {
+    const id = String(m.id ?? '').toLowerCase()
+    if (id) prices[id] = m
+  }
+  return { prices }
 }
 
 /**
- * Preços CoinMarketCap (servidor). Chave em COINMARKETCAP_API_KEY ou CMC_PRO_API_KEY.
- * GET /api/prices?symbols=BTC,ETH,SOL
- * GET /api/prices?ids=1,1027 — cotação por id CMC (evita ambiguidade de símbolo); resposta inclui `byCmcId`.
+ * Preços CoinGecko (servidor). Sem chave usa API pública (limites mais baixos).
+ * GET /api/prices?ids=bitcoin,solana — ids internos CoinGecko
+ * GET /api/prices?symbols=BTC,SOL — resolve via /coins/list em cache
  */
 export async function GET(req: NextRequest) {
-  const ids = parseIds(req.nextUrl.searchParams.get('ids') ?? '')
+  const rawIds = req.nextUrl.searchParams.get('ids') ?? ''
   const symbols = parseSymbols(req.nextUrl.searchParams.get('symbols') ?? '')
-  if (!symbols.length && !ids.length) {
+  let geckoIds = parseGeckoIds(rawIds)
+
+  if (symbols.length) {
+    const resolved = await symbolsToGeckoIds(symbols)
+    geckoIds = [...new Set([...geckoIds, ...resolved])]
+  }
+
+  if (!geckoIds.length) {
     return NextResponse.json({ prices: {}, error: 'missing_symbols_or_ids' }, { status: 400 })
   }
 
-  const apiKey =
-    process.env.COINMARKETCAP_API_KEY?.trim() || process.env.CMC_PRO_API_KEY?.trim()
-  if (!apiKey) {
+  const result = await fetchMarketsForIds(geckoIds)
+  if ('error' in result) {
     return NextResponse.json(
-      { prices: {}, error: 'server_missing_cmc_key' },
-      { status: 503 },
+      { prices: {}, error: result.error },
+      { status: result.status },
     )
   }
 
-  const url = ids.length
-    ? `${CMC_QUOTES}?id=${encodeURIComponent(ids.join(','))}&convert=USD`
-    : `${CMC_QUOTES}?symbol=${encodeURIComponent(symbols.join(','))}&convert=USD`
-  try {
-    const res = await fetch(url, {
-      headers: { 'X-CMC_PRO_API_KEY': apiKey },
-      cache: 'no-store',
-    })
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      return NextResponse.json(
-        { prices: {}, error: `cmc_${res.status}`, detail: text.slice(0, 200) },
-        { status: res.status === 429 ? 429 : 502 },
-      )
+  const byGeckoId: Record<
+    string,
+    {
+      price: number
+      pct24h: number
+      pct7d: number
+      name: string
+      geckoId: string
+      cmcId: number
     }
-    const body = (await res.json()) as {
-      data?: Record<string, CmcDataEntry>
-      status?: { error_message?: string }
+  > = {}
+  const prices: Record<
+    string,
+    {
+      price: number
+      pct24h: number
+      pct7d: number
+      name: string
+      geckoId: string
+      cmcId: number
     }
-    const data = body.data ?? {}
-    const prices: Record<
-      string,
-      {
-        price: number
-        pct24h: number
-        pct7d: number
-        name: string
-        cmcId: number
-      }
-    > = {}
-    const byCmcId: Record<
-      string,
-      {
-        price: number
-        pct24h: number
-        pct7d: number
-        name: string
-        cmcId: number
-      }
-    > = {}
+  > = {}
 
-    if (ids.length) {
-      for (const [idKey, entry] of Object.entries(data)) {
-        if (!entry?.quote?.USD) continue
-        const usd = entry.quote.USD
-        const sym = String(entry.symbol ?? '').toUpperCase()
-        const cmcId = Number(entry.id) || Number(idKey) || 0
-        const row = {
-          price: Number(usd.price) || 0,
-          pct24h: Number(usd.percent_change_24h) || 0,
-          pct7d: Number(usd.percent_change_7d) || 0,
-          name: String(entry.name ?? (sym || idKey)),
-          cmcId,
-        }
-        byCmcId[idKey] = row
-        if (sym) prices[sym] = row
-      }
-      return NextResponse.json({ prices, byCmcId })
-    }
-
-    for (const sym of symbols) {
-      const entry = data[sym]
-      if (!entry?.quote?.USD) continue
-      const usd = entry.quote.USD
-      prices[sym] = {
-        price: Number(usd.price) || 0,
-        pct24h: Number(usd.percent_change_24h) || 0,
-        pct7d: Number(usd.percent_change_7d) || 0,
-        name: String(entry.name ?? sym),
-        cmcId: Number(entry.id) || 0,
-      }
-    }
-
-    return NextResponse.json({ prices })
-  } catch {
-    return NextResponse.json({ prices: {}, error: 'network' }, { status: 502 })
+  for (const id of geckoIds) {
+    const m = result.prices[id]
+    if (!m) continue
+    const row = rowFromMarket(m)
+    byGeckoId[id] = row
+    const sym = String(m.symbol ?? '').toUpperCase()
+    if (sym) prices[sym] = row
   }
+
+  return NextResponse.json({ prices, byGeckoId })
 }

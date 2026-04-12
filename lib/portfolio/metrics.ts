@@ -1,5 +1,16 @@
 import type { CmcQuote, PortfolioHolding } from './types'
 
+export function quoteForHolding(
+  h: PortfolioHolding,
+  prices: Record<string, CmcQuote>,
+  byGeckoId?: Record<string, CmcQuote>,
+): CmcQuote | undefined {
+  const gid = h.geckoId?.trim().toLowerCase()
+  if (gid && byGeckoId?.[gid]) return byGeckoId[gid]
+  const sym = h.symbol.trim().toUpperCase()
+  return prices[sym]
+}
+
 export type HoldingRowMetrics = {
   price: number
   valueUsd: number
@@ -34,11 +45,12 @@ export function totalsFromHoldings(
   holdings: PortfolioHolding[],
   prices: Record<string, CmcQuote>,
   realizedPnlUsd: number,
+  byGeckoId?: Record<string, CmcQuote>,
 ) {
   let valueUsd = 0
   let costUsd = 0
   for (const h of holdings) {
-    const q = prices[h.symbol]
+    const q = quoteForHolding(h, prices, byGeckoId)
     const m = rowMetrics(h, q)
     valueUsd += m.valueUsd
     costUsd += m.costUsd
