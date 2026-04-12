@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Cell,
@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 import {
+  ChevronDown,
   ChevronRight,
   MoreHorizontal,
   Pencil,
@@ -39,7 +40,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -271,6 +271,16 @@ export function PortfolioClient() {
   const [sellDate, setSellDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [formErr, setFormErr] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const historyPanelRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!historyOpen) return
+    const el = historyPanelRef.current
+    if (!el) return
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+  }, [historyOpen])
 
   const openEdit = (h: PortfolioHolding) => {
     setActiveHolding(h)
@@ -834,38 +844,51 @@ export function PortfolioClient() {
         </Dialog>
 
         {data.transactions.length > 0 && (
-          <>
-            <div className="mt-8 flex justify-center">
+          <div className="mt-8 flex w-full flex-col items-stretch">
+            <div className="flex justify-start">
               <button
                 type="button"
-                onClick={() => setHistoryOpen(true)}
-                aria-haspopup="dialog"
+                id="portfolio-history-toggle"
+                aria-controls="portfolio-history-panel"
                 aria-expanded={historyOpen}
+                onClick={() => setHistoryOpen((v) => !v)}
                 className={cn(
                   'group inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111827] px-5 py-3 text-sm font-semibold text-foreground shadow-lg shadow-black/20 transition-colors',
                   'hover:border-[#3b82f6]/35 hover:bg-[#161e2e] hover:text-[#93c5fd]',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b82f6]/50',
+                  historyOpen && 'border-[#3b82f6]/30 bg-[#161e2e] text-[#93c5fd]',
                 )}
               >
                 Histórico recente
-                <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[#93c5fd]" />
+                {historyOpen ? (
+                  <ChevronDown className="size-4 text-muted-foreground group-hover:text-[#93c5fd]" />
+                ) : (
+                  <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[#93c5fd]" />
+                )}
               </button>
             </div>
 
-            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-              <DialogContent
-                showCloseButton
-                className={cn(
-                  'flex max-h-[min(85vh,760px)] w-[calc(100%-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden border-white/10 bg-[#111827] p-0 sm:max-w-xl',
-                )}
-              >
-                <DialogHeader className="shrink-0 border-b border-white/[0.06] px-5 py-4 text-left sm:px-6">
-                  <DialogTitle className="text-base sm:text-lg">Histórico recente</DialogTitle>
-                  <DialogDescription className="text-xs sm:text-sm">
+            <section
+              ref={historyPanelRef}
+              id="portfolio-history-panel"
+              role="region"
+              aria-labelledby="portfolio-history-toggle"
+              aria-hidden={!historyOpen}
+              className={cn(
+                'flex w-full flex-col overflow-hidden rounded-2xl border border-transparent bg-[#111827] shadow-lg shadow-black/15 transition-[max-height,opacity,border-color,margin-top] duration-300 ease-out',
+                historyOpen
+                  ? 'mt-3 max-h-[min(65vh,640px)] border-white/[0.1] opacity-100'
+                  : 'mt-0 max-h-0 opacity-0 pointer-events-none',
+              )}
+            >
+              <div className="flex max-h-[min(65vh,640px)] min-h-0 flex-col">
+                <div className="shrink-0 border-b border-white/[0.06] px-5 py-4 sm:px-6">
+                  <h3 className="text-base font-semibold text-foreground sm:text-lg">Histórico recente</h3>
+                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
                     {data.transactions.length}{' '}
                     {data.transactions.length === 1 ? 'transação' : 'transações'} na carteira.
-                  </DialogDescription>
-                </DialogHeader>
+                  </p>
+                </div>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
                   <ul className="flex flex-col gap-2">
                     {data.transactions.map((tx) => (
@@ -875,16 +898,16 @@ export function PortfolioClient() {
                     ))}
                   </ul>
                 </div>
-                <DialogFooter className="shrink-0 border-t border-white/[0.06] bg-[#0d1117]/80 px-5 py-3 sm:px-6 sm:justify-center">
+                <div className="shrink-0 border-t border-white/[0.06] bg-[#0d1117]/80 px-5 py-3 sm:px-6">
                   <Button variant="ghost" size="sm" className="text-[#93c5fd] hover:text-[#bfdbfe]" asChild>
                     <Link href="/portfolio/historico" onClick={() => setHistoryOpen(false)}>
                       Abrir histórico na página dedicada
                     </Link>
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </>
+                </div>
+              </div>
+            </section>
+          </div>
         )}
 
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
