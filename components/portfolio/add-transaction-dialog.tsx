@@ -156,6 +156,11 @@ function parseNum(raw: string): number {
   return Number.isFinite(n) ? n : NaN
 }
 
+function hasValidUnitPrice(priceStr: string): boolean {
+  const p = parseNum(priceStr)
+  return Number.isFinite(p) && p > 0
+}
+
 function formatCryptoQty(q: number): string {
   if (!Number.isFinite(q) || q <= 0) return ''
   return new Intl.NumberFormat('pt-BR', {
@@ -231,6 +236,9 @@ export function AddTransactionDialog({
   const [noteOpen, setNoteOpen] = useState(false)
 
   const [formErr, setFormErr] = useState<string | null>(null)
+  /** Valor atual do preço para callbacks async (evita 429 a assustar com preço já preenchido). */
+  const latestPriceStrRef = useRef(priceStr)
+  latestPriceStrRef.current = priceStr
 
   const resetForm = useCallback(() => {
     setTxTab('buy')
@@ -324,7 +332,7 @@ export function AddTransactionDialog({
     void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
       const msg = priceFetchErrMessage(payload.error)
       if (msg) {
-        setFormErr(msg)
+        if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
         return
       }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -350,7 +358,7 @@ export function AddTransactionDialog({
       if (cancelled || skipAutoPrice.current) return
       const msg = priceFetchErrMessage(payload.error)
       if (msg) {
-        setFormErr(msg)
+        if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
         return
       }
       const p = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -390,7 +398,7 @@ export function AddTransactionDialog({
         if (cancelled || skipAutoPrice.current) return
         const msg = priceFetchErrMessage(payload.error)
         if (msg) {
-          setFormErr(msg)
+          if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
           return
         }
         const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -480,7 +488,7 @@ export function AddTransactionDialog({
     void fetchSpotQuotes(quoteParamsFromCoin(selectedCoin)).then((payload) => {
       const msg = priceFetchErrMessage(payload.error)
       if (msg) {
-        setFormErr(msg)
+        if (!hasValidUnitPrice(latestPriceStrRef.current)) setFormErr(msg)
         return
       }
       const pr = quoteUsdFromPayload(selectedCoin.symbol, selectedCoin.id, payload)
@@ -819,7 +827,7 @@ export function AddTransactionDialog({
             )}
             {txTab === 'buy' && selectedCoin && (
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Escolhe a moeda: o <span className="text-foreground/90">preço unitário</span> vem da API (CoinMarketCap)
+                Escolhe a moeda: o <span className="text-foreground/90">preço unitário</span> vem da API (CoinGecko)
                 e podes alterá-lo. Com <span className="text-foreground/90">quantidade</span>, o total em USD aparece
                 em baixo; se ainda não houver preço, é buscado ao meteres a quantidade. Em alternativa, usa{' '}
                 <span className="text-foreground/90">Total em USD</span> para calcular a quantidade automaticamente. A
