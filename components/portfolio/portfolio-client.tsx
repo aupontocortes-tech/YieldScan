@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -14,6 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 import {
+  ChevronRight,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -30,6 +32,7 @@ import type { CmcQuote, PortfolioHolding } from '@/lib/portfolio/types'
 import { CoinAvatar } from '@/lib/portfolio/cmc-assets'
 import { usePortfolioStore } from '@/hooks/use-portfolio'
 import { AddTransactionDialog } from '@/components/portfolio/add-transaction-dialog'
+import { PortfolioTransactionRow } from '@/components/portfolio/transaction-row'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -830,43 +833,33 @@ export function PortfolioClient() {
 
         {data.transactions.length > 0 && (
           <Card className={cn(CARD, 'mt-8')}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold">Histórico recente</CardTitle>
+            <CardHeader className="pb-3">
+              <Link
+                href="/portfolio/historico"
+                aria-label="Ver histórico completo de transações"
+                className="group -m-1 rounded-xl p-1 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-[#3b82f6]/45"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <CardTitle className="text-base font-semibold transition-colors group-hover:text-[#93c5fd]">
+                        Histórico recente
+                      </CardTitle>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-[#93c5fd]" />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Últimas {Math.min(8, data.transactions.length)} movimentações · clica para ver todo o
+                      histórico
+                    </p>
+                  </div>
+                </div>
+              </Link>
             </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
+            <CardContent className="pt-0">
+              <ul className="flex flex-col gap-2">
                 {data.transactions.slice(0, 8).map((tx) => (
-                  <li
-                    key={tx.id}
-                    className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 py-2 last:border-0"
-                  >
-                    <span className="text-muted-foreground">
-                      {tx.at}{' '}
-                      <span className="font-medium text-foreground">
-                        {tx.type === 'buy' ? 'Compra' : 'Venda'} {tx.symbol}
-                      </span>
-                    </span>
-                    <span className="text-right font-mono text-xs">
-                      <span className="block">
-                        {tx.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} @{' '}
-                        {formatCurrency(tx.priceUsd, false)}
-                        {tx.realizedPnlUsd != null && (
-                          <span className={cn(' ml-2', pctTone(tx.realizedPnlUsd))}>
-                            ({formatCurrency(tx.realizedPnlUsd, false)})
-                          </span>
-                        )}
-                      </span>
-                      {tx.feeUsd != null && tx.feeUsd > 0 && (
-                        <span className="mt-0.5 block text-muted-foreground">
-                          Taxa {formatCurrency(tx.feeUsd, false)}
-                        </span>
-                      )}
-                      {tx.note && (
-                        <span className="mt-0.5 block max-w-[220px] truncate text-muted-foreground" title={tx.note}>
-                          {tx.note}
-                        </span>
-                      )}
-                    </span>
+                  <li key={tx.id}>
+                    <PortfolioTransactionRow tx={tx} holdings={data.holdings} />
                   </li>
                 ))}
               </ul>
