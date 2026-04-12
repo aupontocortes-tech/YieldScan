@@ -95,11 +95,13 @@ function toDatetimeLocalValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** Aceita decimais (ex.: 0,0005), formato pt-BR/US e notação científica. */
+/** Aceita decimais (ex.: 0,0005), formato pt-BR/US, espaços finos da locale e notação científica. */
 function parseNum(raw: string): number {
   const t = String(raw)
     .trim()
     .replace(/\$/g, '')
+    .replace(/\u00A0/g, '')
+    .replace(/\u202F/g, '')
     .replace(/\s/g, '')
     .replace(/−/g, '-')
   if (!t || t === '.' || t === ',') return NaN
@@ -311,18 +313,14 @@ export function AddTransactionDialog({
   }, [txTab, selectedHolding, spotPrices])
 
   /** Derivado em tempo real a partir de quantidade, preço unitário e taxa (sem alterar o layout). */
-  const { qtyN, priceN, feeN, gross, buyTotal, sellNet } = useMemo(() => {
+  const { qtyN, priceN, feeN, gross, buyTotal, sellNet, qtyOk, priceOk } = useMemo(() => {
     const qty = parseNum(qtyStr)
     const price = parseNum(priceStr)
     const feeRaw = parseNum(feeStr)
     const fee = Number.isFinite(feeRaw) ? Math.max(0, feeRaw) : 0
-    const g =
-      Number.isFinite(qty) &&
-      qty > 0 &&
-      Number.isFinite(price) &&
-      price >= 0
-        ? qty * price
-        : 0
+    const qOk = Number.isFinite(qty) && qty > 0
+    const pOk = Number.isFinite(price) && price >= 0
+    const g = qOk && pOk ? qty * price : 0
     return {
       qtyN: qty,
       priceN: price,
@@ -330,6 +328,8 @@ export function AddTransactionDialog({
       gross: g,
       buyTotal: g + fee,
       sellNet: Math.max(0, g - fee),
+      qtyOk: qOk,
+      priceOk: pOk,
     }
   }, [qtyStr, priceStr, feeStr])
 
@@ -706,11 +706,29 @@ export function AddTransactionDialog({
                   ? formatCurrency(buyTotal, false)
                   : formatCurrency(gross, false)}
               </p>
+              {txTab === 'buy' && selectedCoin && priceOk && !qtyOk && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Preço unitário:{' '}
+                  <span className="font-mono text-foreground/90">{formatCurrency(priceN, false)}</span>
+                  {' · '}
+                  Indica a <span className="text-foreground/80">quantidade</span> para ver o total em USD.
+                </p>
+              )}
+              {txTab === 'buy' && selectedCoin && qtyOk && !priceOk && priceStr.trim() !== '' && (
+                <p className="mt-2 text-xs text-[#ef4444]">
+                  Preço não reconhecido. Usa <span className="font-mono">12345,67</span> ou{' '}
+                  <span className="font-mono">12345.67</span> (USD por moeda).
+                </p>
+              )}
+              {txTab === 'buy' && selectedCoin && qtyOk && !priceOk && priceStr.trim() === '' && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Indica o <span className="text-foreground/80">preço unitário (USD)</span> para ver o total.
+                </p>
+              )}
               {txTab === 'buy' &&
                 selectedCoin &&
-                qtyN > 0 &&
-                Number.isFinite(priceN) &&
-                priceN >= 0 && (
+                qtyOk &&
+                priceOk && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     {qtyN.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}{' '}
                     <span className="text-foreground/80">{selectedCoin.symbol}</span> ×{' '}
@@ -741,9 +759,9 @@ export function AddTransactionDialog({
             disabled={
               txTab === 'transfer' ||
               (txTab === 'buy' &&
-                (!selectedCoin || !Number.isFinite(qtyN) || qtyN <= 0)) ||
+                (!selectedCoin || !qtyOk || !priceOk)) ||
               (txTab === 'sell' &&
-                (!selectedHolding || !Number.isFinite(qtyN) || qtyN <= 0))
+                (!selectedHolding || !qtyOk || !priceOk))
             }
             onClick={submit}
           >
