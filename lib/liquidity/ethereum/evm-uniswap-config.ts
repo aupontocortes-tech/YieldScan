@@ -23,17 +23,28 @@ export type EvmUniswapChainConfig = {
   dexscreenerPath: string
   npmDeployBlock: number
   wrappedNativeLower: string
-  /** URLs por ordem: variável de ambiente (se definida) substitui a lista pública. */
-  rpcUrls: () => string[]
+  /** URLs por ordem; `fromEnv` indica se alguma variável de ambiente foi usada (mensagens de erro mais precisas). */
+  rpcUrls: () => { urls: string[]; fromEnv: boolean }
 }
 
-/** Se existir uma env listada, usa só essa; senão tenta vários RPCs públicos (resiliência em serverless). */
-function resolveRpcUrls(envKeys: string[], publicEndpoints: readonly string[]): string[] {
+export type EvmRpcResolution = { urls: string[]; fromEnv: boolean }
+
+/**
+ * Junta todos os URLs não vazios das env listadas (sem duplicar), por ordem.
+ * Só cai nos RPCs públicos se nenhuma env estiver definida.
+ */
+function resolveRpcUrls(envKeys: string[], publicEndpoints: readonly string[]): EvmRpcResolution {
+  const seen = new Set<string>()
+  const urls: string[] = []
   for (const k of envKeys) {
     const v = process.env[k]?.trim()
-    if (v) return [v]
+    if (v && !seen.has(v)) {
+      seen.add(v)
+      urls.push(v)
+    }
   }
-  return [...publicEndpoints]
+  if (urls.length > 0) return { urls, fromEnv: true }
+  return { urls: [...publicEndpoints], fromEnv: false }
 }
 
 const CONFIGS: Record<SupportedEvmUniswapChainId, EvmUniswapChainConfig> = {
@@ -47,7 +58,15 @@ const CONFIGS: Record<SupportedEvmUniswapChainId, EvmUniswapChainConfig> = {
     npmDeployBlock: 12_369_621,
     wrappedNativeLower: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
     rpcUrls: () =>
-      resolveRpcUrls(['ETH_RPC_URL', 'NEXT_PUBLIC_ETH_RPC_URL'], [
+      resolveRpcUrls(
+        [
+          'ETH_RPC_URL',
+          'NEXT_PUBLIC_ETH_RPC_URL',
+          'ETHEREUM_RPC_URL',
+          'NEXT_PUBLIC_ETHEREUM_RPC_URL',
+          'MAINNET_RPC_URL',
+        ],
+        [
         'https://ethereum.publicnode.com',
         'https://cloudflare-eth.com',
         'https://eth.drpc.org',
@@ -63,7 +82,9 @@ const CONFIGS: Record<SupportedEvmUniswapChainId, EvmUniswapChainConfig> = {
     npmDeployBlock: 173,
     wrappedNativeLower: '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
     rpcUrls: () =>
-      resolveRpcUrls(['ARBITRUM_RPC_URL', 'NEXT_PUBLIC_ARBITRUM_RPC_URL'], [
+      resolveRpcUrls(
+        ['ARBITRUM_RPC_URL', 'NEXT_PUBLIC_ARBITRUM_RPC_URL', 'ARB_RPC_URL'],
+        [
         'https://arb1.arbitrum.io/rpc',
         'https://arbitrum-one.publicnode.com',
         'https://arbitrum.drpc.org',
@@ -79,7 +100,7 @@ const CONFIGS: Record<SupportedEvmUniswapChainId, EvmUniswapChainConfig> = {
     npmDeployBlock: 5022,
     wrappedNativeLower: '0x4200000000000000000000000000000000000006',
     rpcUrls: () =>
-      resolveRpcUrls(['BASE_RPC_URL', 'NEXT_PUBLIC_BASE_RPC_URL'], [
+      resolveRpcUrls(['BASE_RPC_URL', 'NEXT_PUBLIC_BASE_RPC_URL', 'BASE_MAINNET_RPC_URL'], [
         'https://mainnet.base.org',
         'https://base.publicnode.com',
         'https://base.drpc.org',
@@ -95,7 +116,9 @@ const CONFIGS: Record<SupportedEvmUniswapChainId, EvmUniswapChainConfig> = {
     npmDeployBlock: 22_757_547,
     wrappedNativeLower: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
     rpcUrls: () =>
-      resolveRpcUrls(['POLYGON_RPC_URL', 'NEXT_PUBLIC_POLYGON_RPC_URL'], [
+      resolveRpcUrls(
+        ['POLYGON_RPC_URL', 'NEXT_PUBLIC_POLYGON_RPC_URL', 'MATIC_RPC_URL', 'POLYGON_MAINNET_RPC_URL'],
+        [
         'https://polygon-rpc.com',
         'https://polygon-bor.publicnode.com',
         'https://polygon.drpc.org',

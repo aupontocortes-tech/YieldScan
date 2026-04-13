@@ -75,7 +75,7 @@ async function runPool<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T
 }
 
 function rpcEnvHint(shortLabel: string, chainId: number): string {
-  if (chainId === 1) return 'ETH_RPC_URL'
+  if (chainId === 1) return 'ETH_RPC_URL (ou ETHEREUM_RPC_URL)'
   if (chainId === 42161) return 'ARBITRUM_RPC_URL'
   if (chainId === 8453) return 'BASE_RPC_URL'
   if (chainId === 137) return 'POLYGON_RPC_URL'
@@ -110,7 +110,7 @@ export async function getEthereumPositionsOnChain(
   const topicTo = zeroPadValue(owner, 32)
   const rpcHint = rpcEnvHint(cfg.shortLabel, cfg.chainId)
 
-  const rpcList = cfg.rpcUrls()
+  const { urls: rpcList, fromEnv: rpcFromEnv } = cfg.rpcUrls()
   let provider: JsonRpcProvider | undefined
   let npm: Contract | undefined
   let balance: bigint | undefined
@@ -128,11 +128,14 @@ export async function getEthereumPositionsOnChain(
   }
 
   if (provider == null || npm == null || balance === undefined) {
+    const warning = rpcFromEnv
+      ? `RPC ${cfg.shortLabel}: o URL definido nas variáveis de ambiente falhou (rede errada, chave inválida ou limite). Confirma ${rpcHint} na Vercel, activa cada rede no painel Alchemy/Infura e faz redeploy após alterar env.`
+      : `RPC ${cfg.shortLabel} indisponível (nós públicos falharam ou bloquearam pedidos serverless). Define ${rpcHint} no .env.local ou nas Environment Variables (Vercel) — Alchemy, Infura, etc.`
     return {
       positions: [],
       meta: {
         source: 'uniswap-v3-onchain',
-        warning: `RPC ${cfg.shortLabel} indisponível (vários nós públicos falharam). Define ${rpcHint} no .env.local (local) ou nas Environment Variables do projeto (ex.: Vercel) — Infura, Alchemy, etc.`,
+        warning,
       },
     }
   }
@@ -170,11 +173,14 @@ export async function getEthereumPositionsOnChain(
     const batches = await runPool(logTasks, PARALLEL_CHUNKS)
     allLogs = batches.flat()
   } catch {
+    const hint = rpcFromEnv
+      ? `eth_getLogs falhou (${cfg.shortLabel}) no teu RPC privado. Muitos planos free limitam histórico; tenta outro endpoint ou upgrade.`
+      : `eth_getLogs falhou (${cfg.shortLabel}). Usa ${rpcHint} com nó próprio ou menos rate limit.`
     return {
       positions: [],
       meta: {
         source: 'uniswap-v3-onchain',
-        warning: `eth_getLogs falhou (${cfg.shortLabel}). Usa ${rpcHint} com nó próprio ou menos rate limit.`,
+        warning: hint,
       },
     }
   }
