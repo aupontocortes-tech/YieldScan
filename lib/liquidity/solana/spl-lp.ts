@@ -3,6 +3,8 @@ import { calculatePnL, pnlPercent } from '@/lib/liquidity/business'
 import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
 
 const WSOL = 'So11111111111111111111111111111111111111112'
+const MAX_MINTS_TO_SCAN = 120
+const DEXSCREEN_BATCH_SIZE = 6
 /** SPL Token (classic) */
 const SPL_TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
 /** Token-2022 — muitos LP mints novos; sem isto a carteira parece “vazia”. */
@@ -152,53 +154,57 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
     .map(([mint, ui]) => ({ mint, ui }))
 
   rows.sort((a, b) => b.ui - a.ui)
-  const top = rows.slice(0, 24)
+  const top = rows.slice(0, MAX_MINTS_TO_SCAN)
 
   const positions: LiquidityPosition[] = []
 
-  for (let i = 0; i < top.length; i++) {
-    const { mint, ui } = top[i]!
-    if (i > 0 && i % 4 === 0) {
-      await new Promise((r) => setTimeout(r, 220))
+  for (let start = 0; start < top.length; start += DEXSCREEN_BATCH_SIZE) {
+    const batch = top.slice(start, start + DEXSCREEN_BATCH_SIZE)
+    const tokenResponses = await Promise.all(batch.map(({ mint }) => fetchDexscreenerToken(mint)))
+    for (let i = 0; i < batch.length; i++) {
+      const { mint, ui } = batch[i]!
+      const ds = tokenResponses[i]
+      const pair = pickLpMintPair(ds?.pairs, mint)
+      if (!pair) continue
+
+      const price = pair.priceUsd != null ? Number(pair.priceUsd) : Number.NaN
+      const valueUSD = Number.isFinite(price) && price > 0 ? price * ui : 0
+      if (valueUSD <= 0) continue
+
+      const dex = pair.dexId ?? 'Solana DEX'
+      const base = pair.baseToken?.symbol ?? 'Base'
+      const quote = pair.quoteToken?.symbol ?? 'Quote'
+      const protocol = `${dex}`
+
+      const investedUSD = valueUSD
+      const feesEarnedUSD = 0
+      const pnlUSD = calculatePnL({ valueUSD, investedUSD, feesEarnedUSD })
+      const apr = estimateAprFromDexPair(pair)
+
+      positions.push({
+        id: `sol-lp-${mint}`,
+        chain: 'solana',
+        protocol,
+        tokenA: base,
+        tokenB: quote,
+        amountA: ui,
+        amountB: 0,
+        valueUSD,
+        investedUSD,
+        feesEarnedUSD,
+        pnlUSD: valueUSD > 0 ? pnlUSD : 0,
+        pnlPct: valueUSD > 0 ? pnlPercent(pnlUSD, investedUSD) : Number.NaN,
+        impermanentLossUSD: null,
+        poolAddress: pair.pairAddress ?? mint,
+        tokenAValuePct: 100,
+        estimatedAprPct: apr,
+        positionKind: 'lp_token',
+        raw: { mint, pairAddress: pair.pairAddress, dexPair: pair },
+      })
     }
-    const ds = await fetchDexscreenerToken(mint)
-    const pair = pickLpMintPair(ds?.pairs, mint)
-    if (!pair) continue
-
-    const price = pair.priceUsd != null ? Number(pair.priceUsd) : Number.NaN
-    const valueUSD = Number.isFinite(price) && price > 0 ? price * ui : 0
-    if (valueUSD <= 0) continue
-
-    const dex = pair.dexId ?? 'Solana DEX'
-    const base = pair.baseToken?.symbol ?? 'Base'
-    const quote = pair.quoteToken?.symbol ?? 'Quote'
-    const protocol = `${dex}`
-
-    const investedUSD = valueUSD
-    const feesEarnedUSD = 0
-    const pnlUSD = calculatePnL({ valueUSD, investedUSD, feesEarnedUSD })
-    const apr = estimateAprFromDexPair(pair)
-
-    positions.push({
-      id: `sol-lp-${mint}`,
-      chain: 'solana',
-      protocol,
-      tokenA: base,
-      tokenB: quote,
-      amountA: ui,
-      amountB: 0,
-      valueUSD,
-      investedUSD,
-      feesEarnedUSD,
-      pnlUSD: valueUSD > 0 ? pnlUSD : 0,
-      pnlPct: valueUSD > 0 ? pnlPercent(pnlUSD, investedUSD) : Number.NaN,
-      impermanentLossUSD: null,
-      poolAddress: pair.pairAddress ?? mint,
-      tokenAValuePct: 100,
-      estimatedAprPct: apr,
-      positionKind: 'lp_token',
-      raw: { mint, pairAddress: pair.pairAddress, dexPair: pair },
-    })
+    if (start + DEXSCREEN_BATCH_SIZE < top.length) {
+      await new Promise((r) => setTimeout(r, 180))
+    }
   }
 
   positions.sort((a, b) => b.valueUSD - a.valueUSD)
