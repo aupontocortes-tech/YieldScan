@@ -85,12 +85,13 @@ function WalletChip({
 function AddWalletForm({
   onAdd,
 }: {
-  onAdd: (chain: WalletChain, address: string, evmChainId?: number) => void
+  onAdd: (chain: WalletChain, address: string, evmChainId?: number) => boolean
 }) {
   const [open, setOpen] = useState(false)
   const [chain, setChain] = useState<WalletChain>('ethereum')
   const [evmChainId, setEvmChainId] = useState<number>(1)
   const [addr, setAddr] = useState('')
+  const [formErr, setFormErr] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -100,7 +101,16 @@ function AddWalletForm({
   const submit = () => {
     const t = addr.trim()
     if (!t) return
-    onAdd(chain, t, chain === 'ethereum' ? evmChainId : undefined)
+    setFormErr(null)
+    const ok = onAdd(chain, t, chain === 'ethereum' ? evmChainId : undefined)
+    if (!ok) {
+      setFormErr(
+        chain === 'ethereum'
+          ? 'Endereço EVM inválido. Usa 0x… (MetaMask). Endereços Solana vão em “Solana”.'
+          : 'Endereço Solana inválido.',
+      )
+      return
+    }
     setAddr('')
     setOpen(false)
   }
@@ -119,50 +129,60 @@ function AddWalletForm({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/50 bg-muted/15 p-3">
-      <select
-        value={chain}
-        onChange={(e) => setChain(e.target.value as WalletChain)}
-        className="h-9 rounded-md border border-border/60 bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-      >
-        <option value="ethereum">EVM · Uniswap v3</option>
-        <option value="solana">Solana</option>
-      </select>
-      {chain === 'ethereum' && (
-        <select
-          value={evmChainId}
-          onChange={(e) => setEvmChainId(Number(e.target.value))}
-          className="h-9 max-w-[160px] rounded-md border border-border/60 bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          title="Rede para este endereço"
-        >
-          {SUPPORTED_EVM_UNISWAP_CHAIN_IDS.map((id) => (
-            <option key={id} value={id}>
-              {EVM_UNISWAP_CHAIN_LABEL[id]}
-            </option>
-          ))}
-        </select>
+    <div className="flex flex-col gap-2 rounded-xl border border-border/50 bg-muted/15 p-3">
+      {formErr && (
+        <p className="text-xs font-medium text-destructive" role="alert">
+          {formErr}
+        </p>
       )}
-      <input
-        ref={inputRef}
-        value={addr}
-        onChange={(e) => setAddr(e.target.value)}
-        placeholder="0x… ou endereço Solana"
-        className="h-9 min-w-[200px] flex-1 rounded-md border border-border/60 bg-background px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') submit()
-          if (e.key === 'Escape') setOpen(false)
-        }}
-      />
-      <Button type="button" size="sm" className="h-9" onClick={submit}>
-        Guardar
-      </Button>
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="rounded p-1 text-muted-foreground hover:text-foreground"
-      >
-        <X className="size-4" />
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={chain}
+          onChange={(e) => {
+            setChain(e.target.value as WalletChain)
+            setFormErr(null)
+          }}
+          className="h-9 rounded-md border border-border/60 bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="ethereum">EVM · Uniswap v3</option>
+          <option value="solana">Solana</option>
+        </select>
+        {chain === 'ethereum' && (
+          <select
+            value={evmChainId}
+            onChange={(e) => setEvmChainId(Number(e.target.value))}
+            className="h-9 max-w-[160px] rounded-md border border-border/60 bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            title="Rede para este endereço"
+          >
+            {SUPPORTED_EVM_UNISWAP_CHAIN_IDS.map((id) => (
+              <option key={id} value={id}>
+                {EVM_UNISWAP_CHAIN_LABEL[id]}
+              </option>
+            ))}
+          </select>
+        )}
+        <input
+          ref={inputRef}
+          value={addr}
+          onChange={(e) => setAddr(e.target.value)}
+          placeholder="0x… ou endereço Solana"
+          className="h-9 min-w-[200px] flex-1 rounded-md border border-border/60 bg-background px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit()
+            if (e.key === 'Escape') setOpen(false)
+          }}
+        />
+        <Button type="button" size="sm" className="h-9" onClick={submit}>
+          Guardar
+        </Button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="rounded p-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
 import type { WalletChain } from '@/hooks/use-wallet'
 import type { SavedWallet } from '@/hooks/use-multi-wallet'
+import { isValidSavedWalletAddress } from '@/lib/wallet-address'
 
 async function fetchLiquidity(
   chain: WalletChain,
@@ -25,6 +26,11 @@ async function fetchLiquidity(
     if (res.status === 400 && data.error === 'unsupported_chain') {
       throw new Error(
         'Esta rede ainda não tem leitura de pools Uniswap v3 nesta app. Escolhe outra rede na carteira ou usa Adicionar endereço com a rede correcta.',
+      )
+    }
+    if (res.status === 400 && data.error === 'invalid_ethereum_address') {
+      throw new Error(
+        'Endereço EVM inválido (esperado 0x…). Se colaste um endereço Solana, escolhe “Solana” no formulário ou remove essa entrada.',
       )
     }
     throw new Error(data.meta?.warning || data.error || `http_${res.status}`)
@@ -79,6 +85,7 @@ export function useMultiLiquidityPositions(wallets: SavedWallet[]) {
     queries: wallets.map((w) => ({
       queryKey: ['liquidity-positions', w.chain, w.evmChainId ?? 1, w.address],
       queryFn: () => fetchLiquidity(w.chain, w.address, w.evmChainId),
+      enabled: isValidSavedWalletAddress(w.chain, w.address),
       staleTime: STALE_MS,
       gcTime: 5 * 60_000,
       refetchInterval: REFETCH_MS,

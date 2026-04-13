@@ -1,7 +1,9 @@
 'use client'
 
+import { getAddress } from 'ethers'
 import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import { useWallet, type WalletChain } from '@/hooks/use-wallet'
+import { isValidSavedWalletAddress } from '@/lib/wallet-address'
 
 const STORAGE_KEY = 'ys_ml_wallets_v2'
 const LEGACY_STORAGE_KEY = 'ys_ml_wallets_v1'
@@ -82,11 +84,14 @@ function normalizeLoadedWallet(raw: unknown): SavedWallet | null {
   const evmChainId =
     w.chain === 'ethereum' ? (typeof w.evmChainId === 'number' ? w.evmChainId : 1) : undefined
   const origin = w.origin === 'extension' || w.origin === 'manual' ? w.origin : 'manual'
+  const raw = w.address.trim()
+  if (!isValidSavedWalletAddress(w.chain, raw)) return null
+  const address = w.chain === 'ethereum' ? getAddress(raw) : raw
   return {
-    id: makeId(w.chain, w.address, evmChainId),
+    id: makeId(w.chain, address, evmChainId),
     chain: w.chain,
     evmChainId,
-    address: w.address.trim(),
+    address,
     addedAt: typeof w.addedAt === 'number' ? w.addedAt : Date.now(),
     origin,
   }
@@ -108,6 +113,21 @@ export function useMultiWallet() {
         for (const row of parsed) {
           const w = normalizeLoadedWallet(row)
           if (w) out.push(w)
+        }
+        if (parsed.length > 0 && out.length === 0) {
+          try {
+            localStorage.setItem(key, '[]')
+          } catch {
+            /* ignore */
+          }
+          return null
+        }
+        if (out.length > 0 && out.length !== parsed.length) {
+          try {
+            localStorage.setItem(key, JSON.stringify(out))
+          } catch {
+            /* ignore */
+          }
         }
         return out.length ? out : null
       }
@@ -182,21 +202,24 @@ export function useMultiWallet() {
     })
   }, [singleWallet.connected, singleWallet.chain, singleWallet.address, singleWallet.evmChainId])
 
-  const addWallet = useCallback((chain: WalletChain, address: string, evmChainId?: number) => {
+  const addWallet = useCallback((chain: WalletChain, address: string, evmChainId?: number): boolean => {
     const trimmed = address.trim()
-    if (!trimmed) return
+    if (!trimmed) return false
+    if (!isValidSavedWalletAddress(chain, trimmed)) return false
     const cid = chain === 'ethereum' ? evmChainId ?? 1 : undefined
+    const normalized = chain === 'ethereum' ? getAddress(trimmed) : trimmed
     dispatch({
       type: 'add',
       wallet: {
-        id: makeId(chain, trimmed, cid),
+        id: makeId(chain, normalized, cid),
         chain,
         evmChainId: cid,
-        address: trimmed,
+        address: normalized,
         addedAt: Date.now(),
         origin: 'manual',
       },
     })
+    return true
   }, [])
 
   const removeWallet = useCallback((id: string) => {

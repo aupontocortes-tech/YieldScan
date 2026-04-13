@@ -1,7 +1,18 @@
 'use client'
 
+import {
+  WalletNotReadyError,
+  WalletReadyState,
+} from '@solana/wallet-adapter-base'
+import {
+  useWallet as useSolanaWallet,
+  WalletNotSelectedError,
+} from '@solana/wallet-adapter-react'
+import { PhantomWalletName } from '@solana/wallet-adapter-wallets'
 import { BrowserProvider, getAddress, isAddress, type Eip1193Provider } from 'ethers'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 export type WalletChain = 'ethereum' | 'solana'
 
 export type UseWalletState = {
@@ -10,19 +21,34 @@ export type UseWalletState = {
   connected: boolean
   connecting: boolean
   error: string | null
-  /** Conecta Ethereum (MetaMask / injetado EIP-1193) ou Solana (Phantom). */
+  /** Conecta Ethereum (MetaMask / injetado EIP-1193) ou Solana (Phantom via wallet-adapter). */
   connect: (target?: WalletChain) => Promise<void>
   disconnect: () => void
   /** Rede EVM atual (ex.: 0x1); só preenchido quando chain === 'ethereum'. */
   evmChainId: number | null
 }
 
-function readPhantom(): Window['solana'] | undefined {
-  if (typeof window === 'undefined') return undefined
-  return window.solana?.isPhantom ? window.solana : window.phantom?.solana
+function solanaConnectErrorMessage(e: unknown): string {
+  if (e instanceof WalletNotSelectedError) {
+    return 'Carteira Solana não seleccionada. Tenta de novo.'
+  }
+  if (e instanceof WalletNotReadyError) {
+    return 'Phantom não está disponível. Instala a extensão ou autoriza este site na Phantom.'
+  }
+  if (e instanceof Error) {
+    const m = e.message || e.name
+    if (/user rejected|denied|cancel/i.test(m)) {
+      return 'Ligação à Phantom cancelada.'
+    }
+    return m
+  }
+  return 'Falha ao conectar à Phantom.'
 }
 
 export function useWallet(): UseWalletState {
+  const solana = useSolanaWallet()
+  const solanaRef = useRef(solana)
+  solanaRef.current = solana
   const [chain, setChain] = useState<WalletChain | null>(null)
   const [address, setAddress] = useState<string | null>(null)
   const [evmChainId, setEvmChainId] = useState<number | null>(null)
@@ -31,20 +57,22 @@ export function useWallet(): UseWalletState {
 
   const connected = Boolean(chain && address)
 
-  const disconnect = useCallback(() => {
+  const clearSession = useCallback(() => {
     setChain(null)
     setAddress(null)
     setEvmChainId(null)
+    void solana.disconnect()
+  }, [solana])
+
+  const disconnect = useCallback(() => {
+    clearSession()
     setError(null)
-    try {
-      const ph = readPhantom()
-      void ph?.disconnect?.()
-    } catch {
-      /* read-only */
-    }
-  }, [])
+  }, [clearSession])
 
   const connectEthereum = useCallback(async () => {
+    if (solana.connected) {
+      await solana.disconnect()
+    }
     const eth = typeof window !== 'undefined' ? window.ethereum : undefined
     if (!eth?.request) {
       throw new Error('Carteira Ethereum (ex.: MetaMask) não encontrada.')
@@ -59,20 +87,44 @@ export function useWallet(): UseWalletState {
     setEvmChainId(Number(net.chainId))
     setAddress(getAddress(raw))
     setChain('ethereum')
-  }, [])
+  }, [solana])
 
   const connectSolana = useCallback(async () => {
-    const sol = readPhantom()
-    if (!sol?.connect) {
-      throw new Error('Phantom não encontrada. Instale a extensão Phantom.')
+    const phantomEntry = solana.wallets.find((w) => w.adapter.name === PhantomWalletName)
+    if (!phantomEntry) {
+      throw new Error(
+        'Phantom não está na lista de carteiras. Recarrega a página com a extensão activa.',
+      )
     }
-    const { publicKey } = await sol.connect()
-    const pk = publicKey?.toBase58?.()
-    if (!pk) throw new Error('Phantom não devolveu uma chave pública.')
+    if (
+      phantomEntry.readyState !== WalletReadyState.Installed &&
+      phantomEntry.readyState !== WalletReadyState.Loadable
+    ) {
+      throw new Error(
+        'Phantom não está pronta. Instala https://phantom.app ou permite a extensão neste site.',
+      )
+    }
+
+    flushSync(() => {
+      solanaRef.current.select(PhantomWalletName)
+    })
+
+    try {
+      await solanaRef.current.connect()
+    } catch (e) {
+      throw new Error(solanaConnectErrorMessage(e))
+    }
+
+    const pk = phantomEntry.adapter.publicKey?.toBase58?.()
+    if (!pk) {
+      throw new Error(
+        'Phantom não devolveu uma chave pública. Tenta aprovar a ligação na extensão.',
+      )
+    }
     setAddress(pk)
     setChain('solana')
     setEvmChainId(null)
-  }, [])
+  }, [solana])
 
   const connect = useCallback(
     async (target: WalletChain = 'ethereum') => {
@@ -83,14 +135,14 @@ export function useWallet(): UseWalletState {
         else await connectSolana()
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Falha ao conectar.'
+        clearSession()
         setError(msg)
-        disconnect()
         throw e
       } finally {
         setConnecting(false)
       }
     },
-    [connectEthereum, connectSolana, disconnect]
+    [connectEthereum, connectSolana, clearSession],
   )
 
   useEffect(() => {
@@ -123,7 +175,6 @@ export function useWallet(): UseWalletState {
     }
   }, [chain, disconnect])
 
-  // Memoizar objeto estável para consumidores (evita re-renders em deps)
   return useMemo(
     () => ({
       chain,
@@ -135,6 +186,6 @@ export function useWallet(): UseWalletState {
       disconnect,
       evmChainId,
     }),
-    [chain, address, connected, connecting, error, connect, disconnect, evmChainId]
+    [chain, address, connected, connecting, error, connect, disconnect, evmChainId],
   )
 }
