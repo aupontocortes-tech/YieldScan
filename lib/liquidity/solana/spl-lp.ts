@@ -103,20 +103,29 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
     }
   }
 
-  type Row = { mint: string; ui: number }
+  type Row = { mint: string; ui: number; isNftLike: boolean }
   function rowsFromParsed(
     parsed: Awaited<ReturnType<Connection['getParsedTokenAccountsByOwner']>>,
   ): Row[] {
     const out: Row[] = []
     for (const { account } of parsed.value) {
       const data = account.data as {
-        parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number | null } } }
+        parsed?: {
+          info?: {
+            mint?: string
+            tokenAmount?: { uiAmount?: number | null; amount?: string; decimals?: number }
+          }
+        }
       }
       const mint = data.parsed?.info?.mint
-      const ui = data.parsed?.info?.tokenAmount?.uiAmount
+      const tokenAmount = data.parsed?.info?.tokenAmount
+      const ui = tokenAmount?.uiAmount
+      const amountRaw = tokenAmount?.amount
+      const decimals = tokenAmount?.decimals
       if (!mint || ui == null || !Number.isFinite(ui) || ui <= 0) continue
       if (mint === WSOL) continue
-      out.push({ mint, ui })
+      const isNftLike = decimals === 0 && amountRaw === '1'
+      out.push({ mint, ui, isNftLike })
     }
     return out
   }
@@ -144,14 +153,19 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
     throw new Error(`RPC Solana: ${a} · ${b}`)
   }
 
-  const byMint = new Map<string, number>()
-  for (const { mint, ui } of [...rowsFromParsed(classicParsed), ...rowsFromParsed(token22Parsed)]) {
-    byMint.set(mint, (byMint.get(mint) ?? 0) + ui)
+  const byMint = new Map<string, { ui: number; isNftLike: boolean }>()
+  for (const { mint, ui, isNftLike } of [...rowsFromParsed(classicParsed), ...rowsFromParsed(token22Parsed)]) {
+    const prev = byMint.get(mint)
+    if (!prev) {
+      byMint.set(mint, { ui, isNftLike })
+      continue
+    }
+    byMint.set(mint, { ui: prev.ui + ui, isNftLike: prev.isNftLike || isNftLike })
   }
 
   const rows: Row[] = [...byMint.entries()]
-    .filter(([, ui]) => ui > 0)
-    .map(([mint, ui]) => ({ mint, ui }))
+    .filter(([, v]) => v.ui > 0)
+    .map(([mint, v]) => ({ mint, ui: v.ui, isNftLike: v.isNftLike }))
 
   rows.sort((a, b) => b.ui - a.ui)
   const top = rows.slice(0, MAX_MINTS_TO_SCAN)
@@ -209,8 +223,35 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
 
   positions.sort((a, b) => b.valueUSD - a.valueUSD)
 
+  if (positions.length === 0) {
+    const nftCandidates = rows.filter((r) => r.isNftLike).slice(0, 6)
+    for (const r of nftCandidates) {
+      positions.push({
+        id: `sol-clmm-nft-${r.mint}`,
+        chain: 'solana',
+        protocol: 'Solana CLMM',
+        tokenA: 'CLMM',
+        tokenB: 'NFT',
+        amountA: 1,
+        amountB: 0,
+        valueUSD: 0,
+        investedUSD: 0,
+        feesEarnedUSD: 0,
+        pnlUSD: 0,
+        pnlPct: Number.NaN,
+        impermanentLossUSD: null,
+        poolAddress: r.mint,
+        tokenAValuePct: 100,
+        positionKind: 'concentrated',
+        raw: { mint: r.mint, unindexedClmmNft: true },
+      })
+    }
+  }
+
   const metaWarning =
-    positions.length === 0 && rows.length > 0
+    positions.length > 0 && positions.some((p) => (p.raw as { unindexedClmmNft?: boolean } | undefined)?.unindexedClmmNft)
+      ? 'Detetámos NFTs que parecem posições CLMM em Solana. Mostramos estes itens como "CLMM NFT" sem valuation até ligar indexador dedicado (Orca/Raydium/Meteora).'
+      : positions.length === 0 && rows.length > 0
       ? 'Só listamos tokens LP (mint diferente do base e do quote no DexScreener). Holdings spot não aparecem aqui. NFTs CLMM (Orca/Raydium) precisam de indexer dedicado.'
       : positions.length === 0
         ? 'Nenhum token LP detectado nesta carteira no DexScreener.'

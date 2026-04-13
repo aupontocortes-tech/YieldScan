@@ -292,6 +292,7 @@ export function LiquidityPositionCard({ p }: { p: PositionWithWallet }) {
   const tokenAValuePct = p.tokenAValuePct ?? (p.amountA > 0 && p.amountB === 0 ? 100 : 50)
   const showRangeUi = hasRange
   const isLpToken = p.positionKind === 'lp_token'
+  const isUnindexedClmmNft = Boolean((p.raw as { unindexedClmmNft?: boolean } | undefined)?.unindexedClmmNft)
 
   return (
     <article
@@ -328,6 +329,11 @@ export function LiquidityPositionCard({ p }: { p: PositionWithWallet }) {
             {isLpToken && (
               <span className="rounded-full border border-border/50 bg-background/50 px-2 py-0.5 text-[10px] text-muted-foreground">
                 Token LP (não é saldo spot de uma só moeda)
+              </span>
+            )}
+            {isUnindexedClmmNft && (
+              <span className="rounded-full border border-gold/35 bg-gold/[0.08] px-2 py-0.5 text-[10px] text-foreground">
+                CLMM NFT detetado (sem valuation)
               </span>
             )}
             {explorer && (
