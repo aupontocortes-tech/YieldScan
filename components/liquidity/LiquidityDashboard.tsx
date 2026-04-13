@@ -1,10 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { WalletReadyState } from '@solana/wallet-adapter-base'
+import { WalletNotReadyError, WalletReadyState } from '@solana/wallet-adapter-base'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallet, WalletNotSelectedError } from '@solana/wallet-adapter-react'
 import { PhantomWalletName } from '@solana/wallet-adapter-wallets'
 import { RefreshCw, Wallet } from 'lucide-react'
 import { useConnect, useDisconnect, useAccount } from 'wagmi'
@@ -16,6 +16,26 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useLiquidityPositions } from '@/hooks/useLiquidityPositions'
 import { cn } from '@/lib/utils'
+
+function liquiditySolanaConnectErrorMessage(e: unknown): string {
+  if (e instanceof WalletNotSelectedError) {
+    return 'Carteira Solana não seleccionada. Usa "Lista de carteiras" ou tenta de novo.'
+  }
+  if (e instanceof WalletNotReadyError) {
+    return 'Phantom não está pronta. Instala ou autoriza este site em phantom.app.'
+  }
+  if (e instanceof Error) {
+    const m = e.message || e.name
+    if (/user rejected|denied|cancel|rejeit/i.test(m)) {
+      return 'Ligação à Phantom cancelada.'
+    }
+    if (/internal|interno|unexpected|unknown/i.test(m)) {
+      return 'A Phantom não completou a ligação. Recarrega a página; em Phantom → Definições → Aplicações de confiança, permite este domínio; ou desliga temporariamente a carteira EVM se houver conflito. Podes usar "Lista de carteiras".'
+    }
+    return m
+  }
+  return 'Falha ao ligar à Phantom.'
+}
 
 function PositionSkeleton() {
   return (
@@ -34,15 +54,17 @@ export function LiquidityDashboard() {
     useConnect()
   const { disconnect: disconnectEvm } = useDisconnect()
   const { setVisible: openSolModal } = useWalletModal()
+  const solWallet = useWallet()
   const {
     connected: solConnected,
     publicKey,
     disconnect: disconnectSol,
-    select,
-    connect: solConnect,
     wallets: solWallets,
     connecting: solConnecting,
-  } = useWallet()
+  } = solWallet
+
+  const solWalletRef = useRef(solWallet)
+  solWalletRef.current = solWallet
 
   const { positions, warnings, errors, isLoading, isFetching, hasWallet, refetch } = useLiquidityPositions()
 
@@ -66,15 +88,14 @@ export function LiquidityDashboard() {
     }
     try {
       flushSync(() => {
-        select(PhantomWalletName)
+        solWalletRef.current.select(PhantomWalletName)
       })
-      await solConnect()
+      await solWalletRef.current.connect()
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Falha ao ligar à Phantom.'
-      setSolConnectError(msg)
+      setSolConnectError(liquiditySolanaConnectErrorMessage(e))
       openSolModal(true)
     }
-  }, [solWallets, select, solConnect, openSolModal])
+  }, [solWallets, openSolModal])
 
   /** Wagmi v2+ pode não expor `id === 'injected'`; o primeiro connector do config é o injected. */
   const injected =
