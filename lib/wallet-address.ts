@@ -9,14 +9,25 @@ export function isValidEvmWalletAddress(raw: string): boolean {
 }
 
 export function isValidSolanaWalletAddress(raw: string): boolean {
-  const s = raw.trim()
-  if (!s) return false
-  try {
-    const pk = new PublicKey(s)
-    return pk.toBase58().length > 0
-  } catch {
-    return false
+  return normalizeSolanaAddressInput(raw) != null
+}
+
+/**
+ * Aceita texto colado com espaços/vírgulas; devolve base58 canónico ou null.
+ */
+export function normalizeSolanaAddressInput(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const chunks = trimmed.split(/[\s,;]+/).filter(Boolean)
+  const candidates = [...new Set([trimmed, ...chunks])]
+  for (const c of candidates) {
+    try {
+      return new PublicKey(c).toBase58()
+    } catch {
+      continue
+    }
   }
+  return null
 }
 
 export function isValidSavedWalletAddress(chain: WalletChainTag, address: string): boolean {

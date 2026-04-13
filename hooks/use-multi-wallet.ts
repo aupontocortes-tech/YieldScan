@@ -3,7 +3,7 @@
 import { getAddress } from 'ethers'
 import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import { useWallet, type WalletChain } from '@/hooks/use-wallet'
-import { isValidSavedWalletAddress } from '@/lib/wallet-address'
+import { isValidSavedWalletAddress, normalizeSolanaAddressInput } from '@/lib/wallet-address'
 
 const STORAGE_KEY = 'ys_ml_wallets_v2'
 const LEGACY_STORAGE_KEY = 'ys_ml_wallets_v1'
@@ -76,17 +76,20 @@ function makeId(chain: WalletChain, address: string, evmChainId?: number): strin
   return `ethereum-${evmChainId ?? 1}-${a}`
 }
 
-function normalizeLoadedWallet(raw: unknown): SavedWallet | null {
-  if (!raw || typeof raw !== 'object') return null
-  const w = raw as Partial<SavedWallet>
+function normalizeLoadedWallet(row: unknown): SavedWallet | null {
+  if (!row || typeof row !== 'object') return null
+  const w = row as Partial<SavedWallet>
   if (w.chain !== 'ethereum' && w.chain !== 'solana') return null
   if (typeof w.address !== 'string' || !w.address.trim()) return null
   const evmChainId =
     w.chain === 'ethereum' ? (typeof w.evmChainId === 'number' ? w.evmChainId : 1) : undefined
   const origin = w.origin === 'extension' || w.origin === 'manual' ? w.origin : 'manual'
-  const raw = w.address.trim()
-  if (!isValidSavedWalletAddress(w.chain, raw)) return null
-  const address = w.chain === 'ethereum' ? getAddress(raw) : raw
+  const trimmed = w.address.trim()
+  if (!isValidSavedWalletAddress(w.chain, trimmed)) return null
+  const address =
+    w.chain === 'ethereum'
+      ? getAddress(trimmed)
+      : (normalizeSolanaAddressInput(trimmed) ?? trimmed)
   return {
     id: makeId(w.chain, address, evmChainId),
     chain: w.chain,
@@ -207,7 +210,8 @@ export function useMultiWallet() {
     if (!trimmed) return false
     if (!isValidSavedWalletAddress(chain, trimmed)) return false
     const cid = chain === 'ethereum' ? evmChainId ?? 1 : undefined
-    const normalized = chain === 'ethereum' ? getAddress(trimmed) : trimmed
+    const normalized =
+      chain === 'ethereum' ? getAddress(trimmed) : (normalizeSolanaAddressInput(trimmed) ?? trimmed)
     dispatch({
       type: 'add',
       wallet: {

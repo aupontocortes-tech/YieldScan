@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PublicKey } from '@solana/web3.js'
 import { getSolanaPositions } from '@/lib/liquidity/solana/spl-lp'
+import { normalizeSolanaAddressInput } from '@/lib/wallet-address'
 
 export const maxDuration = 45
-
-function isValidSolanaAddress(s: string): boolean {
-  try {
-    new PublicKey(s)
-    return true
-  } catch {
-    return false
-  }
-}
 
 /**
  * Somente leitura: tokens SPL enriquecidos (heurística LP/preço via DexScreener).
@@ -23,11 +14,12 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 })
   }
-  const address =
+  const raw =
     typeof body === 'object' && body !== null && 'address' in body
-      ? String((body as { address?: unknown }).address ?? '').trim()
+      ? String((body as { address?: unknown }).address ?? '')
       : ''
-  if (!address || !isValidSolanaAddress(address)) {
+  const address = normalizeSolanaAddressInput(raw)
+  if (!address) {
     return NextResponse.json({ error: 'invalid_solana_address' }, { status: 400 })
   }
 

@@ -1,5 +1,6 @@
-import { Connection, PublicKey } from '@solana/web3.js'
+import { type Connection, PublicKey } from '@solana/web3.js'
 import { calculatePnL, pnlPercent } from '@/lib/liquidity/business'
+import { getSolanaConnection } from '@/lib/solana'
 import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
 
 const WSOL = 'So11111111111111111111111111111111111111112'
@@ -23,16 +24,8 @@ type DexPair = {
 
 type DexTokenResponse = { pairs?: DexPair[] }
 
-function solanaRpcUrl(): string {
-  return (
-    process.env.SOLANA_RPC_URL?.trim() ||
-    process.env.HELIUS_RPC_URL?.trim() ||
-    'https://api.mainnet-beta.solana.com'
-  )
-}
-
 async function getParsedTokenAccountsWithRetry(
-  conn: Connection,
+  conn: ReturnType<typeof getSolanaConnection>,
   owner: PublicKey,
   programId: PublicKey,
 ): Promise<Awaited<ReturnType<Connection['getParsedTokenAccountsByOwner']>>> {
@@ -92,7 +85,7 @@ function estimateAprFromDexPair(pair: DexPair, feeGuess = 0.0025): number | unde
  * Holdings normais (ex.: só HYPE ou só USDC) deixam de aparecer como “pool”.
  */
 export async function getSolanaPositions(walletAddress: string): Promise<LiquidityPositionsResult> {
-  const conn = new Connection(solanaRpcUrl(), 'confirmed')
+  const conn = getSolanaConnection()
   let pk: PublicKey
   try {
     pk = new PublicKey(walletAddress)

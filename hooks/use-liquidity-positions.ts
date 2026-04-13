@@ -33,6 +33,11 @@ async function fetchLiquidity(
         'Endereço EVM inválido (esperado 0x…). Se colaste um endereço Solana, escolhe “Solana” no formulário ou remove essa entrada.',
       )
     }
+    if (res.status === 400 && data.error === 'invalid_solana_address') {
+      throw new Error(
+        'Endereço Solana inválido. Remove essa entrada ou cola o endereço base58 da Phantom (não uses 0x…).',
+      )
+    }
     throw new Error(data.meta?.warning || data.error || `http_${res.status}`)
   }
   return {

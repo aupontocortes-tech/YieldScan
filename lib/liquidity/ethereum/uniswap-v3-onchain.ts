@@ -106,21 +106,33 @@ export async function getEthereumPositionsOnChain(
   const liqChain = liquidityChainForUniswapEvm(cfg.chainId)
   const sdkChainId = cfg.chainId
   const owner = getAddress(ownerInput)
-  const provider = new JsonRpcProvider(cfg.rpcUrl(), sdkChainId)
-  const npm = new Contract(cfg.positionManager, NPM_ABI, provider)
   const transferTopic = IFACE_721.getEvent('Transfer')!.topicHash
   const topicTo = zeroPadValue(owner, 32)
   const rpcHint = rpcEnvHint(cfg.shortLabel, cfg.chainId)
 
-  let balance: bigint
-  try {
-    balance = await npm.balanceOf(owner)
-  } catch {
+  const rpcList = cfg.rpcUrls()
+  let provider: JsonRpcProvider | undefined
+  let npm: Contract | undefined
+  let balance: bigint | undefined
+  for (const url of rpcList) {
+    const p = new JsonRpcProvider(url, sdkChainId)
+    const n = new Contract(cfg.positionManager, NPM_ABI, p)
+    try {
+      balance = await n.balanceOf(owner)
+      provider = p
+      npm = n
+      break
+    } catch {
+      /* tenta próximo RPC */
+    }
+  }
+
+  if (provider == null || npm == null || balance === undefined) {
     return {
       positions: [],
       meta: {
         source: 'uniswap-v3-onchain',
-        warning: `RPC ${cfg.shortLabel} indisponível. Define ${rpcHint} (Infura, Alchemy, etc.).`,
+        warning: `RPC ${cfg.shortLabel} indisponível (vários nós públicos falharam). Define ${rpcHint} no .env.local (local) ou nas Environment Variables do projeto (ex.: Vercel) — Infura, Alchemy, etc.`,
       },
     }
   }
