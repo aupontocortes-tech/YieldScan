@@ -1,7 +1,11 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { WalletReadyState } from '@solana/wallet-adapter-base'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useWallet } from '@solana/wallet-adapter-react'
+import { PhantomWalletName } from '@solana/wallet-adapter-wallets'
 import { RefreshCw, Wallet } from 'lucide-react'
 import { useConnect, useDisconnect, useAccount } from 'wagmi'
 import { LiquidityPositionCard } from '@/components/liquidity/PositionCard'
@@ -9,6 +13,7 @@ import { LiquiditySummary } from '@/components/liquidity/Summary'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import { useLiquidityPositions } from '@/hooks/useLiquidityPositions'
 import { cn } from '@/lib/utils'
 
@@ -25,12 +30,51 @@ function PositionSkeleton() {
 
 export function LiquidityDashboard() {
   const { address, isConnected } = useAccount()
-  const { connect, connectors, isPending: evmPending, error: evmConnectError, reset: resetEvmConnect } = useConnect()
+  const { connect, connectors, isPending: evmPending, error: evmConnectError, reset: resetEvmConnect } =
+    useConnect()
   const { disconnect: disconnectEvm } = useDisconnect()
   const { setVisible: openSolModal } = useWalletModal()
-  const { connected: solConnected, publicKey, disconnect: disconnectSol } = useWallet()
+  const {
+    connected: solConnected,
+    publicKey,
+    disconnect: disconnectSol,
+    select,
+    connect: solConnect,
+    wallets: solWallets,
+    connecting: solConnecting,
+  } = useWallet()
 
   const { positions, warnings, errors, isLoading, isFetching, hasWallet, refetch } = useLiquidityPositions()
+
+  const [solConnectError, setSolConnectError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (solConnected) setSolConnectError(null)
+  }, [solConnected])
+
+  const handleSolanaConnect = useCallback(async () => {
+    setSolConnectError(null)
+    const phantom = solWallets.find((w) => w.adapter.name === PhantomWalletName)
+    const ready =
+      phantom &&
+      (phantom.readyState === WalletReadyState.Installed ||
+        phantom.readyState === WalletReadyState.Loadable)
+    if (!ready) {
+      setSolConnectError('Phantom não detetada neste browser. Abre o modal para opções ou instala phantom.app.')
+      openSolModal(true)
+      return
+    }
+    try {
+      flushSync(() => {
+        select(PhantomWalletName)
+      })
+      await solConnect()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Falha ao ligar à Phantom.'
+      setSolConnectError(msg)
+      openSolModal(true)
+    }
+  }, [solWallets, select, solConnect, openSolModal])
 
   /** Wagmi v2+ pode não expor `id === 'injected'`; o primeiro connector do config é o injected. */
   const injected =
@@ -65,7 +109,7 @@ export function LiquidityDashboard() {
                         size="sm"
                         disabled={evmPending}
                         onClick={() => {
-                          resetEvmConnect()
+                          resetEvmConnect?.()
                           connect({ connector: injected })
                         }}
                         className="gap-2"
@@ -92,16 +136,28 @@ export function LiquidityDashboard() {
                   </Button>
                 )}
                 {!solConnected ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      openSolModal(true)
-                    }}
-                  >
-                    Phantom / Solana
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={solConnecting}
+                      className="gap-2"
+                      onClick={() => void handleSolanaConnect()}
+                    >
+                      {solConnecting ? <Spinner className="size-4" /> : null}
+                      Phantom / Solana
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground"
+                      onClick={() => openSolModal(true)}
+                    >
+                      Lista de carteiras
+                    </Button>
+                  </>
                 ) : (
                   <Button type="button" size="sm" variant="outline" onClick={() => disconnectSol()}>
                     Desligar Solana
@@ -111,6 +167,11 @@ export function LiquidityDashboard() {
               {evmConnectError && (
                 <p className="max-w-sm text-right text-xs text-destructive" role="alert">
                   {evmConnectError.message}
+                </p>
+              )}
+              {solConnectError && (
+                <p className="max-w-sm text-right text-xs text-amber-600 dark:text-amber-500" role="status">
+                  {solConnectError}
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">

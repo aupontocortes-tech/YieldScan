@@ -228,3 +228,11 @@
   animation: fade-in 0.3s ease-out forwards;
   opacity: 0;
 }
+
+/* Solana wallet-adapter modal acima de overlays (Radix Dialog, sidebar mobile, etc.) */
+.wallet-adapter-modal {
+  z-index: 200000 !important;
+}
+.wallet-adapter-modal-wrapper {
+  z-index: 200001 !important;
+}

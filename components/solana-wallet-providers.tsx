@@ -1,7 +1,7 @@
 'use client'
 
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
-import { WalletModal, WalletModalProvider } from '@solana/wallet-adapter-react-ui'
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets'
 import { useMemo, type ReactNode } from 'react'
 
@@ -15,10 +15,8 @@ export function SolanaWalletProviders({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect={false}>
-        <WalletModalProvider>
-          <WalletModal />
-          {children}
-        </WalletModalProvider>
+        {/* WalletModal é montado pelo próprio WalletModalProvider quando `setVisible(true)` — não duplicar (quebrava scroll/UI). */}
+        <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   )
