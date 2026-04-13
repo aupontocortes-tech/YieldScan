@@ -8,7 +8,7 @@ import { AGGREGATOR_EVM_CHAIN_IDS } from '@/services/constants'
 import { normalizePositions } from '@/services/normalize'
 import { fetchUniswapPositions } from '@/services/evm/getUniswapPositions'
 import { fetchSolanaLiquidityPositions } from '@/services/solana/getSolanaPositions'
-import { normalizeSolanaAddressInput } from '@/lib/wallet-address'
+import { isValidEvmWalletAddress, normalizeSolanaAddressInput } from '@/lib/wallet-address'
 import type { AggregatorFetchMeta, AggregatorLiquidityPosition } from '@/services/types'
 import { EVM_UNISWAP_CHAIN_LABEL } from '@/lib/liquidity/ethereum/evm-chain-meta'
 import type { SupportedEvmUniswapChainId } from '@/lib/liquidity/ethereum/evm-chain-meta'
@@ -26,11 +26,16 @@ export function useLiquidityPositions() {
   const solRaw = publicKey?.toBase58() ?? null
   const solAddress = solRaw ? normalizeSolanaAddressInput(solRaw) : null
 
+  const evmEnabled = Boolean(
+    evmConnected && evmAddress && isValidEvmWalletAddress(evmAddress),
+  )
+  const solEnabled = Boolean(solConnected && publicKey && solAddress)
+
   const evmQueries = useQueries({
     queries: AGGREGATOR_EVM_CHAIN_IDS.map((chainId) => ({
       queryKey: ['aggregator', 'uniswap', chainId, evmAddress],
       queryFn: () => fetchUniswapPositions(evmAddress!, chainId),
-      enabled: Boolean(evmConnected && evmAddress),
+      enabled: evmEnabled,
       staleTime: STALE_MS,
       gcTime: 10 * 60_000,
       refetchInterval: REFETCH_MS,
@@ -42,7 +47,7 @@ export function useLiquidityPositions() {
   const solQuery = useQuery({
     queryKey: ['aggregator', 'solana', solAddress],
     queryFn: () => fetchSolanaLiquidityPositions(solAddress!),
-    enabled: Boolean(solConnected && publicKey && solAddress),
+    enabled: solEnabled,
     staleTime: STALE_MS,
     gcTime: 10 * 60_000,
     refetchInterval: REFETCH_MS,
@@ -57,6 +62,8 @@ export function useLiquidityPositions() {
 
     evmQueries.forEach((q, i) => {
       const chainId = AGGREGATOR_EVM_CHAIN_IDS[i]!
+      // Com `enabled: false`, o React Query mantém isError/data antigos — não mostrar fora da carteira EVM ativa.
+      if (!evmEnabled) return
       if (q.isError) {
         errors.push({
           chain: evmLabel(chainId),
@@ -70,14 +77,16 @@ export function useLiquidityPositions() {
       }
     })
 
-    if (solQuery.isError) {
-      errors.push({
-        chain: 'Solana',
-        message: solQuery.error instanceof Error ? solQuery.error.message : String(solQuery.error),
-      })
-    } else if (solQuery.data) {
-      legacy.push(...solQuery.data.positions)
-      if (solQuery.data.meta.warning) warnings.push(`Solana: ${solQuery.data.meta.warning}`)
+    if (solEnabled) {
+      if (solQuery.isError) {
+        errors.push({
+          chain: 'Solana',
+          message: solQuery.error instanceof Error ? solQuery.error.message : String(solQuery.error),
+        })
+      } else if (solQuery.data) {
+        legacy.push(...solQuery.data.positions)
+        if (solQuery.data.meta.warning) warnings.push(`Solana: ${solQuery.data.meta.warning}`)
+      }
     }
 
     const positions: AggregatorLiquidityPosition[] = normalizePositions(legacy).sort(
@@ -85,14 +94,13 @@ export function useLiquidityPositions() {
     )
 
     const isLoadingEvm =
-      evmConnected &&
-      Boolean(evmAddress) &&
-      evmQueries.some((q) => q.isLoading || q.isPending)
+      evmEnabled && evmQueries.some((q) => q.isLoading || q.isPending)
     const isLoadingSol = solConnected && Boolean(solAddress) && (solQuery.isLoading || solQuery.isPending)
     const isFetching =
-      evmQueries.some((q) => q.isFetching) || solQuery.isFetching
+      (evmEnabled && evmQueries.some((q) => q.isFetching)) ||
+      (solEnabled && solQuery.isFetching)
 
-    const hasWallet = Boolean((evmConnected && evmAddress) || (solConnected && solAddress))
+    const hasWallet = Boolean(evmEnabled || solEnabled)
 
     return {
       positions,
@@ -106,7 +114,16 @@ export function useLiquidityPositions() {
         void solQuery.refetch()
       },
     }
-  }, [evmQueries, solQuery, evmConnected, evmAddress, solConnected, solAddress])
+  }, [
+    evmQueries,
+    solQuery,
+    evmConnected,
+    evmAddress,
+    evmEnabled,
+    solConnected,
+    solAddress,
+    solEnabled,
+  ])
 
   return aggregated
 }

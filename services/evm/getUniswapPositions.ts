@@ -23,6 +23,11 @@ export async function fetchUniswapPositions(
         },
       }
     }
+    if (res.status === 400 && data.error === 'invalid_ethereum_address') {
+      throw new Error(
+        'Endereço EVM inválido (esperado 0x…). Liga a carteira EVM ou remove dados antigos da sessão.',
+      )
+    }
     throw new Error(data.meta?.warning || data.error || `http_${res.status}`)
   }
   return {
