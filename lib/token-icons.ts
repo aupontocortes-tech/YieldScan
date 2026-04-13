@@ -203,6 +203,26 @@ export function buildAvatarUrlList(pool: Pool, slotIndex: 0 | 1): string[] {
   return [...new Set(urls)]
 }
 
+/** Logos a partir de dois símbolos (ex.: posições LP sem objeto `Pool`). */
+export function buildAvatarUrlListFromPairSymbols(
+  chain: 'Ethereum' | 'Solana',
+  symbolA: string,
+  symbolB: string,
+  slotIndex: 0 | 1,
+): string[] {
+  const raw = slotIndex === 0 ? symbolA : symbolB
+  const sym = normalizeTokenSymbol(raw.trim())
+  const urls: string[] = []
+  const chainKnown = KNOWN_TOKEN_ADDRESSES[chain]
+  const address = chainKnown?.[sym]
+  if (address) {
+    urls.push(...tokenLogoCandidates(chain, address))
+  }
+  const symLogo = SYMBOL_LOGO_URL[sym]
+  if (symLogo) urls.push(symLogo)
+  return [...new Set(urls)]
+}
+
 /** @deprecated use buildAvatarUrlList — mantido para imports externos */
 export function pickUnderlyingTokenAddresses(pool: Pool, max = 2): string[] {
   const parsed = parseUnderlyingTokens(pool)

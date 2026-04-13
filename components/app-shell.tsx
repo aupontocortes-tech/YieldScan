@@ -9,6 +9,7 @@ import {
   BookOpen,
   Calculator,
   Coins,
+  Droplets,
   LayoutGrid,
   LineChart,
   Newspaper,
@@ -40,6 +41,7 @@ const MAIN_NAV = [
   { name: 'Notícias', href: '/news', icon: Newspaper },
   { name: 'Wallet', href: '/portfolio', icon: Wallet },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
+  { name: 'My Liquidity', href: '/my-liquidity', icon: Droplets },
   { name: 'Indicator', href: '/indicator', icon: LineChart },
   { name: 'Calculator', href: '/calculator', icon: Calculator },
   { name: 'DEX', href: '/dex', icon: LayoutGrid },
@@ -51,6 +53,7 @@ function pageTitle(pathname: string): string {
   if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
   if (pathname.startsWith('/portfolio')) return 'Wallet'
   if (pathname.startsWith('/pools')) return 'Pools'
+  if (pathname.startsWith('/my-liquidity')) return 'My Liquidity'
   if (pathname.startsWith('/indicator')) return 'Indicator'
   if (pathname.startsWith('/calculator')) return 'Calculator'
   if (pathname.startsWith('/dex')) return 'DEX'
@@ -65,14 +68,23 @@ function pageTitle(pathname: string): string {
 function AppShellInset({
   title,
   swipeNav,
+  wideContent,
   children,
 }: {
   title: string
   swipeNav: ReturnType<typeof useSwipeMainNavHandlers>
+  /** Usa mais largura útil (remove margem/arredondado do inset em desktop). */
+  wideContent?: boolean
   children: React.ReactNode
 }) {
   return (
-    <SidebarInset>
+    <SidebarInset
+      className={
+        wideContent
+          ? 'md:!m-0 md:!rounded-none md:!shadow-none md:peer-data-[state=collapsed]:!ml-0'
+          : undefined
+      }
+    >
       <header className="relative z-40 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-1 h-6" />
@@ -140,6 +152,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             ? pathname.startsWith('/portfolio')
                             : item.href === '/pools'
                             ? pathname.startsWith('/pools')
+                            : item.href === '/my-liquidity'
+                              ? pathname.startsWith('/my-liquidity')
                             : item.href === '/indicator'
                               ? pathname.startsWith('/indicator')
                               : item.href === '/calculator'
@@ -198,7 +212,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <MobileSidebarEdgeOpenStrip />
 
-      <AppShellInset title={title} swipeNav={swipeNav}>
+      <AppShellInset
+        title={title}
+        swipeNav={swipeNav}
+        wideContent={pathname.startsWith('/my-liquidity')}
+      >
         {children}
       </AppShellInset>
     </SidebarProvider>
