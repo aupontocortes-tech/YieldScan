@@ -8,6 +8,7 @@ import { AGGREGATOR_EVM_CHAIN_IDS } from '@/services/constants'
 import { normalizePositions } from '@/services/normalize'
 import { fetchUniswapPositions } from '@/services/evm/getUniswapPositions'
 import { fetchSolanaLiquidityPositions } from '@/services/solana/getSolanaPositions'
+import { normalizeSolanaAddressInput } from '@/lib/wallet-address'
 import type { AggregatorFetchMeta, AggregatorLiquidityPosition } from '@/services/types'
 import { EVM_UNISWAP_CHAIN_LABEL } from '@/lib/liquidity/ethereum/evm-chain-meta'
 import type { SupportedEvmUniswapChainId } from '@/lib/liquidity/ethereum/evm-chain-meta'
@@ -22,7 +23,8 @@ function evmLabel(chainId: number): string {
 export function useLiquidityPositions() {
   const { address: evmAddress, isConnected: evmConnected } = useAccount()
   const { publicKey, connected: solConnected } = useWallet()
-  const solAddress = publicKey?.toBase58() ?? null
+  const solRaw = publicKey?.toBase58() ?? null
+  const solAddress = solRaw ? normalizeSolanaAddressInput(solRaw) : null
 
   const evmQueries = useQueries({
     queries: AGGREGATOR_EVM_CHAIN_IDS.map((chainId) => ({
@@ -40,7 +42,7 @@ export function useLiquidityPositions() {
   const solQuery = useQuery({
     queryKey: ['aggregator', 'solana', solAddress],
     queryFn: () => fetchSolanaLiquidityPositions(solAddress!),
-    enabled: Boolean(solConnected && solAddress),
+    enabled: Boolean(solConnected && publicKey && solAddress),
     staleTime: STALE_MS,
     gcTime: 10 * 60_000,
     refetchInterval: REFETCH_MS,
