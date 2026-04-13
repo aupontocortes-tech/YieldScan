@@ -25,15 +25,19 @@ function PositionSkeleton() {
 
 export function LiquidityDashboard() {
   const { address, isConnected } = useAccount()
-  const { connect, connectors, isPending: evmPending } = useConnect()
+  const { connect, connectors, isPending: evmPending, error: evmConnectError, reset: resetEvmConnect } = useConnect()
   const { disconnect: disconnectEvm } = useDisconnect()
   const { setVisible: openSolModal } = useWalletModal()
   const { connected: solConnected, publicKey, disconnect: disconnectSol } = useWallet()
 
   const { positions, warnings, errors, isLoading, isFetching, hasWallet, refetch } = useLiquidityPositions()
 
-  const injected = connectors.find((c) => c.id === 'injected' || c.type === 'injected')
-  const walletConnect = connectors.find((c) => c.id === 'walletConnect')
+  /** Wagmi v2+ pode não expor `id === 'injected'`; o primeiro connector do config é o injected. */
+  const injected =
+    connectors.find((c) => c.id === 'injected' || (c as { type?: string }).type === 'injected') ??
+    connectors.find((c) => !String(c.id).toLowerCase().includes('walletconnect')) ??
+    connectors[0]
+  const walletConnect = connectors.find((c) => String(c.id).toLowerCase().includes('walletconnect'))
 
   return (
     <div className="relative min-h-0 flex-1 bg-background">
@@ -60,7 +64,10 @@ export function LiquidityDashboard() {
                         type="button"
                         size="sm"
                         disabled={evmPending}
-                        onClick={() => connect({ connector: injected })}
+                        onClick={() => {
+                          resetEvmConnect()
+                          connect({ connector: injected })
+                        }}
                         className="gap-2"
                       >
                         <Wallet className="size-4" />
@@ -85,7 +92,14 @@ export function LiquidityDashboard() {
                   </Button>
                 )}
                 {!solConnected ? (
-                  <Button type="button" size="sm" variant="secondary" onClick={() => openSolModal(true)}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      openSolModal(true)
+                    }}
+                  >
                     Phantom / Solana
                   </Button>
                 ) : (
@@ -94,6 +108,11 @@ export function LiquidityDashboard() {
                   </Button>
                 )}
               </div>
+              {evmConnectError && (
+                <p className="max-w-sm text-right text-xs text-destructive" role="alert">
+                  {evmConnectError.message}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {isConnected && address && (
                   <span className="rounded-md bg-muted/50 px-2 py-0.5 font-mono">{address.slice(0, 6)}…{address.slice(-4)}</span>
