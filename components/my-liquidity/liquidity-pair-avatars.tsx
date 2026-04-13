@@ -2,7 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { buildAvatarUrlListFromPairSymbols, symbolToInitials } from '@/lib/token-icons'
+import type { LiquidityChain } from '@/lib/liquidity/types'
 import { cn } from '@/lib/utils'
+
+/** Logos CoinGecko/Uniswap seguem “Ethereum” para tokens EVM. */
+function avatarChainKey(chain: LiquidityChain): 'Ethereum' | 'Solana' {
+  if (chain === 'solana') return 'Solana'
+  return 'Ethereum'
+}
 
 function TokenAvatarSlot({
   urls,
@@ -62,11 +69,11 @@ export function LiquidityPairAvatars({
   symbolA,
   symbolB,
 }: {
-  chain: 'ethereum' | 'solana'
+  chain: LiquidityChain
   symbolA: string
   symbolB: string
 }) {
-  const c = chain === 'ethereum' ? 'Ethereum' : 'Solana'
+  const c = avatarChainKey(chain)
   const urls0 = useMemo(
     () => buildAvatarUrlListFromPairSymbols(c, symbolA, symbolB, 0),
     [c, symbolA, symbolB],

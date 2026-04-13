@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAddress } from 'ethers'
+import { isSupportedEvmUniswapChainId } from '@/lib/liquidity/ethereum/evm-chain-meta'
 import { getEthereumPositions } from '@/lib/liquidity/ethereum/uniswap-v3'
 
 export const maxDuration = 30
 
 /**
- * Somente leitura: posições Uniswap v3 (Ethereum mainnet) via subgraph + SDK.
+ * Somente leitura: posições Uniswap v3 (Ethereum, Arbitrum, Base, Polygon).
  */
 export async function POST(req: NextRequest) {
   let body: unknown
@@ -22,8 +23,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid_ethereum_address' }, { status: 400 })
   }
 
+  let chainId = 1
+  if (typeof body === 'object' && body !== null && 'chainId' in body) {
+    const raw = (body as { chainId?: unknown }).chainId
+    const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number(raw)
+    if (Number.isFinite(n)) chainId = Math.trunc(n)
+  }
+  if (!isSupportedEvmUniswapChainId(chainId)) {
+    return NextResponse.json(
+      { error: 'unsupported_chain', positions: [], meta: { source: 'uniswap-v3' } },
+      { status: 400 },
+    )
+  }
+
   try {
-    const result = await getEthereumPositions(address)
+    const result = await getEthereumPositions(address, chainId)
     return NextResponse.json(result)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'unknown_error'

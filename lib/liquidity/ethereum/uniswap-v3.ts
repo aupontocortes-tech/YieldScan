@@ -3,11 +3,15 @@ import { Pool, Position } from '@uniswap/v3-sdk'
 import JSBI from 'jsbi'
 import { calculateImpermanentLoss, calculatePnL, pnlPercent } from '@/lib/liquidity/business'
 import { estimateAprFromDexscreenerPool } from '@/lib/liquidity/dexscreener-pool-apr'
+import {
+  isSupportedEvmUniswapChainId,
+  liquidityChainForUniswapEvm,
+} from '@/lib/liquidity/ethereum/evm-uniswap-config'
 import { getEthereumPositionsOnChain } from '@/lib/liquidity/ethereum/uniswap-v3-onchain'
 import { fetchEthUsdSpot, usdFromDerivedEth } from '@/lib/liquidity/prices-server'
-import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
+import type { LiquidityChain, LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
 
-const MAINNET_CHAIN = 1
+const MAINNET_CHAIN_ID = 1
 const DEFAULT_SUBGRAPH_ID = '5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV'
 
 type GqlToken = {
@@ -146,19 +150,19 @@ async function postGraphql(endpoint: string, query: string, owner: string): Prom
   return body.data?.positions ?? []
 }
 
-function buildSdkAmounts(pos: GqlPosition): { amount0: number; amount1: number } {
+function buildSdkAmounts(pos: GqlPosition, sdkChainId: number): { amount0: number; amount1: number } {
   const p = pos.pool
   const d0 = Number(p.token0.decimals ?? '18')
   const d1 = Number(p.token1.decimals ?? '18')
   const t0 = new Token(
-    MAINNET_CHAIN,
+    sdkChainId,
     p.token0.id.toLowerCase(),
     Number.isFinite(d0) ? d0 : 18,
     p.token0.symbol ?? 'T0',
     p.token0.name ?? p.token0.symbol ?? 'Token0'
   )
   const t1 = new Token(
-    MAINNET_CHAIN,
+    sdkChainId,
     p.token1.id.toLowerCase(),
     Number.isFinite(d1) ? d1 : 18,
     p.token1.symbol ?? 'T1',
@@ -184,7 +188,11 @@ function buildSdkAmounts(pos: GqlPosition): { amount0: number; amount1: number }
   }
 }
 
-async function fetchFromSubgraph(ownerAddress: string, endpoint: string): Promise<LiquidityPositionsResult> {
+async function fetchFromSubgraph(
+  ownerAddress: string,
+  endpoint: string,
+  liquidityChain: LiquidityChain,
+): Promise<LiquidityPositionsResult> {
   let rows: GqlPosition[]
   try {
     rows = await postGraphql(endpoint, POSITIONS_QUERY_SCALAR_TICKS, ownerAddress)
@@ -204,7 +212,7 @@ async function fetchFromSubgraph(ownerAddress: string, endpoint: string): Promis
     let amount0: number
     let amount1: number
     try {
-      ;({ amount0, amount1 } = buildSdkAmounts(pos))
+      ;({ amount0, amount1 } = buildSdkAmounts(pos, MAINNET_CHAIN_ID))
     } catch {
       continue
     }
@@ -248,7 +256,7 @@ async function fetchFromSubgraph(ownerAddress: string, endpoint: string): Promis
 
     positions.push({
       id: `eth-uni-v3-${pos.id}`,
-      chain: 'ethereum',
+      chain: liquidityChain,
       protocol: 'Uniswap v3',
       tokenA: p.token0.symbol ?? 'Token0',
       tokenB: p.token1.symbol ?? 'Token1',
@@ -284,7 +292,7 @@ async function fetchFromSubgraph(ownerAddress: string, endpoint: string): Promis
       aprSeen.set(
         k,
         await estimateAprFromDexscreenerPool({
-          chain: 'ethereum',
+          chain: liquidityChain,
           poolAddress: x.poolAddress,
           feeTierBps: x.feeTierBps,
         }),
@@ -306,21 +314,41 @@ async function fetchFromSubgraph(ownerAddress: string, endpoint: string): Promis
 }
 
 /**
- * Posições Uniswap v3 (Ethereum mainnet):
- * 1) Subgraph (THE_GRAPH_API_KEY ou UNISWAP_V3_SUBGRAPH_URL), se configurado;
- * 2) Caso contrário (ou erro no subgraph), fallback RPC: logs + positions() + pool + SDK.
+ * Posições Uniswap v3:
+ * — Ethereum (chainId 1): subgraph (THE_GRAPH_API_KEY / UNISWAP_V3_SUBGRAPH_URL) se configurado, senão RPC;
+ * — Arbitrum, Base, Polygon: apenas RPC on-chain (mesmos contratos Uniswap v3).
  */
-export async function getEthereumPositions(ownerAddress: string): Promise<LiquidityPositionsResult> {
+export async function getEthereumPositions(
+  ownerAddress: string,
+  chainId: number = MAINNET_CHAIN_ID,
+): Promise<LiquidityPositionsResult> {
+  if (!isSupportedEvmUniswapChainId(chainId)) {
+    return {
+      positions: [],
+      meta: {
+        source: 'uniswap-v3',
+        warning:
+          'Rede EVM não suportada para Uniswap v3 aqui. Suportadas: Ethereum, Arbitrum, Base, Polygon, BNB Chain.',
+      },
+    }
+  }
+
+  const liquidityChain = liquidityChainForUniswapEvm(chainId)
+
+  if (chainId !== MAINNET_CHAIN_ID) {
+    return getEthereumPositionsOnChain(ownerAddress, chainId)
+  }
+
   const endpoint = subgraphEndpoint()
   if (endpoint) {
     try {
-      return await fetchFromSubgraph(ownerAddress, endpoint)
+      return await fetchFromSubgraph(ownerAddress, endpoint, liquidityChain)
     } catch {
       /* continua para RPC */
     }
   }
 
-  const onChain = await getEthereumPositionsOnChain(ownerAddress)
+  const onChain = await getEthereumPositionsOnChain(ownerAddress, chainId)
   if (!endpoint) {
     return onChain
   }

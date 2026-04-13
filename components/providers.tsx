@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt'
+import { SolanaWalletProviders } from '@/components/solana-wallet-providers'
 import { SqliteBootstrap } from '@/components/sqlite-bootstrap'
+import { AppWagmiProvider } from '@/components/wagmi-provider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -24,10 +26,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SqliteBootstrap />
-      <AppShell>{children}</AppShell>
-      <PwaInstallPrompt />
-    </QueryClientProvider>
+    <AppWagmiProvider>
+      <QueryClientProvider client={queryClient}>
+        <SolanaWalletProviders>
+          <SqliteBootstrap />
+          <AppShell>{children}</AppShell>
+          <PwaInstallPrompt />
+        </SolanaWalletProviders>
+      </QueryClientProvider>
+    </AppWagmiProvider>
   )
 }

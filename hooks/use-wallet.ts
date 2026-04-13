@@ -2,7 +2,6 @@
 
 import { BrowserProvider, getAddress, isAddress, type Eip1193Provider } from 'ethers'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-
 export type WalletChain = 'ethereum' | 'solana'
 
 export type UseWalletState = {

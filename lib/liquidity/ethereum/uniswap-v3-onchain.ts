@@ -5,19 +5,15 @@ import JSBI from 'jsbi'
 import { calculatePnL, pnlPercent } from '@/lib/liquidity/business'
 import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 import { estimateAprFromDexscreenerPool } from '@/lib/liquidity/dexscreener-pool-apr'
+import { liquidityChainForUniswapEvm } from '@/lib/liquidity/ethereum/evm-chain-meta'
+import { getEvmUniswapConfig } from '@/lib/liquidity/ethereum/evm-uniswap-config'
 import { fetchEthUsdSpot } from '@/lib/liquidity/prices-server'
 import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
 
-const MAINNET_CHAIN = 1
-/** NonfungiblePositionManager (Ethereum mainnet). */
-const NPM = '0xC36442b4a4522E871399CD017aD59865a842ddfB'
-const UNI_FACTORY = '0x1F9840a85d5aF5bf1D1762F925BDADd4201F984'
-
-const NPM_DEPLOY_BLOCK = 12_369_621
 /** Janela de blocos para eth_getLogs (RPCs públicos limitam o range por pedido). */
 const CHUNK_BLOCKS = 1_800
 const PARALLEL_CHUNKS = 28
-/** ~5,4M blocos ≈ ~750 dias (7200 blocos/dia). */
+/** Histórico máximo a varrer (Transfer → NFT). */
 const MAX_SCAN_BLOCKS = 5_400_000
 
 const IFACE_721 = new Interface([
@@ -39,15 +35,10 @@ const POOL_ABI = [
 
 const ERC20_ABI = ['function decimals() view returns (uint8)', 'function symbol() view returns (string)']
 
-function rpcUrl(): string {
-  return (
-    process.env.ETH_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_ETH_RPC_URL?.trim() ||
-    'https://ethereum.publicnode.com'
-  )
-}
-
-async function fetchCoingeckoContractUsd(addresses: string[]): Promise<Record<string, number>> {
+async function fetchCoingeckoContractUsd(
+  addresses: string[],
+  coingeckoPlatform: string,
+): Promise<Record<string, number>> {
   const uniq = [...new Set(addresses.map((a) => a.toLowerCase()))].filter(Boolean).slice(0, 60)
   if (!uniq.length) return {}
   const { base, headers } = getCoingeckoRequestParts()
@@ -55,7 +46,7 @@ async function fetchCoingeckoContractUsd(addresses: string[]): Promise<Record<st
   const chunk = 28
   for (let i = 0; i < uniq.length; i += chunk) {
     const part = uniq.slice(i, i + chunk)
-    const url = `${base}/simple/token_price/ethereum?contract_addresses=${part.join(',')}&vs_currencies=usd`
+    const url = `${base}/simple/token_price/${encodeURIComponent(coingeckoPlatform)}?contract_addresses=${part.join(',')}&vs_currencies=usd`
     const res = await fetch(url, { headers, cache: 'no-store' })
     if (!res.ok) continue
     const data = (await res.json()) as Record<string, { usd?: number }>
@@ -83,16 +74,43 @@ async function runPool<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T
   return results
 }
 
+function rpcEnvHint(shortLabel: string, chainId: number): string {
+  if (chainId === 1) return 'ETH_RPC_URL'
+  if (chainId === 42161) return 'ARBITRUM_RPC_URL'
+  if (chainId === 8453) return 'BASE_RPC_URL'
+  if (chainId === 137) return 'POLYGON_RPC_URL'
+  if (chainId === 56) return 'BSC_RPC_URL'
+  return `RPC (${shortLabel})`
+}
+
 /**
  * Fallback sem The Graph: descobre NFTs v3 via logs de Transfer para o endereço,
  * confirma com ownerOf, lê positions() + pool slot0 e calcula montantes com o SDK.
  */
-export async function getEthereumPositionsOnChain(ownerInput: string): Promise<LiquidityPositionsResult> {
+export async function getEthereumPositionsOnChain(
+  ownerInput: string,
+  chainId: number = 1,
+): Promise<LiquidityPositionsResult> {
+  const cfg = getEvmUniswapConfig(chainId)
+  if (!cfg) {
+    return {
+      positions: [],
+      meta: {
+        source: 'uniswap-v3-onchain',
+        warning:
+          'Rede EVM não suportada para Uniswap v3 nesta app (Ethereum, Arbitrum, Base, Polygon, BNB Chain).',
+      },
+    }
+  }
+
+  const liqChain = liquidityChainForUniswapEvm(cfg.chainId)
+  const sdkChainId = cfg.chainId
   const owner = getAddress(ownerInput)
-  const provider = new JsonRpcProvider(rpcUrl())
-  const npm = new Contract(NPM, NPM_ABI, provider)
+  const provider = new JsonRpcProvider(cfg.rpcUrl(), sdkChainId)
+  const npm = new Contract(cfg.positionManager, NPM_ABI, provider)
   const transferTopic = IFACE_721.getEvent('Transfer')!.topicHash
   const topicTo = zeroPadValue(owner, 32)
+  const rpcHint = rpcEnvHint(cfg.shortLabel, cfg.chainId)
 
   let balance: bigint
   try {
@@ -102,8 +120,7 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
       positions: [],
       meta: {
         source: 'uniswap-v3-onchain',
-        warning:
-          'RPC Ethereum indisponível. Define ETH_RPC_URL (Infura, Alchemy, etc.) ou THE_GRAPH_API_KEY.',
+        warning: `RPC ${cfg.shortLabel} indisponível. Define ${rpcHint} (Infura, Alchemy, etc.).`,
       },
     }
   }
@@ -119,7 +136,7 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
   }
 
   const latest = Number(await provider.getBlockNumber())
-  const fromBlock = Math.max(NPM_DEPLOY_BLOCK, latest - MAX_SCAN_BLOCKS)
+  const fromBlock = Math.max(cfg.npmDeployBlock, latest - MAX_SCAN_BLOCKS)
 
   const chunks: { from: number; to: number }[] = []
   for (let b = fromBlock; b <= latest; b += CHUNK_BLOCKS) {
@@ -129,7 +146,7 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
   const logTasks = chunks.map(
     ({ from, to }) => () =>
       provider.getLogs({
-        address: NPM,
+        address: cfg.positionManager,
         topics: [transferTopic, null, topicTo],
         fromBlock: from,
         toBlock: to,
@@ -145,8 +162,7 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
       positions: [],
       meta: {
         source: 'uniswap-v3-onchain',
-        warning:
-          'eth_getLogs falhou (range ou rate limit do RPC). Usa ETH_RPC_URL com nó próprio ou THE_GRAPH_API_KEY.',
+        warning: `eth_getLogs falhou (${cfg.shortLabel}). Usa ${rpcHint} com nó próprio ou menos rate limit.`,
       },
     }
   }
@@ -178,13 +194,13 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
       meta: {
         source: 'uniswap-v3-onchain',
         warning:
-          'A carteira tem posições Uniswap v3 (balanceOf > 0), mas não encontrámos os NFTs nesta janela de blocos. ' +
-          'Configura THE_GRAPH_API_KEY para listagem completa, ou ETH_RPC_URL com nó archive.',
+          `A carteira tem posições Uniswap v3 em ${cfg.shortLabel} (balanceOf > 0), mas não encontrámos os NFTs nesta janela de blocos. ` +
+          `Para Ethereum, THE_GRAPH_API_KEY ou nó archive ajudam; noutras redes, ${rpcHint} com histórico largo.`,
       },
     }
   }
 
-  const factory = new Contract(UNI_FACTORY, FACTORY_ABI, provider)
+  const factory = new Contract(cfg.factory, FACTORY_ABI, provider)
   const ethUsd = await fetchEthUsdSpot()
 
   type PosRow = {
@@ -248,7 +264,7 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
 
   const tokenAddrs = [...new Set(rows.flatMap((r) => [r.token0, r.token1]))]
   const [priceByAddrRaw, decimalsCache] = await Promise.all([
-    fetchCoingeckoContractUsd(tokenAddrs),
+    fetchCoingeckoContractUsd(tokenAddrs, cfg.coingeckoPlatform),
     (async () => {
       const m = new Map<string, number>()
       for (const a of tokenAddrs) {
@@ -264,10 +280,17 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
     })(),
   ])
 
-  const WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+  const wrapped = cfg.wrappedNativeLower
   const priceByAddr = { ...priceByAddrRaw }
-  if (ethUsd > 0 && (!priceByAddr[WETH] || priceByAddr[WETH]! <= 0)) {
-    priceByAddr[WETH] = ethUsd
+  /** Só faz sentido usar spot ETH para WETH (L1/L2 com WETH); não para WMATIC/WBNB. */
+  const useEthSpotForWrappedNative =
+    cfg.chainId === 1 || cfg.chainId === 42161 || cfg.chainId === 8453
+  if (
+    useEthSpotForWrappedNative &&
+    ethUsd > 0 &&
+    (!priceByAddr[wrapped] || priceByAddr[wrapped]! <= 0)
+  ) {
+    priceByAddr[wrapped] = ethUsd
   }
 
   const positions: LiquidityPosition[] = []
@@ -276,7 +299,7 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
     const k = `${pool.toLowerCase()}-${feeBps}`
     if (aprCache.has(k)) return aprCache.get(k)
     const v = await estimateAprFromDexscreenerPool({
-      chain: 'ethereum',
+      chain: liqChain,
       poolAddress: pool,
       feeTierBps: feeBps,
     })
@@ -308,8 +331,8 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
       /* defaults */
     }
 
-    const t0 = new Token(MAINNET_CHAIN, r.token0, d0, sym0, sym0)
-    const t1 = new Token(MAINNET_CHAIN, r.token1, d1, sym1, sym1)
+    const t0 = new Token(sdkChainId, r.token0, d0, sym0, sym0)
+    const t1 = new Token(sdkChainId, r.token1, d1, sym1, sym1)
 
     let amount0: number
     let amount1: number
@@ -349,11 +372,11 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
 
     let tokenAValuePct: number
     if (valueUSD > 1e-8 && p0 > 0) {
-      tokenAValuePct = Math.round((amount0 * p0) / valueUSD * 100)
+      tokenAValuePct = Math.round(((amount0 * p0) / valueUSD) * 100)
     } else if (currentTick < r.tickLower) {
-      tokenAValuePct = 100 // below range: all tokenA
+      tokenAValuePct = 100
     } else if (currentTick > r.tickUpper) {
-      tokenAValuePct = 0 // above range: all tokenB
+      tokenAValuePct = 0
     } else {
       tokenAValuePct = 50
     }
@@ -361,8 +384,8 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
     const estimatedAprPct = await aprForPool(poolAddrHex, r.fee)
 
     positions.push({
-      id: `eth-uni-v3-onchain-${r.tokenId.toString()}`,
-      chain: 'ethereum',
+      id: `${cfg.chainId}-uni-v3-onchain-${r.tokenId.toString()}`,
+      chain: liqChain,
       protocol: 'Uniswap v3',
       tokenA: sym0,
       tokenB: sym1,
@@ -385,11 +408,16 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
       tokenAValuePct,
       estimatedAprPct,
       positionKind: 'concentrated',
-      raw: { tokenId: r.tokenId.toString(), source: 'rpc' },
+      raw: { tokenId: r.tokenId.toString(), source: 'rpc', chainId: cfg.chainId },
     })
   }
 
   positions.sort((a, b) => b.valueUSD - a.valueUSD)
+
+  const tailWarning =
+    latest - fromBlock >= MAX_SCAN_BLOCKS - 1
+      ? 'A pesquisa de NFTs cobre só uma janela recente de blocos; posições muito antigas podem não aparecer.'
+      : ''
 
   return {
     positions,
@@ -399,11 +427,11 @@ export async function getEthereumPositionsOnChain(ownerInput: string): Promise<L
         positions.length === 0
           ? 'Não foi possível reconstruir pools/preços para estas posições.'
           : [
-              'Dados via RPC público (sem The Graph). Principal investido = valor atual (sem histórico on-chain); P&amp;L pode ser 0.',
-              ethUsd <= 0 ? 'Preço ETH indisponível; tokens podem aparecer a 0 USD.' : '',
-              latest - fromBlock >= MAX_SCAN_BLOCKS - 1
-                ? `Janela indexada: últimos ~${Math.floor(MAX_SCAN_BLOCKS / 7200)} dias de Transfer events.`
+              `Dados via RPC (${cfg.shortLabel}, sem The Graph nesta rede). Principal investido = valor atual; P&amp;L pode ser 0.`,
+              useEthSpotForWrappedNative && ethUsd <= 0
+                ? 'Preço spot ETH indisponível; WETH pode aparecer a 0 USD.'
                 : '',
+              tailWarning,
             ]
               .filter(Boolean)
               .join(' '),

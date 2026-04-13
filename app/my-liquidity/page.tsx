@@ -1,5 +1,5 @@
-import { MyLiquidityClient } from '@/components/my-liquidity/my-liquidity-client'
+import { LiquidityDashboard } from '@/components/liquidity/LiquidityDashboard'
 
 export default function MyLiquidityPage() {
-  return <MyLiquidityClient />
+  return <LiquidityDashboard />
 }

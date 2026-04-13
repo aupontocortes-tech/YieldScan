@@ -8,15 +8,25 @@ import type { SavedWallet } from '@/hooks/use-multi-wallet'
 async function fetchLiquidity(
   chain: WalletChain,
   address: string,
+  evmChainId?: number,
 ): Promise<LiquidityPositionsResult> {
   const path = chain === 'ethereum' ? '/api/liquidity/ethereum' : '/api/liquidity/solana'
+  const body =
+    chain === 'ethereum'
+      ? { address, chainId: evmChainId ?? 1 }
+      : { address }
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address }),
+    body: JSON.stringify(body),
   })
   const data = (await res.json()) as LiquidityPositionsResult & { error?: string }
   if (!res.ok) {
+    if (res.status === 400 && data.error === 'unsupported_chain') {
+      throw new Error(
+        'Esta rede ainda não tem leitura de pools Uniswap v3 nesta app. Escolhe outra rede na carteira ou usa Adicionar endereço com a rede correcta.',
+      )
+    }
     throw new Error(data.meta?.warning || data.error || `http_${res.status}`)
   }
   return {
@@ -32,12 +42,13 @@ const STALE_MS = 30_000
 export function useLiquidityPositions(opts: {
   chain: WalletChain | null
   address: string | null
+  evmChainId?: number
   enabled: boolean
 }) {
-  const { chain, address, enabled } = opts
+  const { chain, address, evmChainId, enabled } = opts
   return useQuery({
-    queryKey: ['liquidity-positions', chain, address],
-    queryFn: () => fetchLiquidity(chain!, address!),
+    queryKey: ['liquidity-positions', chain, evmChainId ?? 1, address],
+    queryFn: () => fetchLiquidity(chain!, address!, evmChainId),
     enabled: Boolean(enabled && chain && address),
     staleTime: STALE_MS,
     gcTime: 5 * 60_000,
@@ -51,12 +62,14 @@ export type PositionWithWallet = LiquidityPosition & {
   walletId: string
   walletAddress: string
   walletChain: WalletChain
+  walletEvmChainId?: number
 }
 
 export type LiquidityFetchError = {
   walletId: string
   walletAddress: string
   walletChain: WalletChain
+  walletEvmChainId?: number
   message: string
 }
 
@@ -64,8 +77,8 @@ export type LiquidityFetchError = {
 export function useMultiLiquidityPositions(wallets: SavedWallet[]) {
   const queries = useQueries({
     queries: wallets.map((w) => ({
-      queryKey: ['liquidity-positions', w.chain, w.address],
-      queryFn: () => fetchLiquidity(w.chain, w.address),
+      queryKey: ['liquidity-positions', w.chain, w.evmChainId ?? 1, w.address],
+      queryFn: () => fetchLiquidity(w.chain, w.address, w.evmChainId),
       staleTime: STALE_MS,
       gcTime: 5 * 60_000,
       refetchInterval: REFETCH_MS,
@@ -90,12 +103,19 @@ export function useMultiLiquidityPositions(wallets: SavedWallet[]) {
         walletId: w.id,
         walletAddress: w.address,
         walletChain: w.chain,
+        walletEvmChainId: w.evmChainId,
         message: err instanceof Error ? err.message : String(err),
       })
     }
     if (q.data) {
       for (const p of q.data.positions) {
-        positions.push({ ...p, walletId: w.id, walletAddress: w.address, walletChain: w.chain })
+        positions.push({
+          ...p,
+          walletId: w.id,
+          walletAddress: w.address,
+          walletChain: w.chain,
+          walletEvmChainId: w.evmChainId,
+        })
       }
       if (q.data.meta.warning) warnings.push(q.data.meta.warning)
     }

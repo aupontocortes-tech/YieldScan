@@ -5,7 +5,26 @@ import { useMemo } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { LiquidityPairAvatars } from '@/components/my-liquidity/liquidity-pair-avatars'
 import type { PositionWithWallet } from '@/hooks/use-liquidity-positions'
+import type { LiquidityChain } from '@/lib/liquidity/types'
 import { cn } from '@/lib/utils'
+
+const POOL_EXPLORER: Partial<Record<LiquidityChain, (addr: string) => string>> = {
+  ethereum: (a) => `https://etherscan.io/address/${a}`,
+  arbitrum: (a) => `https://arbiscan.io/address/${a}`,
+  base: (a) => `https://basescan.org/address/${a}`,
+  polygon: (a) => `https://polygonscan.com/address/${a}`,
+  bnb: (a) => `https://bscscan.com/address/${a}`,
+  solana: (a) => `https://solscan.io/account/${a}`,
+}
+
+const CHAIN_BADGE: Record<LiquidityChain, string> = {
+  ethereum: 'ETH',
+  arbitrum: 'ARB',
+  base: 'BASE',
+  polygon: 'POL',
+  bnb: 'BNB',
+  solana: 'SOL',
+}
 
 const GOLD = '#e8c547'
 const CYAN = '#28a0f0'
@@ -283,11 +302,7 @@ export function LiquidityPositionCard({ p }: { p: PositionWithWallet }) {
 
   const feeTierLabel = p.feeTierBps != null ? `${(p.feeTierBps / 10_000).toFixed(2)}%` : null
   const explorer =
-    p.poolAddress
-      ? p.chain === 'ethereum'
-        ? `https://etherscan.io/address/${p.poolAddress}`
-        : `https://solscan.io/account/${p.poolAddress}`
-      : null
+    p.poolAddress && POOL_EXPLORER[p.chain] ? POOL_EXPLORER[p.chain]!(p.poolAddress) : null
 
   const tokenAValuePct = p.tokenAValuePct ?? (p.amountA > 0 && p.amountB === 0 ? 100 : 50)
   const showRangeUi = hasRange
@@ -321,7 +336,7 @@ export function LiquidityPositionCard({ p }: { p: PositionWithWallet }) {
               </span>
             )}
             <span className="rounded border border-border/50 bg-background/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {p.chain === 'ethereum' ? 'ETH' : 'SOL'}
+              {CHAIN_BADGE[p.chain]}
             </span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2">

@@ -2,7 +2,7 @@
  * Modelo unificado de posição de liquidez (UI + camada de negócio).
  * Todos os valores monetários estão em USD quando aplicável.
  */
-export type LiquidityChain = 'ethereum' | 'solana'
+export type LiquidityChain = 'ethereum' | 'arbitrum' | 'base' | 'polygon' | 'bnb' | 'solana'
 
 export type LiquidityPosition = {
   id: string

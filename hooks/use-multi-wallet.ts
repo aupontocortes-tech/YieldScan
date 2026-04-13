@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import { useWallet, type WalletChain } from '@/hooks/use-wallet'
 
-const STORAGE_KEY = 'ys_ml_wallets_v1'
+const STORAGE_KEY = 'ys_ml_wallets_v2'
+const LEGACY_STORAGE_KEY = 'ys_ml_wallets_v1'
 
 export type SavedWallet = {
-  /** `chain-address` */
+  /** `solana-addr` ou `ethereum-{chainId}-addr` */
   id: string
   chain: WalletChain
+  /** Rede EVM (1, 42161, 8453, 137). Ignorado em Solana. */
+  evmChainId?: number
   address: string
   addedAt: number
+  /** `extension` = ligada via MetaMask; actualiza com chainChanged. */
+  origin?: 'extension' | 'manual'
 }
 
 type State = { wallets: SavedWallet[] }
@@ -19,43 +24,106 @@ type Action =
   | { type: 'add'; wallet: SavedWallet }
   | { type: 'remove'; id: string }
   | { type: 'load'; wallets: SavedWallet[] }
+  | { type: 'syncExtensionEvm'; address: string; evmChainId: number }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'load':
       return { wallets: action.wallets }
     case 'add': {
-      const exists = state.wallets.some(
-        (w) =>
-          w.chain === action.wallet.chain &&
-          w.address.toLowerCase() === action.wallet.address.toLowerCase(),
-      )
+      const exists = state.wallets.some((w) => walletKey(w) === walletKey(action.wallet))
       if (exists) return state
       return { wallets: [...state.wallets, action.wallet] }
     }
     case 'remove':
       return { wallets: state.wallets.filter((w) => w.id !== action.id) }
+    case 'syncExtensionEvm': {
+      const addr = action.address.toLowerCase()
+      let changed = false
+      const wallets = state.wallets.map((w) => {
+        if (
+          w.origin !== 'extension' ||
+          w.chain !== 'ethereum' ||
+          w.address.toLowerCase() !== addr
+        ) {
+          return w
+        }
+        if (w.evmChainId === action.evmChainId) return w
+        changed = true
+        return {
+          ...w,
+          evmChainId: action.evmChainId,
+          id: makeId('ethereum', w.address, action.evmChainId),
+        }
+      })
+      return changed ? { wallets } : state
+    }
     default:
       return state
   }
 }
 
-function makeId(chain: WalletChain, address: string) {
-  return `${chain}-${address.toLowerCase()}`
+function walletKey(w: SavedWallet): string {
+  if (w.chain === 'solana') return `solana:${w.address.toLowerCase()}`
+  return `ethereum:${w.evmChainId ?? 1}:${w.address.toLowerCase()}`
+}
+
+function makeId(chain: WalletChain, address: string, evmChainId?: number): string {
+  const a = address.trim().toLowerCase()
+  if (chain === 'solana') return `solana-${a}`
+  return `ethereum-${evmChainId ?? 1}-${a}`
+}
+
+function normalizeLoadedWallet(raw: unknown): SavedWallet | null {
+  if (!raw || typeof raw !== 'object') return null
+  const w = raw as Partial<SavedWallet>
+  if (w.chain !== 'ethereum' && w.chain !== 'solana') return null
+  if (typeof w.address !== 'string' || !w.address.trim()) return null
+  const evmChainId =
+    w.chain === 'ethereum' ? (typeof w.evmChainId === 'number' ? w.evmChainId : 1) : undefined
+  const origin = w.origin === 'extension' || w.origin === 'manual' ? w.origin : 'manual'
+  return {
+    id: makeId(w.chain, w.address, evmChainId),
+    chain: w.chain,
+    evmChainId,
+    address: w.address.trim(),
+    addedAt: typeof w.addedAt === 'number' ? w.addedAt : Date.now(),
+    origin,
+  }
 }
 
 export function useMultiWallet() {
   const singleWallet = useWallet()
   const [state, dispatch] = useReducer(reducer, { wallets: [] })
 
-  /** Carrega carteiras guardadas do localStorage ao montar. */
+  /** Carrega carteiras guardadas (v2 ou migra v1). */
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored) as SavedWallet[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          dispatch({ type: 'load', wallets: parsed })
+      const tryParse = (key: string): SavedWallet[] | null => {
+        const stored = localStorage.getItem(key)
+        if (!stored) return null
+        const parsed = JSON.parse(stored) as unknown
+        if (!Array.isArray(parsed) || parsed.length === 0) return null
+        const out: SavedWallet[] = []
+        for (const row of parsed) {
+          const w = normalizeLoadedWallet(row)
+          if (w) out.push(w)
+        }
+        return out.length ? out : null
+      }
+
+      const v2 = tryParse(STORAGE_KEY)
+      if (v2) {
+        dispatch({ type: 'load', wallets: v2 })
+        return
+      }
+      const v1 = tryParse(LEGACY_STORAGE_KEY)
+      if (v1) {
+        dispatch({ type: 'load', wallets: v1 })
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(v1))
+        } catch {
+          /* ignore */
         }
       }
     } catch {
@@ -73,26 +141,61 @@ export function useMultiWallet() {
     }
   }, [state.wallets])
 
-  /** Adiciona automaticamente a carteira activa (connect via extensão). */
+  /** Adiciona ou actualiza carteira ligada via extensão (MetaMask / Phantom). */
   useEffect(() => {
     if (!singleWallet.connected || !singleWallet.address || !singleWallet.chain) return
+    if (singleWallet.chain === 'ethereum') {
+      const cid = singleWallet.evmChainId ?? 1
+      dispatch({
+        type: 'add',
+        wallet: {
+          id: makeId('ethereum', singleWallet.address, cid),
+          chain: 'ethereum',
+          evmChainId: cid,
+          address: singleWallet.address,
+          addedAt: Date.now(),
+          origin: 'extension',
+        },
+      })
+    } else {
+      dispatch({
+        type: 'add',
+        wallet: {
+          id: makeId('solana', singleWallet.address),
+          chain: 'solana',
+          address: singleWallet.address,
+          addedAt: Date.now(),
+          origin: 'extension',
+        },
+      })
+    }
+  }, [singleWallet.connected, singleWallet.address, singleWallet.chain, singleWallet.evmChainId])
+
+  /** MetaMask mudou de rede: actualiza entrada `extension` com o mesmo endereço. */
+  useEffect(() => {
+    if (!singleWallet.connected || singleWallet.chain !== 'ethereum' || !singleWallet.address) return
+    if (singleWallet.evmChainId == null) return
+    dispatch({
+      type: 'syncExtensionEvm',
+      address: singleWallet.address,
+      evmChainId: singleWallet.evmChainId,
+    })
+  }, [singleWallet.connected, singleWallet.chain, singleWallet.address, singleWallet.evmChainId])
+
+  const addWallet = useCallback((chain: WalletChain, address: string, evmChainId?: number) => {
+    const trimmed = address.trim()
+    if (!trimmed) return
+    const cid = chain === 'ethereum' ? evmChainId ?? 1 : undefined
     dispatch({
       type: 'add',
       wallet: {
-        id: makeId(singleWallet.chain, singleWallet.address),
-        chain: singleWallet.chain,
-        address: singleWallet.address,
+        id: makeId(chain, trimmed, cid),
+        chain,
+        evmChainId: cid,
+        address: trimmed,
         addedAt: Date.now(),
+        origin: 'manual',
       },
-    })
-  }, [singleWallet.connected, singleWallet.address, singleWallet.chain])
-
-  const addWallet = useCallback((chain: WalletChain, address: string) => {
-    const trimmed = address.trim()
-    if (!trimmed) return
-    dispatch({
-      type: 'add',
-      wallet: { id: makeId(chain, trimmed), chain, address: trimmed, addedAt: Date.now() },
     })
   }, [])
 
