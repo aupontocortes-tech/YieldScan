@@ -1,6 +1,6 @@
-import { type Connection, PublicKey } from '@solana/web3.js'
+import { Connection, PublicKey } from '@solana/web3.js'
 import { calculatePnL, pnlPercent } from '@/lib/liquidity/business'
-import { getSolanaConnection } from '@/lib/solana'
+import { getSolanaRpcUrlCandidates } from '@/lib/solana'
 import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
 
 const WSOL = 'So11111111111111111111111111111111111111112'
@@ -25,17 +25,35 @@ type DexPair = {
 type DexTokenResponse = { pairs?: DexPair[] }
 
 async function getParsedTokenAccountsWithRetry(
-  conn: ReturnType<typeof getSolanaConnection>,
+  conn: Connection,
   owner: PublicKey,
   programId: PublicKey,
 ): Promise<Awaited<ReturnType<Connection['getParsedTokenAccountsByOwner']>>> {
   let last: unknown
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await conn.getParsedTokenAccountsByOwner(owner, { programId })
+      return await conn.getParsedTokenAccountsByOwner(owner, { programId }, 'confirmed')
     } catch (e) {
       last = e
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
+    }
+  }
+  throw last
+}
+
+/** Se o RPC primário (ex. Alchemy) recusar o pedido, tenta fallbacks — evita falhas totais e pedidos repetidos inválidos. */
+async function getParsedTokenAccountsByOwnerMultiRpc(
+  owner: PublicKey,
+  programId: PublicKey,
+): Promise<Awaited<ReturnType<Connection['getParsedTokenAccountsByOwner']>>> {
+  const urls = getSolanaRpcUrlCandidates()
+  let last: unknown
+  for (const url of urls) {
+    const conn = new Connection(url, { commitment: 'confirmed' })
+    try {
+      return await getParsedTokenAccountsWithRetry(conn, owner, programId)
+    } catch (e) {
+      last = e
     }
   }
   throw last
@@ -85,7 +103,6 @@ function estimateAprFromDexPair(pair: DexPair, feeGuess = 0.0025): number | unde
  * Holdings normais (ex.: só HYPE ou só USDC) deixam de aparecer como “pool”.
  */
 export async function getSolanaPositions(walletAddress: string): Promise<LiquidityPositionsResult> {
-  const conn = getSolanaConnection()
   let pk: PublicKey
   try {
     pk = new PublicKey(walletAddress)
@@ -124,8 +141,8 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
   }
 
   const [classicSettled, token22Settled] = await Promise.allSettled([
-    getParsedTokenAccountsWithRetry(conn, pk, SPL_TOKEN_PROGRAM),
-    getParsedTokenAccountsWithRetry(conn, pk, TOKEN_2022_PROGRAM),
+    getParsedTokenAccountsByOwnerMultiRpc(pk, SPL_TOKEN_PROGRAM),
+    getParsedTokenAccountsByOwnerMultiRpc(pk, TOKEN_2022_PROGRAM),
   ])
   const emptyParsed = { value: [] } as Awaited<
     ReturnType<Connection['getParsedTokenAccountsByOwner']>
