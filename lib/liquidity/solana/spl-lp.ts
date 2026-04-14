@@ -41,24 +41,6 @@ async function getParsedTokenAccountsWithRetry(
   throw last
 }
 
-/** Se o RPC primário (ex. Alchemy) recusar o pedido, tenta fallbacks — evita falhas totais e pedidos repetidos inválidos. */
-async function getParsedTokenAccountsByOwnerMultiRpc(
-  owner: PublicKey,
-  programId: PublicKey,
-): Promise<Awaited<ReturnType<Connection['getParsedTokenAccountsByOwner']>>> {
-  const urls = getSolanaRpcUrlCandidates()
-  let last: unknown
-  for (const url of urls) {
-    const conn = new Connection(url, { commitment: 'confirmed' })
-    try {
-      return await getParsedTokenAccountsWithRetry(conn, owner, programId)
-    } catch (e) {
-      last = e
-    }
-  }
-  throw last
-}
-
 async function fetchDexscreenerToken(mint: string): Promise<DexTokenResponse | null> {
   const url = `https://api.dexscreener.com/latest/dex/tokens/${mint}`
   const res = await fetch(url, { cache: 'no-store' })
@@ -140,26 +122,50 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
     return out
   }
 
-  const [classicSettled, token22Settled] = await Promise.allSettled([
-    getParsedTokenAccountsByOwnerMultiRpc(pk, SPL_TOKEN_PROGRAM),
-    getParsedTokenAccountsByOwnerMultiRpc(pk, TOKEN_2022_PROGRAM),
-  ])
   const emptyParsed = { value: [] } as Awaited<
     ReturnType<Connection['getParsedTokenAccountsByOwner']>
   >
-  const classicParsed =
-    classicSettled.status === 'fulfilled' ? classicSettled.value : emptyParsed
-  const token22Parsed =
-    token22Settled.status === 'fulfilled' ? token22Settled.value : emptyParsed
-  if (classicSettled.status === 'rejected' && token22Settled.status === 'rejected') {
-    const a =
-      classicSettled.reason instanceof Error
-        ? classicSettled.reason.message
-        : String(classicSettled.reason)
-    const b =
-      token22Settled.reason instanceof Error
-        ? token22Settled.reason.message
-        : String(token22Settled.reason)
+  const candidates = getSolanaRpcUrlCandidates()
+  let workingUrl: string | undefined
+
+  async function loadParsed(
+    programId: PublicKey,
+  ): Promise<Awaited<ReturnType<Connection['getParsedTokenAccountsByOwner']>>> {
+    const order = workingUrl
+      ? [workingUrl, ...candidates.filter((u) => u !== workingUrl)]
+      : [...candidates]
+    let last: unknown
+    for (const url of order) {
+      const conn = new Connection(url, { commitment: 'confirmed' })
+      try {
+        const out = await getParsedTokenAccountsWithRetry(conn, pk, programId)
+        workingUrl = url
+        return out
+      } catch (e) {
+        last = e
+      }
+    }
+    throw last
+  }
+
+  /** Em sequência: reutiliza o mesmo RPC que funcionou no SPL Token, reduz rate-limit/timeouts na Vercel. */
+  let classicParsed = emptyParsed
+  let token22Parsed = emptyParsed
+  let classicErr: unknown
+  let token22Err: unknown
+  try {
+    classicParsed = await loadParsed(SPL_TOKEN_PROGRAM)
+  } catch (e) {
+    classicErr = e
+  }
+  try {
+    token22Parsed = await loadParsed(TOKEN_2022_PROGRAM)
+  } catch (e) {
+    token22Err = e
+  }
+  if (classicErr != null && token22Err != null) {
+    const a = classicErr instanceof Error ? classicErr.message : String(classicErr)
+    const b = token22Err instanceof Error ? token22Err.message : String(token22Err)
     throw new Error(`RPC Solana: ${a} · ${b}`)
   }
 

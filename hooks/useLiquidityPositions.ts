@@ -95,7 +95,7 @@ export function useLiquidityPositions() {
 
     const isLoadingEvm =
       evmEnabled && evmQueries.some((q) => q.isLoading || q.isPending)
-    const isLoadingSol = solConnected && Boolean(solAddress) && (solQuery.isLoading || solQuery.isPending)
+    const isLoadingSol = solEnabled && (solQuery.isLoading || solQuery.isPending)
     const isFetching =
       (evmEnabled && evmQueries.some((q) => q.isFetching)) ||
       (solEnabled && solQuery.isFetching)
