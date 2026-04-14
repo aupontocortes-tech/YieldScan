@@ -80,6 +80,9 @@ export function normalizePosition(p: LiquidityPosition): AggregatorLiquidityPosi
       ? p.currentTick >= p.tickLower && p.currentTick <= p.tickUpper
       : true)
 
+  const rawMeta = p.raw as { unindexedClmmNft?: boolean } | undefined
+  const unpricedPlaceholder = Boolean(rawMeta?.unindexedClmmNft)
+
   return {
     id: p.id,
     chain: chainLabel(p.chain),
@@ -103,6 +106,7 @@ export function normalizePosition(p: LiquidityPosition): AggregatorLiquidityPosi
     impermanentLossUSD: p.impermanentLossUSD ?? undefined,
     poolAddress: p.poolAddress,
     feeTierBps: p.feeTierBps,
+    unpricedPlaceholder,
   }
 }
 
@@ -110,7 +114,7 @@ export function normalizePositions(positions: LiquidityPosition[]): AggregatorLi
   return positions
     .filter((p) => {
       const raw = p.raw as { unindexedClmmNft?: boolean } | undefined
-      if (raw?.unindexedClmmNft) return false
+      if (raw?.unindexedClmmNft) return true
       if (!Number.isFinite(p.valueUSD) || p.valueUSD <= 0) return false
       return true
     })

@@ -40,6 +40,9 @@ export type AggregatorLiquidityPosition = {
   /** Metadados opcionais para explorers / links */
   poolAddress?: string
   feeTierBps?: number
+
+  /** NFT CLMM Solana (Orca/Raydium) sem indexer — mostramos linha a $0 para não parecer “vazio”. */
+  unpricedPlaceholder?: boolean
 }
 
 export type AggregatorFetchMeta = {

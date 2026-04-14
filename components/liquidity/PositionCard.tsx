@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Info } from 'lucide-react'
 import type { AggregatorLiquidityPosition } from '@/services/types'
 import { RangeBar } from '@/components/liquidity/RangeBar'
 import { cn } from '@/lib/utils'
@@ -28,15 +28,25 @@ export function LiquidityPositionCard({ position: p }: PositionCardProps) {
   const pnl = p.pnlPct
   const pnlTone =
     pnl != null && Number.isFinite(pnl) ? (pnl >= 0 ? 'text-emerald-500' : 'text-red-500') : 'text-muted-foreground'
+  const unpriced = Boolean(p.unpricedPlaceholder)
 
   return (
     <article
       className={cn(
         'flex flex-col gap-4 rounded-xl border bg-card/80 p-4 shadow-sm backdrop-blur-sm transition-shadow hover:shadow-md sm:p-5',
-        p.inRange ? 'border-border/60' : 'border-amber-500/35 bg-amber-500/[0.03]',
+        unpriced ? 'border-sky-500/30 bg-sky-500/[0.04]' : p.inRange ? 'border-border/60' : 'border-amber-500/35 bg-amber-500/[0.03]',
       )}
     >
-      {!p.inRange && (
+      {unpriced && (
+        <div className="flex items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-800 dark:text-sky-200">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            CLMM detetado (NFT). Valuation em USD ainda não está ligada a Orca/Raydium/Meteora — a posição existe, só não
+            dá para mostrar o valor aqui.
+          </span>
+        </div>
+      )}
+      {!unpriced && !p.inRange && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
           <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
           Posição fora do intervalo de preço — rendimento de fees pode estar limitado.
@@ -53,12 +63,14 @@ export function LiquidityPositionCard({ position: p }: PositionCardProps) {
           <span
             className={cn(
               'mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-              p.inRange
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
+              unpriced
+                ? 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                : p.inRange
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
             )}
           >
-            {p.inRange ? '● No range' : '● Fora do range'}
+            {unpriced ? '● Sem preço (CLMM)' : p.inRange ? '● No range' : '● Fora do range'}
           </span>
         </div>
         <div className="text-right">

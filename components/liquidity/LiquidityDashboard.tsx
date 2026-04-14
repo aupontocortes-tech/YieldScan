@@ -281,7 +281,9 @@ export function LiquidityDashboard() {
               <div className="rounded-xl border border-border/50 bg-muted/10 py-14 text-center">
                 <p className="font-medium text-foreground">Nenhuma posição encontrada</p>
                 <p className="mt-2 max-w-md mx-auto text-sm text-muted-foreground">
-                  Não há pools com valor calculável para estes endereços, ou os RPCs/indexadores não devolveram dados.
+                  Não há posições com valor em USD (Uniswap v3 nas redes EVM, ou tokens LP no DexScreener em Solana). CLMM
+                  em Solana pode existir como NFT sem valuation nesta app. Confirma RPCs em{' '}
+                  <span className="font-mono text-[11px] text-foreground/80">/api/liquidity/diagnostics</span>.
                 </p>
                 <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
                   Atualizar posições
