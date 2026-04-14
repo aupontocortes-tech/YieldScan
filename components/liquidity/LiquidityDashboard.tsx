@@ -116,8 +116,8 @@ export function LiquidityDashboard() {
             <div>
               <CardTitle className="text-2xl font-semibold tracking-tight">Liquidity</CardTitle>
               <CardDescription className="mt-1.5 max-w-xl text-sm leading-relaxed">
-                Agregador multichain — Uniswap v3 (Ethereum, Arbitrum, Polygon, Base) e liquidez Solana detectável
-                on-chain. Dados calculados a partir de pools e oráculos; APR e fees são estimativas.
+                Foco em Uniswap v3 e v4 nas mesmas redes EVM (Ethereum, Arbitrum, Polygon, Base, BNB). Solana segue
+                experimental (DexScreener / CLMM). Dados on-chain + CoinGecko; APR em v3 onde existir DexScreener.
               </CardDescription>
             </div>
             <div className="flex flex-col gap-2 sm:items-end">

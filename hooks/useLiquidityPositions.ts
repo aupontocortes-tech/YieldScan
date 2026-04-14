@@ -7,6 +7,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { AGGREGATOR_EVM_CHAIN_IDS } from '@/services/constants'
 import { normalizePositions } from '@/services/normalize'
 import { fetchUniswapPositions } from '@/services/evm/getUniswapPositions'
+import { fetchUniswapV4Positions } from '@/services/evm/getUniswapV4Positions'
 import { fetchSolanaLiquidityPositions } from '@/services/solana/getSolanaPositions'
 import { isValidEvmWalletAddress, normalizeSolanaAddressInput } from '@/lib/wallet-address'
 import type { AggregatorFetchMeta, AggregatorLiquidityPosition } from '@/services/types'
@@ -33,8 +34,21 @@ export function useLiquidityPositions() {
 
   const evmQueries = useQueries({
     queries: AGGREGATOR_EVM_CHAIN_IDS.map((chainId) => ({
-      queryKey: ['aggregator', 'uniswap', chainId, evmAddress],
+      queryKey: ['aggregator', 'uniswap-v3', chainId, evmAddress],
       queryFn: () => fetchUniswapPositions(evmAddress!, chainId),
+      enabled: evmEnabled,
+      staleTime: STALE_MS,
+      gcTime: 10 * 60_000,
+      refetchInterval: REFETCH_MS,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    })),
+  })
+
+  const v4Queries = useQueries({
+    queries: AGGREGATOR_EVM_CHAIN_IDS.map((chainId) => ({
+      queryKey: ['aggregator', 'uniswap-v4', chainId, evmAddress],
+      queryFn: () => fetchUniswapV4Positions(evmAddress!, chainId),
       enabled: evmEnabled,
       staleTime: STALE_MS,
       gcTime: 10 * 60_000,
@@ -62,18 +76,33 @@ export function useLiquidityPositions() {
 
     evmQueries.forEach((q, i) => {
       const chainId = AGGREGATOR_EVM_CHAIN_IDS[i]!
-      // Com `enabled: false`, o React Query mantém isError/data antigos — não mostrar fora da carteira EVM ativa.
       if (!evmEnabled) return
       if (q.isError) {
         errors.push({
-          chain: evmLabel(chainId),
+          chain: `${evmLabel(chainId)} · v3`,
           message: q.error instanceof Error ? q.error.message : String(q.error),
         })
         return
       }
       if (q.data) {
         legacy.push(...q.data.positions)
-        if (q.data.meta.warning) warnings.push(`${evmLabel(chainId)}: ${q.data.meta.warning}`)
+        if (q.data.meta.warning) warnings.push(`${evmLabel(chainId)} v3: ${q.data.meta.warning}`)
+      }
+    })
+
+    v4Queries.forEach((q, i) => {
+      const chainId = AGGREGATOR_EVM_CHAIN_IDS[i]!
+      if (!evmEnabled) return
+      if (q.isError) {
+        errors.push({
+          chain: `${evmLabel(chainId)} · v4`,
+          message: q.error instanceof Error ? q.error.message : String(q.error),
+        })
+        return
+      }
+      if (q.data) {
+        legacy.push(...q.data.positions)
+        if (q.data.meta.warning) warnings.push(`${evmLabel(chainId)} v4: ${q.data.meta.warning}`)
       }
     })
 
@@ -94,10 +123,13 @@ export function useLiquidityPositions() {
     )
 
     const isLoadingEvm =
-      evmEnabled && evmQueries.some((q) => q.isLoading || q.isPending)
+      evmEnabled &&
+      (evmQueries.some((q) => q.isLoading || q.isPending) ||
+        v4Queries.some((q) => q.isLoading || q.isPending))
     const isLoadingSol = solEnabled && (solQuery.isLoading || solQuery.isPending)
     const isFetching =
-      (evmEnabled && evmQueries.some((q) => q.isFetching)) ||
+      (evmEnabled &&
+        (evmQueries.some((q) => q.isFetching) || v4Queries.some((q) => q.isFetching))) ||
       (solEnabled && solQuery.isFetching)
 
     const hasWallet = Boolean(evmEnabled || solEnabled)
@@ -111,11 +143,13 @@ export function useLiquidityPositions() {
       hasWallet,
       refetch: () => {
         evmQueries.forEach((q) => void q.refetch())
+        v4Queries.forEach((q) => void q.refetch())
         void solQuery.refetch()
       },
     }
   }, [
     evmQueries,
+    v4Queries,
     solQuery,
     evmConnected,
     evmAddress,
