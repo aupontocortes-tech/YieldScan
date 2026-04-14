@@ -1,10 +1,11 @@
 import { createConfig, http } from 'wagmi'
-import { injected, walletConnect } from '@wagmi/connectors'
+import { injected, metaMask, walletConnect } from '@wagmi/connectors'
 import { arbitrum, base, mainnet, polygon } from 'viem/chains'
 
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() ?? ''
 
 const connectors = [
+  metaMask(),
   injected({
     shimDisconnect: true,
   }),

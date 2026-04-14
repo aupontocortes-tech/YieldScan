@@ -21,21 +21,30 @@ function evmLabel(chainId: number): string {
   return EVM_UNISWAP_CHAIN_LABEL[chainId as SupportedEvmUniswapChainId] ?? `Chain ${chainId}`
 }
 
-export function useLiquidityPositions() {
-  const { address: evmAddress, isConnected: evmConnected } = useAccount()
-  const { publicKey, connected: solConnected } = useWallet()
-  const solRaw = publicKey?.toBase58() ?? null
+type UseLiquidityPositionsOpts = {
+  manualEvmAddress?: string | null
+  manualSolanaAddress?: string | null
+}
+
+export function useLiquidityPositions(opts?: UseLiquidityPositionsOpts) {
+  const { address: evmAddress } = useAccount()
+  const { publicKey } = useWallet()
+  const manualEvmAddress = opts?.manualEvmAddress?.trim() || null
+  const manualSolanaRaw = opts?.manualSolanaAddress?.trim() || null
+
+  const effectiveEvmAddress = manualEvmAddress ?? evmAddress ?? null
+  const solRaw = manualSolanaRaw ?? publicKey?.toBase58() ?? null
   const solAddress = solRaw ? normalizeSolanaAddressInput(solRaw) : null
 
   const evmEnabled = Boolean(
-    evmConnected && evmAddress && isValidEvmWalletAddress(evmAddress),
+    effectiveEvmAddress && isValidEvmWalletAddress(effectiveEvmAddress),
   )
-  const solEnabled = Boolean(solConnected && publicKey && solAddress)
+  const solEnabled = Boolean(solAddress)
 
   const evmQueries = useQueries({
     queries: AGGREGATOR_EVM_CHAIN_IDS.map((chainId) => ({
-      queryKey: ['aggregator', 'uniswap-v3', chainId, evmAddress],
-      queryFn: () => fetchUniswapPositions(evmAddress!, chainId),
+      queryKey: ['aggregator', 'uniswap-v3', chainId, effectiveEvmAddress],
+      queryFn: () => fetchUniswapPositions(effectiveEvmAddress!, chainId),
       enabled: evmEnabled,
       staleTime: STALE_MS,
       gcTime: 10 * 60_000,
@@ -47,8 +56,8 @@ export function useLiquidityPositions() {
 
   const v4Queries = useQueries({
     queries: AGGREGATOR_EVM_CHAIN_IDS.map((chainId) => ({
-      queryKey: ['aggregator', 'uniswap-v4', chainId, evmAddress],
-      queryFn: () => fetchUniswapV4Positions(evmAddress!, chainId),
+      queryKey: ['aggregator', 'uniswap-v4', chainId, effectiveEvmAddress],
+      queryFn: () => fetchUniswapV4Positions(effectiveEvmAddress!, chainId),
       enabled: evmEnabled,
       staleTime: STALE_MS,
       gcTime: 10 * 60_000,
@@ -151,12 +160,12 @@ export function useLiquidityPositions() {
     evmQueries,
     v4Queries,
     solQuery,
-    evmConnected,
-    evmAddress,
+    effectiveEvmAddress,
     evmEnabled,
-    solConnected,
     solAddress,
     solEnabled,
+    manualEvmAddress,
+    manualSolanaRaw,
   ])
 
   return aggregated

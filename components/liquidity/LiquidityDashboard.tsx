@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useLiquidityPositions } from '@/hooks/useLiquidityPositions'
+import { isValidEvmWalletAddress, normalizeSolanaAddressInput } from '@/lib/wallet-address'
 import { cn } from '@/lib/utils'
 
 function liquiditySolanaConnectErrorMessage(e: unknown): string {
@@ -66,7 +67,19 @@ export function LiquidityDashboard() {
   const solWalletRef = useRef(solWallet)
   solWalletRef.current = solWallet
 
-  const { positions, warnings, errors, isLoading, isFetching, hasWallet, refetch } = useLiquidityPositions()
+  const [manualEvmAddress, setManualEvmAddress] = useState('')
+  const [manualSolanaAddress, setManualSolanaAddress] = useState('')
+  const [manualMode, setManualMode] = useState(false)
+  const manualEvmValid = manualEvmAddress.trim() ? isValidEvmWalletAddress(manualEvmAddress) : false
+  const manualSolValid = manualSolanaAddress.trim()
+    ? Boolean(normalizeSolanaAddressInput(manualSolanaAddress))
+    : false
+  const manualActive = manualMode && (manualEvmValid || manualSolValid)
+
+  const { positions, warnings, errors, isLoading, isFetching, hasWallet, refetch } = useLiquidityPositions({
+    manualEvmAddress: manualActive ? manualEvmAddress : null,
+    manualSolanaAddress: manualActive ? manualSolanaAddress : null,
+  })
 
   const [solConnectError, setSolConnectError] = useState<string | null>(null)
 
@@ -99,6 +112,7 @@ export function LiquidityDashboard() {
 
   /** Wagmi v2+ pode não expor `id === 'injected'`; o primeiro connector do config é o injected. */
   const injected =
+    connectors.find((c) => String(c.id).toLowerCase().includes('metamask')) ??
     connectors.find((c) => c.id === 'injected' || (c as { type?: string }).type === 'injected') ??
     connectors.find((c) => !String(c.id).toLowerCase().includes('walletconnect')) ??
     connectors[0]
@@ -209,6 +223,61 @@ export function LiquidityDashboard() {
           </CardHeader>
 
           <CardContent className="space-y-6 pt-6">
+            <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+              <p className="text-xs font-medium text-foreground">Fallback sem extensão: colar endereço</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Se MetaMask/Phantom não conectar, cola o endereço da carteira para consultar as pools.
+              </p>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <input
+                  value={manualEvmAddress}
+                  onChange={(e) => setManualEvmAddress(e.target.value)}
+                  placeholder="Endereço EVM (0x...)"
+                  className="h-9 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+                <input
+                  value={manualSolanaAddress}
+                  onChange={(e) => setManualSolanaAddress(e.target.value)}
+                  placeholder="Endereço Solana (base58)"
+                  className="h-9 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={manualActive ? 'default' : 'outline'}
+                  onClick={() => {
+                    setManualMode(true)
+                    void refetch()
+                  }}
+                  disabled={!manualEvmValid && !manualSolValid}
+                >
+                  Consultar por endereço
+                </Button>
+                {manualMode && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setManualMode(false)
+                      setManualEvmAddress('')
+                      setManualSolanaAddress('')
+                    }}
+                  >
+                    Voltar para extensão
+                  </Button>
+                )}
+                {!manualEvmValid && manualEvmAddress.trim().length > 0 && (
+                  <span className="text-[11px] text-amber-600">EVM inválido.</span>
+                )}
+                {!manualSolValid && manualSolanaAddress.trim().length > 0 && (
+                  <span className="text-[11px] text-amber-600">Solana inválido.</span>
+                )}
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Button
                 type="button"
