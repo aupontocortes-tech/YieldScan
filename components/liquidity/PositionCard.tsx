@@ -41,8 +41,8 @@ export function LiquidityPositionCard({ position: p }: PositionCardProps) {
         <div className="flex items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-800 dark:text-sky-200">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
-            CLMM detetado (NFT). Valuation em USD ainda não está ligada a Orca/Raydium/Meteora — a posição existe, só não
-            dá para mostrar o valor aqui.
+            Posição CLMM sem preço nesta vista (outra DEX ou falta de dados). Liga um RPC Solana fiável e confirma o par
+            no DexScreener.
           </span>
         </div>
       )}

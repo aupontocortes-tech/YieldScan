@@ -115,8 +115,10 @@ export function normalizePositions(positions: LiquidityPosition[]): AggregatorLi
     .filter((p) => {
       const raw = p.raw as { unindexedClmmNft?: boolean } | undefined
       if (raw?.unindexedClmmNft) return true
-      if (!Number.isFinite(p.valueUSD) || p.valueUSD <= 0) return false
-      return true
+      const v = Number.isFinite(p.valueUSD) ? p.valueUSD : 0
+      const f = Number.isFinite(p.feesEarnedUSD) ? p.feesEarnedUSD : 0
+      if (v > 0 || f > 0) return true
+      return false
     })
     .map(normalizePosition)
 }

@@ -1,5 +1,21 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** Evita erro no Windows: Turbopack a assumir `app/` como raiz e não achar `next`. */
+  turbopack: {
+    root: __dirname,
+  },
+  serverExternalPackages: [
+    '@orca-so/whirlpools',
+    '@orca-so/whirlpools-client',
+    '@orca-so/whirlpools-core',
+    '@orca-so/tx-sender',
+    '@solana/kit',
+  ],
   typescript: {
     ignoreBuildErrors: true,
   },

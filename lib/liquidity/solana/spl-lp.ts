@@ -2,6 +2,7 @@ import { Connection, PublicKey } from '@solana/web3.js'
 import { calculatePnL, pnlPercent } from '@/lib/liquidity/business'
 import { getSolanaRpcUrlCandidates } from '@/lib/solana'
 import type { LiquidityPosition, LiquidityPositionsResult } from '@/lib/liquidity/types'
+import { fetchOrcaWhirlpoolPositions } from '@/lib/liquidity/solana/orca-whirlpool-positions'
 
 const WSOL = 'So11111111111111111111111111111111111111112'
 const MAX_MINTS_TO_SCAN = 120
@@ -94,6 +95,13 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
       meta: { source: 'solana-spl', warning: 'Endereço Solana inválido.' },
     }
   }
+
+  const orcaPromise: Promise<
+    LiquidityPosition[] | { __orcaError: string; positions: LiquidityPosition[] }
+  > = fetchOrcaWhirlpoolPositions(pk.toBase58()).catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { __orcaError: msg, positions: [] as LiquidityPosition[] }
+  })
 
   type Row = { mint: string; ui: number; isNftLike: boolean }
   function rowsFromParsed(
@@ -239,42 +247,32 @@ export async function getSolanaPositions(walletAddress: string): Promise<Liquidi
 
   positions.sort((a, b) => b.valueUSD - a.valueUSD)
 
-  if (positions.length === 0) {
-    const nftCandidates = rows.filter((r) => r.isNftLike).slice(0, 6)
-    for (const r of nftCandidates) {
-      positions.push({
-        id: `sol-clmm-nft-${r.mint}`,
-        chain: 'solana',
-        protocol: 'Solana CLMM',
-        tokenA: 'CLMM',
-        tokenB: 'NFT',
-        amountA: 1,
-        amountB: 0,
-        valueUSD: 0,
-        investedUSD: 0,
-        feesEarnedUSD: 0,
-        pnlUSD: 0,
-        pnlPct: Number.NaN,
-        impermanentLossUSD: null,
-        poolAddress: r.mint,
-        tokenAValuePct: 100,
-        positionKind: 'concentrated',
-        raw: { mint: r.mint, unindexedClmmNft: true },
-      })
-    }
+  const orcaOutcome = await orcaPromise
+  let orcaPositions: LiquidityPosition[] = []
+  let orcaErr: string | undefined
+  if (Array.isArray(orcaOutcome)) {
+    orcaPositions = orcaOutcome
+  } else {
+    orcaErr = orcaOutcome.__orcaError
+    orcaPositions = orcaOutcome.positions
   }
 
-  const metaWarning =
-    positions.length > 0 && positions.some((p) => (p.raw as { unindexedClmmNft?: boolean } | undefined)?.unindexedClmmNft)
-      ? 'Detetámos NFTs que parecem posições CLMM em Solana. Mostramos estes itens como "CLMM NFT" sem valuation até ligar indexador dedicado (Orca/Raydium/Meteora).'
-      : positions.length === 0 && rows.length > 0
-      ? 'Só listamos tokens LP (mint diferente do base e do quote no DexScreener). Holdings spot não aparecem aqui. NFTs CLMM (Orca/Raydium) precisam de indexer dedicado.'
-      : positions.length === 0
-        ? 'Nenhum token LP detectado nesta carteira no DexScreener.'
-        : 'Solana: só tokens LP (não confundimos com moedas que só tens na carteira). APR é estimativa a partir de volume 24h / TVL.'
+  const merged = [...orcaPositions, ...positions].sort((a, b) => b.valueUSD - a.valueUSD)
+
+  const hasNftLike = rows.some((r) => r.isNftLike)
+  const baseWarning =
+    merged.length === 0 && rows.length > 0
+      ? hasNftLike
+        ? 'Nenhuma pool listada como LP fungível no DexScreener. Posições Orca Whirlpool aparecem acima quando o RPC responde; outras DEX (Raydium CLMM, etc.) ainda não estão integradas.'
+        : 'Só listamos tokens LP (mint diferente do base e do quote no DexScreener). Holdings spot não aparecem aqui.'
+      : merged.length === 0
+        ? 'Nenhuma posição Solana detectada (Orca Whirlpool + LP no DexScreener).'
+        : 'Solana: Orca Whirlpool lido on-chain; LP fungível via DexScreener. USD e APR são estimativas; fees rendendo mostram feeOwed acumulado na posição.'
+
+  const metaWarning = [orcaErr ? `Orca (aviso): ${orcaErr}` : null, baseWarning].filter(Boolean).join(' ')
 
   return {
-    positions,
+    positions: merged,
     meta: {
       source: 'solana-lp-filtered',
       warning: metaWarning,

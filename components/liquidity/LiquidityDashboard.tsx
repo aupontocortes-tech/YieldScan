@@ -6,7 +6,7 @@ import { WalletNotReadyError, WalletReadyState } from '@solana/wallet-adapter-ba
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useWallet, WalletNotSelectedError } from '@solana/wallet-adapter-react'
 import { PhantomWalletName } from '@solana/wallet-adapter-wallets'
-import { RefreshCw, Wallet } from 'lucide-react'
+import { ChevronDown, RefreshCw, Wallet } from 'lucide-react'
 import { useConnect, useDisconnect, useAccount } from 'wagmi'
 import { LiquidityPositionCard } from '@/components/liquidity/PositionCard'
 import { LiquiditySummary } from '@/components/liquidity/Summary'
@@ -126,171 +126,220 @@ export function LiquidityDashboard() {
       />
       <div className="relative z-[1] mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
         <Card className="border-border/50 shadow-xl shadow-black/10">
-          <CardHeader className="border-b border-border/40 space-y-4 sm:flex sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
-            <div>
-              <CardTitle className="text-2xl font-semibold tracking-tight">Liquidity</CardTitle>
-              <CardDescription className="mt-1.5 max-w-xl text-sm leading-relaxed">
-                Foco em Uniswap v3 e v4 nas mesmas redes EVM (Ethereum, Arbitrum, Polygon, Base, BNB). Solana segue
-                experimental (DexScreener / CLMM). Dados on-chain + CoinGecko; APR em v3 onde existir DexScreener.
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-2 sm:items-end">
-              <div className="flex flex-wrap gap-2">
-                {!isConnected ? (
-                  <>
-                    {injected && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={evmPending}
-                        onClick={() => {
-                          resetEvmConnect?.()
-                          connect({ connector: injected })
-                        }}
-                        className="gap-2"
-                      >
-                        <Wallet className="size-4" />
-                        EVM (browser)
+          <CardHeader className="border-b border-border/40 pb-4">
+            <CardTitle className="text-2xl font-semibold tracking-tight">As tuas pools</CardTitle>
+            <CardDescription className="mt-1 max-w-2xl text-sm leading-relaxed">
+              Vista só de leitura: valores, intervalo de preço, fees acumuladas na posição e APR estimado do pool. Ethereum
+              (Uniswap v3/v4) e Solana (Orca Whirlpool on-chain + outros LP via DexScreener).
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-6 pt-6">
+            <section
+              className="rounded-xl border border-border/45 bg-gradient-to-br from-muted/25 via-background to-background p-4 sm:p-5"
+              aria-label="Ligar carteira"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+                    <Wallet className="size-5 text-primary" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Conectar carteira</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Não pedimos assinatura de transação — só endereço público para consultar a blockchain.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground"
+                  disabled={!hasWallet || isFetching}
+                  onClick={() => refetch()}
+                >
+                  <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
+                  Atualizar
+                </Button>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border/40 bg-card/60 p-3 sm:p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground">Ethereum / L2</span>
+                    <span
+                      className={cn(
+                        'size-2 rounded-full',
+                        isConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-muted-foreground/35',
+                      )}
+                      aria-hidden
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">MetaMask ou carteira de browser (EVM).</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!isConnected ? (
+                      <>
+                        {injected && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={evmPending}
+                            className="font-medium"
+                            onClick={() => {
+                              resetEvmConnect?.()
+                              connect({ connector: injected })
+                            }}
+                          >
+                            Ligar MetaMask
+                          </Button>
+                        )}
+                        {walletConnect && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={evmPending}
+                            onClick={() => connect({ connector: walletConnect })}
+                          >
+                            WalletConnect
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <Button type="button" size="sm" variant="outline" onClick={() => disconnectEvm()}>
+                        Desligar
                       </Button>
                     )}
-                    {walletConnect && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={evmPending}
-                        onClick={() => connect({ connector: walletConnect })}
-                      >
-                        WalletConnect
+                  </div>
+                  {isConnected && address && (
+                    <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground" title={address}>
+                      {address.slice(0, 10)}…{address.slice(-8)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-border/40 bg-card/60 p-3 sm:p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground">Solana</span>
+                    <span
+                      className={cn(
+                        'size-2 rounded-full',
+                        solConnected
+                          ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]'
+                          : 'bg-muted-foreground/35',
+                      )}
+                      aria-hidden
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Phantom ou outra carteira da lista.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!solConnected ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="font-medium"
+                          disabled={solConnecting}
+                          onClick={() => void handleSolanaConnect()}
+                        >
+                          {solConnecting ? <Spinner className="size-4" /> : null}
+                          Ligar Phantom
+                        </Button>
+                        <Button type="button" size="sm" variant="secondary" onClick={() => openSolModal(true)}>
+                          Outras carteiras
+                        </Button>
+                      </>
+                    ) : (
+                      <Button type="button" size="sm" variant="outline" onClick={() => disconnectSol()}>
+                        Desligar
                       </Button>
                     )}
-                  </>
-                ) : (
-                  <Button type="button" size="sm" variant="outline" onClick={() => disconnectEvm()}>
-                    Desligar EVM
+                  </div>
+                  {solConnected && publicKey && (
+                    <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground" title={publicKey.toBase58()}>
+                      {publicKey.toBase58().slice(0, 12)}…{publicKey.toBase58().slice(-8)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {(evmConnectError || solConnectError) && (
+                <div className="mt-3 space-y-1 text-xs">
+                  {evmConnectError && (
+                    <p className="text-destructive" role="alert">
+                      {evmConnectError.message}
+                    </p>
+                  )}
+                  {solConnectError && (
+                    <p className="text-amber-600 dark:text-amber-400" role="status">
+                      {solConnectError}
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <details className="group rounded-lg border border-border/50 bg-muted/15 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted/30">
+                <span>Sem extensão? Colar endereço</span>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-border/40 px-3 py-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Útil em mobile ou quando a ligação falha. Cola o endereço e carrega em Consultar.
+                </p>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <input
+                    value={manualEvmAddress}
+                    onChange={(e) => setManualEvmAddress(e.target.value)}
+                    placeholder="EVM (0x…)"
+                    className="h-10 rounded-md border border-border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <input
+                    value={manualSolanaAddress}
+                    onChange={(e) => setManualSolanaAddress(e.target.value)}
+                    placeholder="Solana (base58)"
+                    className="h-10 rounded-md border border-border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={manualActive ? 'default' : 'secondary'}
+                    onClick={() => {
+                      setManualMode(true)
+                      void refetch()
+                    }}
+                    disabled={!manualEvmValid && !manualSolValid}
+                  >
+                    Consultar
                   </Button>
-                )}
-                {!solConnected ? (
-                  <>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={solConnecting}
-                      className="gap-2"
-                      onClick={() => void handleSolanaConnect()}
-                    >
-                      {solConnecting ? <Spinner className="size-4" /> : null}
-                      Phantom / Solana
-                    </Button>
+                  {manualMode && (
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
                       className="text-muted-foreground"
-                      onClick={() => openSolModal(true)}
+                      onClick={() => {
+                        setManualMode(false)
+                        setManualEvmAddress('')
+                        setManualSolanaAddress('')
+                      }}
                     >
-                      Lista de carteiras
+                      Usar só extensão
                     </Button>
-                  </>
-                ) : (
-                  <Button type="button" size="sm" variant="outline" onClick={() => disconnectSol()}>
-                    Desligar Solana
-                  </Button>
-                )}
+                  )}
+                  {!manualEvmValid && manualEvmAddress.trim().length > 0 && (
+                    <span className="text-[11px] text-amber-600">EVM inválido</span>
+                  )}
+                  {!manualSolValid && manualSolanaAddress.trim().length > 0 && (
+                    <span className="text-[11px] text-amber-600">Solana inválido</span>
+                  )}
+                </div>
               </div>
-              {evmConnectError && (
-                <p className="max-w-sm text-right text-xs text-destructive" role="alert">
-                  {evmConnectError.message}
-                </p>
-              )}
-              {solConnectError && (
-                <p className="max-w-sm text-right text-xs text-amber-600 dark:text-amber-500" role="status">
-                  {solConnectError}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                {isConnected && address && (
-                  <span className="rounded-md bg-muted/50 px-2 py-0.5 font-mono">{address.slice(0, 6)}…{address.slice(-4)}</span>
-                )}
-                {solConnected && publicKey && (
-                  <span className="rounded-md bg-muted/50 px-2 py-0.5 font-mono">
-                    {publicKey.toBase58().slice(0, 4)}…{publicKey.toBase58().slice(-4)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-6 pt-6">
-            <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
-              <p className="text-xs font-medium text-foreground">Fallback sem extensão: colar endereço</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Se MetaMask/Phantom não conectar, cola o endereço da carteira para consultar as pools.
-              </p>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <input
-                  value={manualEvmAddress}
-                  onChange={(e) => setManualEvmAddress(e.target.value)}
-                  placeholder="Endereço EVM (0x...)"
-                  className="h-9 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                />
-                <input
-                  value={manualSolanaAddress}
-                  onChange={(e) => setManualSolanaAddress(e.target.value)}
-                  placeholder="Endereço Solana (base58)"
-                  className="h-9 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={manualActive ? 'default' : 'outline'}
-                  onClick={() => {
-                    setManualMode(true)
-                    void refetch()
-                  }}
-                  disabled={!manualEvmValid && !manualSolValid}
-                >
-                  Consultar por endereço
-                </Button>
-                {manualMode && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setManualMode(false)
-                      setManualEvmAddress('')
-                      setManualSolanaAddress('')
-                    }}
-                  >
-                    Voltar para extensão
-                  </Button>
-                )}
-                {!manualEvmValid && manualEvmAddress.trim().length > 0 && (
-                  <span className="text-[11px] text-amber-600">EVM inválido.</span>
-                )}
-                {!manualSolValid && manualSolanaAddress.trim().length > 0 && (
-                  <span className="text-[11px] text-amber-600">Solana inválido.</span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={!hasWallet || isFetching}
-                onClick={() => refetch()}
-              >
-                <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} />
-                Atualizar posições
-              </Button>
-            </div>
+            </details>
 
             {errors.length > 0 && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -317,10 +366,11 @@ export function LiquidityDashboard() {
             )}
 
             {!hasWallet && (
-              <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 py-16 text-center">
-                <p className="font-medium text-foreground">Conecta uma carteira</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Usa EVM (todas as cadeias suportadas em paralelo) ou Solana para carregar posições.
+              <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 py-14 text-center">
+                <p className="font-medium text-foreground">Escolhe uma rede acima</p>
+                <p className="mt-1 max-w-md mx-auto text-sm text-muted-foreground">
+                  Liga Ethereum ou Solana, ou abre “Colar endereço”. Depois vês valor estimado, range, fees na posição e
+                  APR do pool.
                 </p>
               </div>
             )}
@@ -350,12 +400,12 @@ export function LiquidityDashboard() {
               <div className="rounded-xl border border-border/50 bg-muted/10 py-14 text-center">
                 <p className="font-medium text-foreground">Nenhuma posição encontrada</p>
                 <p className="mt-2 max-w-md mx-auto text-sm text-muted-foreground">
-                  Não há posições com valor em USD (Uniswap v3 nas redes EVM, ou tokens LP no DexScreener em Solana). CLMM
-                  em Solana pode existir como NFT sem valuation nesta app. Confirma RPCs em{' '}
-                  <span className="font-mono text-[11px] text-foreground/80">/api/liquidity/diagnostics</span>.
+                  Em Solana, Orca Whirlpool é lido on-chain (precisa de RPC estável). Outras DEX concentradas ainda não
+                  entram. Em EVM, confirma Uniswap v3/v4 nas redes suportadas.
                 </p>
-                <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
-                  Atualizar posições
+                <Button type="button" variant="outline" size="sm" className="mt-4 gap-2" onClick={() => refetch()}>
+                  <RefreshCw className="size-3.5" />
+                  Tentar de novo
                 </Button>
               </div>
             )}

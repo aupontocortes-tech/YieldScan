@@ -11,6 +11,8 @@
     "postinstall": "node -e \"const fs=require('fs'),p=require('path');const s=p.join('node_modules','sql.js','dist','sql-wasm.wasm'),d=p.join('public','sql-wasm.wasm');if(fs.existsSync(s)){fs.mkdirSync('public',{recursive:true});fs.copyFileSync(s,d);}\""
   },
   "dependencies": {
+    "@orca-so/whirlpools": "^7.0.2",
+    "@solana/kit": "^5.0.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.12",
     "@radix-ui/react-alert-dialog": "1.1.15",
