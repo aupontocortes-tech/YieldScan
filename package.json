@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@orca-so/whirlpools": "^7.0.2",
+    "@orca-so/whirlpools-client": "6.2.1",
     "@solana/kit": "^5.0.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.12",
