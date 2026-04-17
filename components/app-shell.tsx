@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   LineChart,
   Newspaper,
+  SlidersHorizontal,
   Sparkles,
   Wallet,
 } from 'lucide-react'
@@ -37,27 +38,29 @@ import { Separator } from '@/components/ui/separator'
 import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
 const MAIN_NAV = [
-  { name: 'Dashboard', href: '/dashboard', icon: Activity },
+  { name: 'Painel', href: '/dashboard', icon: Activity },
   { name: 'Notícias', href: '/news', icon: Newspaper },
-  { name: 'Wallet', href: '/portfolio', icon: Wallet },
+  { name: 'Carteira', href: '/portfolio', icon: Wallet },
   { name: 'Pools', href: '/pools', icon: BarChart3 },
-  { name: 'My Liquidity', href: '/my-liquidity', icon: Droplets },
-  { name: 'Indicator', href: '/indicator', icon: LineChart },
-  { name: 'Calculator', href: '/calculator', icon: Calculator },
+  { name: 'A minha liquidez', href: '/my-liquidity', icon: Droplets },
+  { name: 'Rebalance Pro', href: '/rebalance-pro', icon: SlidersHorizontal },
+  { name: 'Indicadores', href: '/indicator', icon: LineChart },
+  { name: 'Calculadora', href: '/calculator', icon: Calculator },
   { name: 'DEX', href: '/dex', icon: LayoutGrid },
-  { name: 'Swap', href: '/swap', icon: ArrowLeftRight },
+  { name: 'Trocas', href: '/swap', icon: ArrowLeftRight },
 ] as const
 
 function pageTitle(pathname: string): string {
-  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Dashboard'
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Painel'
   if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
-  if (pathname.startsWith('/portfolio')) return 'Wallet'
+  if (pathname.startsWith('/portfolio')) return 'Carteira'
   if (pathname.startsWith('/pools')) return 'Pools'
-  if (pathname.startsWith('/my-liquidity')) return 'My Liquidity'
-  if (pathname.startsWith('/indicator')) return 'Indicator'
-  if (pathname.startsWith('/calculator')) return 'Calculator'
+  if (pathname.startsWith('/my-liquidity')) return 'A minha liquidez'
+  if (pathname.startsWith('/rebalance-pro')) return 'Rebalance Pro'
+  if (pathname.startsWith('/indicator')) return 'Indicadores'
+  if (pathname.startsWith('/calculator')) return 'Calculadora'
   if (pathname.startsWith('/dex')) return 'DEX'
-  if (pathname.startsWith('/swap')) return 'Swap'
+  if (pathname.startsWith('/swap')) return 'Trocas'
   if (pathname.startsWith('/token/')) {
     const sym = pathname.slice('/token/'.length)
     return sym ? `Token · ${decodeURIComponent(sym)}` : 'Token'
@@ -127,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       Yield<span className="text-sidebar-primary">Scan</span>
                     </span>
                     <span className="truncate text-xs text-sidebar-foreground/65">
-                      DeFi analytics workspace
+                      Rendimentos e liquidez em DeFi
                     </span>
                   </div>
                 </Link>
@@ -151,14 +154,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           : item.href === '/portfolio'
                             ? pathname.startsWith('/portfolio')
                             : item.href === '/pools'
-                            ? pathname.startsWith('/pools')
-                            : item.href === '/my-liquidity'
-                              ? pathname.startsWith('/my-liquidity')
-                            : item.href === '/indicator'
-                              ? pathname.startsWith('/indicator')
-                              : item.href === '/calculator'
-                                ? pathname.startsWith('/calculator')
-                                : pathname === item.href
+                              ? pathname.startsWith('/pools')
+                              : item.href === '/my-liquidity'
+                                ? pathname.startsWith('/my-liquidity')
+                                : item.href === '/rebalance-pro'
+                                  ? pathname.startsWith('/rebalance-pro')
+                                  : item.href === '/indicator'
+                                    ? pathname.startsWith('/indicator')
+                                    : item.href === '/calculator'
+                                      ? pathname.startsWith('/calculator')
+                                      : pathname === item.href
                       }
                       tooltip={item.name}
                     >
@@ -178,10 +183,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Learn (site externo)">
+                  <SidebarMenuButton asChild tooltip="Aprender (site externo)">
                     <a href="https://www.yldlab.xyz/" target="_blank" rel="noopener noreferrer">
                       <BookOpen />
-                      <span>Learn</span>
+                      <span>Aprender</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -215,7 +220,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppShellInset
         title={title}
         swipeNav={swipeNav}
-        wideContent={pathname.startsWith('/my-liquidity')}
+        wideContent={
+          pathname.startsWith('/my-liquidity') || pathname.startsWith('/rebalance-pro')
+        }
       >
         {children}
       </AppShellInset>

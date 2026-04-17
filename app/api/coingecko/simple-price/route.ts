@@ -14,8 +14,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'ids e vs obrigatórios' }, { status: 400 })
   }
 
+  const include24 =
+    req.nextUrl.searchParams.get('include_24hr_change') === 'true' ||
+    req.nextUrl.searchParams.get('include_24hr_change') === '1'
+
   const { base, headers } = getCoingeckoRequestParts()
-  const url = `${base}/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=${encodeURIComponent(vs)}`
+  let url = `${base}/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=${encodeURIComponent(vs)}`
+  if (include24) {
+    url += '&include_24hr_change=true'
+  }
 
   try {
     const res = await fetch(url, {

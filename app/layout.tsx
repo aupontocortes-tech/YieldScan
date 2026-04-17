@@ -22,9 +22,9 @@ const siteUrl = getSiteUrl()
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'YieldScan - DeFi Intelligence Dashboard',
+  title: 'YieldScan — Painel DeFi',
   description:
-    'Agregador DeFi em tempo real. Compare APR de pools de liquidez, TVL e oportunidades em varias chains.',
+    'Agregador DeFi em tempo quase real: APR de pools, TVL, a tua liquidez e ferramentas para acompanhar posições.',
   keywords: ['DeFi', 'yield farming', 'APR', 'liquidez', 'TVL', 'crypto', 'Ethereum', 'Solana'],
   applicationName: 'YieldScan',
   manifest: '/manifest.webmanifest',
