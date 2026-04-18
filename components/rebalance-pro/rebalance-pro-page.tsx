@@ -109,8 +109,8 @@ export function RebalanceProPage() {
   const [pMax, setPMax] = React.useState('3000')
   const [capital, setCapital] = React.useState('')
 
-  const [aggressiveness, setAggressiveness] = React.useState(1)
-  const [smartMode, setSmartMode] = React.useState(false)
+  const [rangeMode, setRangeMode] = React.useState<'simples' | 'dinamico'>('simples')
+  const [percentualFrac, setPercentualFrac] = React.useState(0.1)
 
   const [notice, setNotice] = React.useState<string | null>(null)
   const marketAbortRef = React.useRef<AbortController | null>(null)
@@ -193,16 +193,20 @@ export function RebalanceProPage() {
   const pMaxN = parseNum(pMax)
   const invalidRange = !(pMaxN > pMinN) || pMinN < 0 || pMaxN < 0
 
+  const capitalN = parseNum(capital)
+  const hasValidCapital = Number.isFinite(capitalN) && capitalN > 0
+
   const rangeResult = React.useMemo(() => {
     if (invalidRange || effectivePrice <= 0) return null
     return computeRebalance({
       price: effectivePrice,
       pMin: pMinN,
       pMax: pMaxN,
-      aggressiveness,
-      smartMode,
+      modo: rangeMode,
+      percentual: rangeMode === 'dinamico' ? percentualFrac : undefined,
+      valorTotal: hasValidCapital ? capitalN : undefined,
     })
-  }, [effectivePrice, pMinN, pMaxN, aggressiveness, smartMode, invalidRange])
+  }, [effectivePrice, pMinN, pMaxN, rangeMode, percentualFrac, hasValidCapital, capitalN, invalidRange])
 
   const inRange = rangeResult ? rangeResult.inRange : false
   const hasEnoughData = rangeResult != null
@@ -318,7 +322,8 @@ export function RebalanceProPage() {
               open={detailsOpen}
               onOpenChange={setDetailsOpen}
               pairLabel={pairLabel}
-              chartTokenSymbol={tokenA.symbol}
+              priceSymbol={tokenA.symbol}
+              quoteSymbol={tokenB.symbol}
               marketProps={{
                 price: safeDisplayPrice,
                 change24hPct: change24h,
@@ -334,12 +339,15 @@ export function RebalanceProPage() {
                 error: marketError,
                 onRefresh: () => void refreshMarket(),
               }}
-              smartMode={smartMode}
-              onSmartModeChange={setSmartMode}
-              aggressiveness={aggressiveness}
-              onAggressivenessChange={setAggressiveness}
+              rangeMode={rangeMode}
+              onRangeModeChange={setRangeMode}
+              percentualFrac={percentualFrac}
+              onPercentualFracChange={setPercentualFrac}
               newMin={rangeResult?.newMin ?? null}
               newMax={rangeResult?.newMax ?? null}
+              rangeUsado={rangeResult?.rangeUsado ?? null}
+              tokenAQty={rangeResult?.tokenA ?? null}
+              tokenBUsd={rangeResult?.tokenB ?? null}
               rangeShiftPct={rangeResult?.rangeShiftPct ?? null}
               impermanentLossHintPct={rangeResult?.impermanentLossHintPct ?? null}
               showRangeSuggestion={hasEnoughData}
@@ -364,13 +372,13 @@ export function RebalanceProPage() {
               onPress={onPrimaryAction}
             />
 
-            {capital.trim() && parseNum(capital) > 0 && (
+            {capital.trim() && hasValidCapital && (
               <p className="text-center text-[11px] text-muted-foreground">
-                Referência de capital:{' '}
+                Montagem 50/50 em valor no painel &quot;Detalhes&quot; usando{' '}
                 <span className="font-mono text-foreground/90">
-                  ${parseNum(capital).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                  ${capitalN.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                 </span>{' '}
-                (opcional, só visual)
+                USD.
               </p>
             )}
 

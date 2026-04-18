@@ -14,6 +14,9 @@ type SliderControlProps = {
   value: number
   onChange: (v: number) => void
   format?: (v: number) => string
+  /** Rótulos abaixo do slider (padrão: escala da antiga “agressividade”). */
+  footerLeft?: string
+  footerRight?: string
   className?: string
 }
 
@@ -26,6 +29,8 @@ export function SliderControl({
   value,
   onChange,
   format = (v) => `${v.toFixed(2)}×`,
+  footerLeft = 'Estreito (0,5×)',
+  footerRight = 'Largo (1,5×)',
   className,
 }: SliderControlProps) {
   const [local, setLocal] = React.useState(value)
@@ -53,8 +58,8 @@ export function SliderControl({
         className="w-full [&_[role=slider]]:border-violet-400/60 [&_[role=slider]]:bg-gradient-to-br [&_[role=slider]]:from-violet-500 [&_[role=slider]]:to-cyan-400"
       />
       <div className="flex justify-between text-[10px] text-muted-foreground">
-        <span>Estreito (0,5×)</span>
-        <span>Largo (1,5×)</span>
+        <span>{footerLeft}</span>
+        <span>{footerRight}</span>
       </div>
     </div>
   )
