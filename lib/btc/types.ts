@@ -168,7 +168,10 @@ export const TIMEFRAME_TOOLTIP_PT: Record<string, string> = {
   '3y': 'Janela ~3 anos (fechos semanais)',
 }
 
-/** Barra principal do dashboard de indicadores (ordem fixa). */
+/**
+ * Barra principal do dashboard de indicadores (ordem fixa).
+ * Inclui minutos → horas → dia / semana / mês → janelas (2m–3a).
+ */
 export const INDICATOR_TOOLBAR_TIMEFRAMES = [
   '1m',
   '5m',
@@ -178,8 +181,29 @@ export const INDICATOR_TOOLBAR_TIMEFRAMES = [
   '1d',
   '1w',
   '1M',
+  '2mo',
+  '3mo',
+  '6mo',
   '1y',
+  '3y',
 ] as const
+
+/** Rótulos na barra (PT) — semana e mês bem distintos dos minutos. */
+export const INDICATOR_TOOLBAR_LABEL_PT: Record<string, string> = {
+  '1m': '1 min',
+  '5m': '5 min',
+  '15m': '15 min',
+  '1h': '1 h',
+  '4h': '4 h',
+  '1d': 'Diário',
+  '1w': 'Semanal',
+  '1M': 'Mensal',
+  '2mo': '2 meses',
+  '3mo': '3 meses',
+  '6mo': '6 meses',
+  '1y': '1 ano',
+  '3y': '3 anos',
+}
 
 /** @deprecated Use TIMEFRAME_PRESETS */
 export const BINANCE_INTERVALS = TIMEFRAME_PRESETS.filter(t => t.group !== 'periodo').map(t => ({

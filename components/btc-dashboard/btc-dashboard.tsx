@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sheet'
 import { fetchBtcKlines } from '@/lib/btc/binance'
 import {
+  INDICATOR_TOOLBAR_LABEL_PT,
   INDICATOR_TOOLBAR_TIMEFRAMES,
   TIMEFRAME_PRESETS,
   TIMEFRAME_TOOLTIP_PT,
@@ -138,7 +139,7 @@ export function BtcDashboard() {
                   : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200',
               )}
             >
-              {tf.label}
+              {INDICATOR_TOOLBAR_LABEL_PT[tf.id] ?? tf.label}
             </button>
           ))}
         </nav>
