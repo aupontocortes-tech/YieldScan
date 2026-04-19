@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import {
+  AreaSeries,
   CandlestickSeries,
   ColorType,
   createChart,
@@ -13,11 +14,18 @@ import {
 import type { IChartApi, Time } from 'lightweight-charts'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
-import { bollingerBands, macd, movingAverage, rsi, sma, stochastic } from '@/lib/btc/indicators'
+import { bollingerBands, ema, macd, movingAverage, rsi, sma, stochastic } from '@/lib/btc/indicators'
+import {
+  syntheticMvrv,
+  syntheticMvrvZScore,
+  syntheticNupl,
+  syntheticSopr,
+} from '@/lib/btc/on-chain-synthetic'
 import type { OhlcvBar } from '@/lib/btc/types'
+
 const BG = '#050505'
-const GRID = '#1c1917'
-const TEXT = '#a1a1aa'
+const GRID = '#1a1a1a'
+const TEXT = '#d4d4d8'
 
 function baseLayout(width: number, height: number) {
   return {
@@ -43,19 +51,37 @@ function syncCharts(charts: IChartApi[]) {
       const r = c.timeScale().getVisibleRange()
       if (!r) return
       syncing.current = true
-      charts.forEach((o) => { if (o !== c) o.timeScale().setVisibleRange(r) })
+      charts.forEach((o) => {
+        if (o !== c) o.timeScale().setVisibleRange(r)
+      })
       syncing.current = false
     })
   })
 }
 
-export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
-  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg, bollinger: bbCfg, zones: zonesCfg, candles } = useBtcSettings()
+function mainChartHeight() {
+  if (typeof window === 'undefined') return 420
+  return Math.max(360, Math.min(720, Math.floor(window.innerHeight * 0.58)))
+}
+
+type BtcChartsSuiteProps = {
+  bars: OhlcvBar[]
+  resetKey?: number
+}
+
+export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
+  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg, bollinger: bbCfg, zones: zonesCfg, candles, onChain } =
+    useBtcSettings()
+
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
   const macdRef = useRef<HTMLDivElement>(null)
   const stochRef = useRef<HTMLDivElement>(null)
+  const mvrvRef = useRef<HTMLDivElement>(null)
+  const mvrvZRef = useRef<HTMLDivElement>(null)
+  const soprRef = useRef<HTMLDivElement>(null)
+  const nuplRef = useRef<HTMLDivElement>(null)
 
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
@@ -63,22 +89,22 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
 
   const rsiSeries = useMemo(
     () => (rsiCfg.enabled ? rsi(closes, rsiCfg.period) : null),
-    [closes, rsiCfg.enabled, rsiCfg.period]
+    [closes, rsiCfg.enabled, rsiCfg.period],
   )
   const macdOut = useMemo(
     () => (macdCfg.enabled ? macd(closes, macdCfg.fast, macdCfg.slow, macdCfg.signal) : null),
-    [closes, macdCfg.enabled, macdCfg.fast, macdCfg.slow, macdCfg.signal]
+    [closes, macdCfg.enabled, macdCfg.fast, macdCfg.slow, macdCfg.signal],
   )
   const stochOut = useMemo(
-    () => (stochCfg.enabled ? stochastic(highs, lows, closes, stochCfg.kPeriod, stochCfg.dPeriod, stochCfg.smooth) : null),
-    [highs, lows, closes, stochCfg.enabled, stochCfg.kPeriod, stochCfg.dPeriod, stochCfg.smooth]
+    () =>
+      stochCfg.enabled ? stochastic(highs, lows, closes, stochCfg.kPeriod, stochCfg.dPeriod, stochCfg.smooth) : null,
+    [highs, lows, closes, stochCfg.enabled, stochCfg.kPeriod, stochCfg.dPeriod, stochCfg.smooth],
   )
   const bbSeries = useMemo(() => {
     if (!bbCfg.enabled || closes.length < bbCfg.period) return null
     return bollingerBands(closes, bbCfg.period, bbCfg.stdDev)
   }, [closes, bbCfg.enabled, bbCfg.period, bbCfg.stdDev])
 
-  // Zones computed values
   const zoneValues = useMemo(() => {
     if (!zonesCfg.enabled || closes.length < 10) return null
     const n = closes.length
@@ -91,124 +117,375 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     return { ma50v, ma100v, ma200v, recentHigh, recentLow }
   }, [closes, highs, lows, zonesCfg.enabled])
 
+  const mvrvData = useMemo(
+    () => (onChain.mvrv.enabled ? syntheticMvrv(closes, onChain.mvrv.smaPeriod) : null),
+    [closes, onChain.mvrv.enabled, onChain.mvrv.smaPeriod],
+  )
+  const mvrvForZ = useMemo(() => {
+    if (!onChain.mvrvZ.enabled) return null
+    return syntheticMvrv(closes, onChain.mvrv.smaPeriod)
+  }, [closes, onChain.mvrvZ.enabled, onChain.mvrv.smaPeriod])
+  const mvrvZData = useMemo(() => {
+    if (!onChain.mvrvZ.enabled || !mvrvForZ) return null
+    return syntheticMvrvZScore(mvrvForZ, onChain.mvrvZ.window)
+  }, [onChain.mvrvZ.enabled, onChain.mvrvZ.window, mvrvForZ])
+
+  const soprData = useMemo(
+    () => (onChain.sopr.enabled ? syntheticSopr(closes, onChain.sopr.emaPeriod) : null),
+    [closes, onChain.sopr.enabled, onChain.sopr.emaPeriod],
+  )
+  const nuplData = useMemo(
+    () => (onChain.nupl.enabled ? syntheticNupl(closes, onChain.nupl.smaPeriod) : null),
+    [closes, onChain.nupl.enabled, onChain.nupl.smaPeriod],
+  )
+
+  /** Últimos níveis USD das proxies STH/LTH (mesma lógica do gráfico) — para a barrinha abaixo do preço */
+  const sthLthLevels = useMemo(() => {
+    if (!onChain.sthLth.enabled || closes.length < 10) return null
+    const st = onChain.sthLth
+    const sthVals = ema(closes, st.rsiPeriod)
+    const lthVals = sma(closes, st.smaPeriod)
+    const i = closes.length - 1
+    const sth = sthVals[i]
+    const lth = lthVals[i]
+    if (sth == null || lth == null) return null
+    return { sth, lth }
+  }, [closes, onChain.sthLth])
+
+  const fmtUsdCompact = useMemo(
+    () =>
+      new Intl.NumberFormat('pt-PT', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }),
+    [],
+  )
+
   useEffect(() => {
     const wrap = wrapRef.current
     const elM = mainRef.current
-    const elR = rsiRef.current
-    const elMacd = macdRef.current
-    const elS = stochRef.current
-    // Só exigimos o gráfico principal — refs de RSI/MACD/Stoch não existem quando o indicador está desligado
     if (!wrap || !elM || bars.length < 10) return
 
     const w = Math.max(wrap.clientWidth, 200)
+    const hMain = mainChartHeight()
     const charts: ReturnType<typeof createChart>[] = []
 
-    // ── Main chart ───────────────────────────────────────
-    const cMain = createChart(elM, { ...baseLayout(w, 400) })
+    const cMain = createChart(elM, { ...baseLayout(w, hMain) })
     charts.push(cMain)
 
     const { up, down, wickDown } = candles.colors
-    cMain.addSeries(CandlestickSeries, {
+    const candle = cMain.addSeries(CandlestickSeries, {
       upColor: up,
       downColor: down,
       borderUpColor: up,
       borderDownColor: down,
       wickUpColor: up,
       wickDownColor: wickDown,
-    }).setData(bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })))
+    })
+    candle.setData(bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })))
 
-    // Moving averages
+    cMain.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: '',
+      color: 'rgba(212,175,55,0.25)',
+    }).setData(
+      bars.map((b) => ({
+        time: b.time as Time,
+        value: b.volume,
+        color: b.close >= b.open ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.22)',
+      })),
+    )
+
+    cMain.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } })
+    cMain.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.18 } })
+
     mas.forEach((ma) => {
       const vals = movingAverage(closes, ma.period, ma.type)
       const lineData = bars
         .map((b, i) => ({ time: b.time as Time, value: vals[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       if (!lineData.length) return
-      cMain.addSeries(LineSeries, { color: ma.color, lineWidth: 2, priceLineVisible: false, lastValueVisible: true }).setData(lineData)
+      cMain.addSeries(LineSeries, {
+        color: ma.color,
+        lineWidth: ma.lineWidth,
+        priceLineVisible: false,
+        lastValueVisible: true,
+      }).setData(lineData)
     })
 
-    // Bollinger Bands
     if (bbSeries) {
-      const bOpts = { priceLineVisible: false, lastValueVisible: false }
+      const bOpts = { priceLineVisible: false, lastValueVisible: false, lineWidth: bbCfg.lineWidth }
       if (bbCfg.showUpper)
-        cMain.addSeries(LineSeries, { color: bbCfg.colors.upper, lineWidth: 1, lineStyle: LineStyle.Dotted, ...bOpts })
-          .setData(bars.map((b, i) => ({ time: b.time as Time, value: bbSeries.upper[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+        cMain
+          .addSeries(LineSeries, { color: bbCfg.colors.upper, lineStyle: LineStyle.Dotted, ...bOpts })
+          .setData(
+            bars
+              .map((b, i) => ({ time: b.time as Time, value: bbSeries.upper[i] }))
+              .filter((d): d is { time: Time; value: number } => d.value != null),
+          )
       if (bbCfg.showMiddle)
-        cMain.addSeries(LineSeries, { color: bbCfg.colors.middle, lineWidth: 1, ...bOpts })
-          .setData(bars.map((b, i) => ({ time: b.time as Time, value: bbSeries.middle[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+        cMain
+          .addSeries(LineSeries, { color: bbCfg.colors.middle, ...bOpts })
+          .setData(
+            bars
+              .map((b, i) => ({ time: b.time as Time, value: bbSeries.middle[i] }))
+              .filter((d): d is { time: Time; value: number } => d.value != null),
+          )
       if (bbCfg.showLower)
-        cMain.addSeries(LineSeries, { color: bbCfg.colors.lower, lineWidth: 1, lineStyle: LineStyle.Dotted, ...bOpts })
-          .setData(bars.map((b, i) => ({ time: b.time as Time, value: bbSeries.lower[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+        cMain
+          .addSeries(LineSeries, { color: bbCfg.colors.lower, lineStyle: LineStyle.Dotted, ...bOpts })
+          .setData(
+            bars
+              .map((b, i) => ({ time: b.time as Time, value: bbSeries.lower[i] }))
+              .filter((d): d is { time: Time; value: number } => d.value != null),
+          )
     }
 
-    // ── Zones (price lines) ─────────────────────────────
+    /** STH/LTH (proxy): no mesmo eixo do preço — EMA curta (comportamento “curto prazo”) vs SMA longa (“macro”). */
+    if (onChain.sthLth.enabled) {
+      const st = onChain.sthLth
+      const sthVals = ema(closes, st.rsiPeriod)
+      const lthVals = sma(closes, st.smaPeriod)
+      cMain
+        .addSeries(LineSeries, {
+          color: st.colorSth,
+          lineWidth: st.lineWidth,
+          /** Linha horizontal no gráfico ao nível do último valor (nível “até onde vai” o STH proxy) */
+          priceLineVisible: true,
+          lastValueVisible: true,
+        })
+        .setData(
+          bars
+            .map((b, i) => ({ time: b.time as Time, value: sthVals[i] }))
+            .filter((d): d is { time: Time; value: number } => d.value != null),
+        )
+      cMain
+        .addSeries(LineSeries, {
+          color: st.colorLth,
+          lineWidth: st.lineWidth,
+          priceLineVisible: true,
+          lastValueVisible: true,
+        })
+        .setData(
+          bars
+            .map((b, i) => ({ time: b.time as Time, value: lthVals[i] }))
+            .filter((d): d is { time: Time; value: number } => d.value != null),
+        )
+    }
+
     if (zonesCfg.enabled && zoneValues) {
       const { ma50v, ma100v, ma200v, recentHigh, recentLow } = zoneValues
-      const addLine = (series: ReturnType<typeof cMain.addSeries>, price: number, color: string, title: string, dashed = false) => {
-        series.createPriceLine({ price, color, lineWidth: 1, lineStyle: dashed ? LineStyle.Dashed : LineStyle.Solid, axisLabelVisible: true, title })
-      }
-      // Use candle series as anchor for price lines
-      const dummy = cMain.addSeries(LineSeries, { visible: false, priceLineVisible: false, lastValueVisible: false })
-
+      const anchor = cMain.addSeries(LineSeries, { visible: false, priceLineVisible: false, lastValueVisible: false })
       if (zonesCfg.showMaZones) {
-        if (ma50v != null) dummy.createPriceLine({ price: ma50v, color: BTC_CHART_THEME.zoneMa50, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'MA50' })
-        if (ma100v != null) dummy.createPriceLine({ price: ma100v, color: BTC_CHART_THEME.zoneMa100, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'MA100' })
-        if (ma200v != null) dummy.createPriceLine({ price: ma200v, color: BTC_CHART_THEME.zoneMa200, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'MA200' })
+        if (ma50v != null)
+          anchor.createPriceLine({
+            price: ma50v,
+            color: BTC_CHART_THEME.zoneMa50,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: 'MA50',
+          })
+        if (ma100v != null)
+          anchor.createPriceLine({
+            price: ma100v,
+            color: BTC_CHART_THEME.zoneMa100,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: 'MA100',
+          })
+        if (ma200v != null)
+          anchor.createPriceLine({
+            price: ma200v,
+            color: BTC_CHART_THEME.zoneMa200,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: 'MA200',
+          })
       }
-
       if (zonesCfg.showSupportResistance) {
-        dummy.createPriceLine({ price: recentHigh, color: BTC_CHART_THEME.zoneExtremeTop, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: 'Máximo Recente' })
-        dummy.createPriceLine({ price: recentLow, color: BTC_CHART_THEME.zoneDiscount, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: 'Mínimo Recente' })
+        anchor.createPriceLine({
+          price: recentHigh,
+          color: BTC_CHART_THEME.zoneSupportResistance,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: 'Máx 50v',
+        })
+        anchor.createPriceLine({
+          price: recentLow,
+          color: BTC_CHART_THEME.zoneSupportResistance,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: 'Mín 50v',
+        })
       }
-
-      if (zonesCfg.showSmartMultipliers && ma200v != null) {
+      if (zonesCfg.showSmartMultipliers && zoneValues.ma200v != null) {
+        const m200 = zoneValues.ma200v
         const zones = [
-          { mult: 1.8, color: BTC_CHART_THEME.zoneExtremeTop, label: 'Topo Extremo (×1.8)' },
-          { mult: 1.4, color: BTC_CHART_THEME.zoneWarning, label: 'Zona Aviso (×1.4)' },
-          { mult: 1.0, color: BTC_CHART_THEME.zoneFairValue, label: 'Valor Justo (×1.0)' },
-          { mult: 0.8, color: BTC_CHART_THEME.zoneDiscount, label: 'Desconto (×0.8)' },
-          { mult: 0.6, color: BTC_CHART_THEME.zoneExtremeBottom, label: 'Fundo Extremo (×0.6)' },
+          { mult: 1.8, color: BTC_CHART_THEME.zoneExtremeTop, label: '×1.8' },
+          { mult: 1.4, color: BTC_CHART_THEME.zoneWarning, label: '×1.4' },
+          { mult: 1.0, color: BTC_CHART_THEME.zoneFairValue, label: '×1' },
+          { mult: 0.8, color: BTC_CHART_THEME.zoneDiscount, label: '×0.8' },
+          { mult: 0.6, color: BTC_CHART_THEME.zoneExtremeBottom, label: '×0.6' },
         ]
         zones.forEach(({ mult, color, label }) => {
-          const price = ma200v * mult
-          if (price > 0) addLine(dummy, price, color, label, true)
+          const price = m200 * mult
+          if (price > 0)
+            anchor.createPriceLine({
+              price,
+              color,
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: label,
+            })
         })
       }
     }
 
-    // ── RSI chart ────────────────────────────────────────
-    if (rsiCfg.enabled && rsiSeries && elR) {
-      const cRsi = createChart(elR, { ...baseLayout(w, 96) })
-      charts.push(cRsi)
-      const rsiLine = cRsi.addSeries(LineSeries, { color: rsiCfg.colors.line, lineWidth: 2, priceLineVisible: false })
-      rsiLine.setData(bars.map((b, i) => ({ time: b.time as Time, value: rsiSeries[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-      cRsi.priceScale('right').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
-      if (rsiCfg.showLevels) {
-        rsiLine.createPriceLine({ price: rsiCfg.oversold, color: rsiCfg.colors.oversold, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: String(rsiCfg.oversold) })
-        rsiLine.createPriceLine({ price: rsiCfg.overbought, color: rsiCfg.colors.overbought, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: String(rsiCfg.overbought) })
-      }
+    const subH = 92
+
+    const addOscillator = (
+      el: HTMLDivElement | null,
+      build: (chart: ReturnType<typeof createChart>) => void,
+    ) => {
+      if (!el) return
+      const c = createChart(el, { ...baseLayout(w, subH) })
+      charts.push(c)
+      build(c)
     }
 
-    // ── MACD chart ───────────────────────────────────────
-    if (macdCfg.enabled && macdOut && elMacd) {
-      const cMacd = createChart(elMacd, { ...baseLayout(w, 112) })
-      charts.push(cMacd)
-      cMacd.addSeries(HistogramSeries, { color: BTC_CHART_THEME.goldDim, priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } })
-        .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.hist[i] ?? 0, color: (macdOut.hist[i] ?? 0) >= 0 ? BTC_CHART_THEME.macdHistogramPos : BTC_CHART_THEME.macdHistogramNeg })))
-      cMacd.addSeries(LineSeries, { color: macdCfg.colors.line, lineWidth: 2, priceLineVisible: false })
-        .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.line[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-      cMacd.addSeries(LineSeries, { color: macdCfg.colors.signal, lineWidth: 1, priceLineVisible: false })
-        .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.signal[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+    if (rsiCfg.enabled && rsiSeries && rsiCfg.view === 'panel') {
+      addOscillator(rsiRef.current, (cRsi) => {
+        const line = cRsi.addSeries(LineSeries, {
+          color: rsiCfg.colors.line,
+          lineWidth: rsiCfg.lineWidth,
+          priceLineVisible: false,
+        })
+        line.setData(
+          bars.map((b, i) => ({ time: b.time as Time, value: rsiSeries[i] })).filter((d): d is { time: Time; value: number } => d.value != null),
+        )
+        cRsi.priceScale('right').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } })
+        if (rsiCfg.showLevels) {
+          line.createPriceLine({
+            price: rsiCfg.oversold,
+            color: rsiCfg.colors.oversold,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: String(rsiCfg.oversold),
+          })
+          line.createPriceLine({
+            price: rsiCfg.overbought,
+            color: rsiCfg.colors.overbought,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: String(rsiCfg.overbought),
+          })
+        }
+      })
     }
 
-    // ── Stochastic chart ─────────────────────────────────
-    if (stochCfg.enabled && stochOut && elS) {
-      const cStoch = createChart(elS, { ...baseLayout(w, 96) })
-      charts.push(cStoch)
-      cStoch.addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: 2, priceLineVisible: false })
-        .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.k[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-      cStoch.addSeries(LineSeries, { color: stochCfg.colors.d, lineWidth: 1, priceLineVisible: false })
-        .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.d[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+    if (macdCfg.enabled && macdOut) {
+      addOscillator(macdRef.current, (cMacd) => {
+        cMacd.addSeries(HistogramSeries, { priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } }).setData(
+          bars.map((b, i) => ({
+            time: b.time as Time,
+            value: macdOut.hist[i] ?? 0,
+            color: (macdOut.hist[i] ?? 0) >= 0 ? BTC_CHART_THEME.macdHistogramPos : BTC_CHART_THEME.macdHistogramNeg,
+          })),
+        )
+        cMacd
+          .addSeries(LineSeries, { color: macdCfg.colors.line, lineWidth: macdCfg.lineWidth, priceLineVisible: false })
+          .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.line[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+        cMacd
+          .addSeries(LineSeries, { color: macdCfg.colors.signal, lineWidth: 1, priceLineVisible: false })
+          .setData(bars.map((b, i) => ({ time: b.time as Time, value: macdOut.signal[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+      })
+    }
+
+    if (stochCfg.enabled && stochOut) {
+      addOscillator(stochRef.current, (cStoch) => {
+        cStoch
+          .addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: stochCfg.lineWidth, priceLineVisible: false })
+          .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.k[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+        cStoch
+          .addSeries(LineSeries, { color: stochCfg.colors.d, lineWidth: 1, priceLineVisible: false })
+          .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.d[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+      })
+    }
+
+    const addLinePane = (
+      el: HTMLDivElement | null,
+      data: (number | null)[] | null,
+      color: string,
+      lw: 1 | 2 | 3,
+      extras?: (line: ReturnType<ReturnType<typeof createChart>['addSeries']>) => void,
+    ) => {
+      if (!el || !data) return
+      addOscillator(el, (c) => {
+        const line = c.addSeries(LineSeries, { color, lineWidth: lw, priceLineVisible: false })
+        line.setData(bars.map((b, i) => ({ time: b.time as Time, value: data[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
+        extras?.(line)
+      })
+    }
+
+    if (onChain.mvrv.enabled && mvrvData) {
+      addLinePane(mvrvRef.current, mvrvData, onChain.mvrv.color, onChain.mvrv.lineWidth, (line) => {
+        line.createPriceLine({ price: 1, color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '1' })
+        line.createPriceLine({ price: 2, color: '#a1a1aa', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '2' })
+        line.createPriceLine({ price: 3, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '3' })
+      })
+    }
+
+    if (onChain.mvrvZ.enabled && mvrvZData) {
+      addLinePane(mvrvZRef.current, mvrvZData, onChain.mvrvZ.color, onChain.mvrvZ.lineWidth, (line) => {
+        line.createPriceLine({ price: 0, color: '#71717a', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '0' })
+        line.createPriceLine({ price: 2, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '+2' })
+        line.createPriceLine({ price: -2, color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '−2' })
+      })
+    }
+
+    if (onChain.sopr.enabled && soprData) {
+      addLinePane(soprRef.current, soprData, onChain.sopr.color, onChain.sopr.lineWidth, (line) => {
+        line.createPriceLine({ price: 1, color: '#71717a', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '1' })
+      })
+    }
+
+    if (onChain.nupl.enabled && nuplData) {
+      addOscillator(nuplRef.current, (c) => {
+        const data = bars.map((b, i) => ({ time: b.time as Time, value: nuplData[i] })).filter((d): d is { time: Time; value: number } => d.value != null)
+        if (onChain.nupl.style === 'area') {
+          c.addSeries(AreaSeries, {
+            lineColor: onChain.nupl.color,
+            topColor: `${onChain.nupl.color}55`,
+            bottomColor: `${onChain.nupl.color}08`,
+            lineWidth: onChain.nupl.lineWidth,
+          }).setData(data)
+        } else {
+          c.addSeries(LineSeries, {
+            color: onChain.nupl.color,
+            lineWidth: onChain.nupl.lineWidth,
+            priceLineVisible: false,
+          }).setData(data)
+        }
+        const ref = c.addSeries(LineSeries, {
+          color: 'transparent',
+          lineWidth: 0,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        })
+        ref.setData(data)
+        ref.createPriceLine({ price: 25, color: '#52525b', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false })
+        ref.createPriceLine({ price: 45, color: '#52525b', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false })
+        ref.createPriceLine({ price: 65, color: '#52525b', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false })
+      })
     }
 
     syncCharts(charts)
@@ -221,12 +498,38 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     })
     ro.observe(wrap)
 
-    return () => { ro.disconnect(); charts.forEach((c) => c.remove()) }
-  }, [bars, closes, mas, rsiCfg, macdCfg, stochCfg, rsiSeries, macdOut, stochOut, bbSeries, bbCfg, zonesCfg, zoneValues, highs, lows, candles])
+    return () => {
+      ro.disconnect()
+      charts.forEach((c) => c.remove())
+    }
+  }, [
+    bars,
+    closes,
+    mas,
+    rsiCfg,
+    macdCfg,
+    stochCfg,
+    rsiSeries,
+    macdOut,
+    stochOut,
+    bbSeries,
+    bbCfg,
+    zonesCfg,
+    zoneValues,
+    highs,
+    lows,
+    candles,
+    onChain,
+    mvrvData,
+    mvrvZData,
+    soprData,
+    nuplData,
+    resetKey,
+  ])
 
   if (bars.length < 10) {
     return (
-      <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-[#d4af37]/20 bg-black/60 text-sm text-zinc-500">
+      <div className="flex min-h-[200px] flex-1 items-center justify-center rounded-lg border border-white/5 bg-[#050505] text-sm text-zinc-500">
         A carregar velas…
       </div>
     )
@@ -236,35 +539,83 @@ export function BtcChartsSuite({ bars }: { bars: OhlcvBar[] }) {
     <div
       ref={wrapRef}
       data-no-swipe-nav
-      className="flex w-full flex-col gap-0 overflow-hidden rounded-xl border border-[#d4af37]/25 bg-[#050505] shadow-[0_0_40px_rgba(212,175,55,0.05)]"
+      className="flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden rounded-lg bg-[#050505]"
     >
-      <div className="flex items-center justify-between border-b border-[#d4af37]/15 px-3 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-[#d4af37]/80">
-          BTC / USDT
-        </span>
-        <div className="flex gap-3 text-[9px] text-zinc-600 uppercase tracking-wider">
-          {mas.length > 0 && <span>MAs</span>}
-          {bbCfg.enabled && <span>Bollinger</span>}
-          {zonesCfg.enabled && <span>Zonas</span>}
+      <div ref={mainRef} className="w-full shrink-0" />
+      {onChain.sthLth.enabled && sthLthLevels && (
+        <div className="border-t border-white/[0.06] px-2 py-2">
+          <div className="mb-1.5 flex flex-wrap gap-2">
+            <div
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-white/[0.08] bg-black/50 pl-2 pr-2.5 py-1.5"
+              style={{ borderLeftWidth: 3, borderLeftColor: onChain.sthLth.colorSth }}
+            >
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">STH</span>
+              <span className="truncate font-mono text-xs tabular-nums text-zinc-100">{fmtUsdCompact.format(sthLthLevels.sth)}</span>
+            </div>
+            <div
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-white/[0.08] bg-black/50 pl-2 pr-2.5 py-1.5"
+              style={{ borderLeftWidth: 3, borderLeftColor: onChain.sthLth.colorLth }}
+            >
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">LTH</span>
+              <span className="truncate font-mono text-xs tabular-nums text-zinc-100">{fmtUsdCompact.format(sthLthLevels.lth)}</span>
+            </div>
+          </div>
+          <p className="text-[10px] leading-snug text-zinc-600">
+            EMA({onChain.sthLth.rsiPeriod}) e SMA({onChain.sthLth.smaPeriod}) no gráfico acima — linhas horizontais marcam o último nível (USD). Proxies visuais, não dados de holders on-chain.
+          </p>
         </div>
-      </div>
-      <div ref={mainRef} className="w-full" />
-      {rsiCfg.enabled && (
+      )}
+
+      {rsiCfg.enabled && rsiCfg.view === 'panel' && (
         <>
-          <div className="border-t border-[#d4af37]/10 px-3 py-1 text-[9px] font-medium uppercase tracking-widest text-zinc-500">RSI ({rsiCfg.period})</div>
-          <div ref={rsiRef} className="w-full" />
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            RSI ({rsiCfg.period})
+          </div>
+          <div ref={rsiRef} className="w-full shrink-0" />
         </>
       )}
+
       {macdCfg.enabled && (
         <>
-          <div className="border-t border-[#d4af37]/10 px-3 py-1 text-[9px] font-medium uppercase tracking-widest text-zinc-500">MACD</div>
-          <div ref={macdRef} className="w-full" />
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">MACD</div>
+          <div ref={macdRef} className="w-full shrink-0" />
         </>
       )}
+
       {stochCfg.enabled && (
         <>
-          <div className="border-t border-[#d4af37]/10 px-3 py-1 text-[9px] font-medium uppercase tracking-widest text-zinc-500">Stochastic</div>
-          <div ref={stochRef} className="w-full" />
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Stochastic</div>
+          <div ref={stochRef} className="w-full shrink-0" />
+        </>
+      )}
+
+      {onChain.mvrv.enabled && (
+        <>
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">
+            MVRV (proxy) · &lt;1 barato · &gt;3 caro
+          </div>
+          <div ref={mvrvRef} className="w-full shrink-0" />
+        </>
+      )}
+
+      {onChain.mvrvZ.enabled && (
+        <>
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">MVRV Z-Score (proxy)</div>
+          <div ref={mvrvZRef} className="w-full shrink-0" />
+        </>
+      )}
+
+      {onChain.sopr.enabled && (
+        <>
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">SOPR (proxy) · ~1 neutro</div>
+          <div ref={soprRef} className="w-full shrink-0" />
+        </>
+      )}
+
+      {onChain.nupl.enabled && (
+        <>
+          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">NUPL (proxy) · 0–100</div>
+          <div ref={nuplRef} className="w-full shrink-0" />
         </>
       )}
     </div>

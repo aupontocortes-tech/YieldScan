@@ -34,7 +34,15 @@ async function fetchBtcContext(): Promise<BtcContextPayload> {
   return r.json() as Promise<BtcContextPayload>
 }
 
-export function MarketCard({ bars, signal }: { bars: OhlcvBar[]; signal: SignalEngineResult | null }) {
+export function MarketCard({
+  bars,
+  signal,
+  variant = 'default',
+}: {
+  bars: OhlcvBar[]
+  signal: SignalEngineResult | null
+  variant?: 'default' | 'strip'
+}) {
   const { data: ctx } = useQuery({
     queryKey: ['btc-context'],
     queryFn: fetchBtcContext,
@@ -54,6 +62,47 @@ export function MarketCard({ bars, signal }: { bars: OhlcvBar[]; signal: SignalE
       : signal?.trendBullish === false
         ? 'Baixa (EMA9 ≤ EMA21)'
         : '—'
+
+  if (variant === 'strip') {
+    return (
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-zinc-400">
+        <span className="font-mono text-zinc-100">
+          BTC{' '}
+          {last
+            ? `US$ ${last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : '—'}
+        </span>
+        {ch != null && (
+          <span className={ch >= 0 ? 'text-emerald-400/90' : 'text-red-400/90'}>
+            {ch >= 0 ? '+' : ''}
+            {ch.toFixed(2)}% vela
+          </span>
+        )}
+        {signal ? (
+          <>
+            <span className="text-[#d4af37]">Score {signal.score}</span>
+            <span className="text-zinc-300">{MARKET_REGIME_PT[signal.marketRegime]}</span>
+            <span className="text-zinc-200">{TRADE_SIGNAL_PT[signal.tradeSignal]}</span>
+          </>
+        ) : (
+          <span>Score —</span>
+        )}
+        <span className="hidden sm:inline text-zinc-600">{trendLabel}</span>
+        {ctx?.coingecko && (
+          <span className="text-zinc-500">
+            CG US$ {ctx.coingecko.usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            {ctx.coingecko.change24h != null && (
+              <span className={ctx.coingecko.change24h >= 0 ? ' text-emerald-400/90' : ' text-red-400/90'}>
+                {' '}
+                ({ctx.coingecko.change24h >= 0 ? '+' : ''}
+                {ctx.coingecko.change24h.toFixed(1)}% 24h)
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3">

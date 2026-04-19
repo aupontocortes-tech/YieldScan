@@ -1,31 +1,50 @@
 import type { BinanceInterval, OhlcvBar } from '@/lib/btc/types'
 
-export async function fetchBtcKlines(
+async function fetchKlinesFromApi(
+  path: string,
   interval: BinanceInterval,
-  limit = 500
-): Promise<OhlcvBar[]> {
+  limit: number,
+): Promise<{ ok: boolean; body: unknown; status: number }> {
   const q = new URLSearchParams({ interval, limit: String(limit) })
-  const res = await fetch(`/api/btc-klines?${q}`)
+  const res = await fetch(`${path}?${q}`, { cache: 'no-store', credentials: 'same-origin' })
   let body: unknown
   try {
     body = await res.json()
   } catch {
     body = null
   }
-  if (!res.ok) {
-    const msg =
-      body &&
-      typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof (body as { error: unknown }).error === 'string'
-        ? (body as { error: string }).error
-        : `Pedido falhou (${res.status})`
-    throw new Error(msg)
+  return { ok: res.ok, body, status: res.status }
+}
+
+function errorMessageFromResponse(body: unknown, status: number, path: string): string {
+  if (status === 404) return `Rota ${path} não encontrada (404). Verifica o deploy ou usa \`next dev\` / Vercel.`
+  const msg =
+    body &&
+    typeof body === 'object' &&
+    body !== null &&
+    'error' in body &&
+    typeof (body as { error: unknown }).error === 'string'
+      ? (body as { error: string }).error
+      : `Pedido falhou (${status})`
+  return msg
+}
+
+export async function fetchBtcKlines(
+  interval: BinanceInterval,
+  limit = 500,
+): Promise<OhlcvBar[]> {
+  const bases = ['/api/btc-klines', '/api/candles/btc']
+  let lastErr = 'Sem resposta do servidor'
+
+  for (const path of bases) {
+    const { ok, body, status } = await fetchKlinesFromApi(path, interval, limit)
+    if (ok && Array.isArray(body)) {
+      return parseBinanceKlines(body)
+    }
+    lastErr = errorMessageFromResponse(body, status, path)
   }
-  const raw = body
-  if (!Array.isArray(raw)) throw new Error('Resposta inválida do servidor (não são velas).')
-  return parseBinanceKlines(raw)
+
+  throw new Error(lastErr)
 }
 
 export function parseBinanceKlines(raw: unknown[]): OhlcvBar[] {

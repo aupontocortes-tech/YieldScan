@@ -8,7 +8,31 @@ import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import type { MaType } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
-import { Plus, Trash2, RotateCcw } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Plus, Trash2, RotateCcw, CircleHelp } from 'lucide-react'
+
+function HelpTip({ text }: { text: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-[#d4af37] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#d4af37]/50"
+          aria-label="Explicação do indicador"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="left"
+        align="start"
+        className="w-[min(100vw-2rem,20rem)] border-zinc-700 bg-[#141414] p-3 text-[11px] leading-relaxed text-zinc-300 shadow-xl"
+      >
+        {text}
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 const MA_PALETTE = [
   '#D4AF37', '#ef4444', '#22c55e', '#38bdf8',
@@ -20,12 +44,14 @@ const MA_PALETTE = [
 function Section({
   title,
   subtitle,
+  helpText,
   enabled,
   onToggle,
   children,
 }: {
   title: string
   subtitle: string
+  helpText?: string
   enabled?: boolean
   onToggle?: (v: boolean) => void
   children: React.ReactNode
@@ -34,8 +60,11 @@ function Section({
   return (
     <div className={`rounded-xl border bg-[#0d0d0d] p-4 transition-all ${dimmed ? 'border-zinc-800/60 opacity-60' : 'border-[#d4af37]/20'}`}>
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-white">{title}</p>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <p className="text-sm font-semibold text-white">{title}</p>
+            {helpText ? <HelpTip text={helpText} /> : null}
+          </div>
           <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>
         </div>
         {onToggle != null && (
@@ -89,6 +118,29 @@ function Rule() {
   return <div className="my-4 border-t border-zinc-800/70" />
 }
 
+/** Linha de toggle on-chain com ícone de ajuda ao lado do nome */
+function OnChainToggleRow({
+  label,
+  helpText,
+  checked,
+  onCheckedChange,
+}: {
+  label: string
+  helpText: string
+  checked: boolean
+  onCheckedChange: (c: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/40 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="text-xs text-zinc-300">{label}</span>
+        <HelpTip text={helpText} />
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  )
+}
+
 // ── Interactive color dot — click to open native color picker ──────────────
 function ColorDot({
   label,
@@ -120,24 +172,50 @@ function ColorDot({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export function SettingsPanel() {
-  const { mas, addMa, updateMa, removeMa, rsi, setRsi, macd, setMacd, stoch, setStoch, bollinger, setBollinger, zones, setZones, candles, setCandles, resetDefaults } = useBtcSettings()
+export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
+  const {
+    mas,
+    addMa,
+    updateMa,
+    removeMa,
+    rsi,
+    setRsi,
+    macd,
+    setMacd,
+    stoch,
+    setStoch,
+    bollinger,
+    setBollinger,
+    zones,
+    setZones,
+    candles,
+    setCandles,
+    onChain,
+    setOnChain,
+    resetDefaults,
+  } = useBtcSettings()
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-white">Configurações</h2>
-          <p className="text-xs text-zinc-500">Todos os indicadores e zonas do gráfico</p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white">Configurações</h2>
+            <p className="text-xs text-zinc-500">Todos os indicadores e zonas do gráfico</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 border-zinc-700 text-xs text-zinc-400 hover:text-white" onClick={resetDefaults}>
+            <RotateCcw className="h-3 w-3" />
+            Repor
+          </Button>
         </div>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 border-zinc-700 text-xs text-zinc-400 hover:text-white" onClick={resetDefaults}>
-          <RotateCcw className="h-3 w-3" />
-          Repor
-        </Button>
-      </div>
+      )}
 
       {/* ── Velas BTC ───────────────────────────────────────────── */}
-      <Section title="Velas (BTC / USDT)" subtitle="Corpo, bordas e pavios do gráfico de velas — clica na cor para mudar">
+      <Section
+        title="Velas (BTC / USDT)"
+        subtitle="Corpo, bordas e pavios do gráfico de velas — clica na cor para mudar"
+        helpText="Define apenas as cores das velas (alta, baixa e pavio da baixa). Não altera preços nem intervalo — é puramente aparência."
+      >
         <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
         <div className="flex flex-wrap gap-3">
           <ColorDot
@@ -159,7 +237,11 @@ export function SettingsPanel() {
       </Section>
 
       {/* ── Moving Averages ─────────────────────────────────────── */}
-      <Section title="Moving Averages" subtitle="Médias móveis sobre o preço de fecho — clica nas bolinhas para mudar a cor">
+      <Section
+        title="Moving Averages"
+        subtitle="Médias móveis sobre o preço de fecho — clica nas bolinhas para mudar a cor"
+        helpText="SMA ou EMA do fecho, desenhadas no mesmo gráfico do preço. Períodos maiores reagem mais devagar; podes empilhar várias médias para ver tendência e possíveis suportes/resistências dinâmicos."
+      >
         <div className="space-y-3">
           {mas.map((ma) => (
             <div key={ma.id} className="rounded-lg border border-zinc-800 bg-black/50 px-3 py-2.5 space-y-2.5">
@@ -194,6 +276,19 @@ export function SettingsPanel() {
                     onChange={(e) => updateMa(ma.id, { period: Math.min(500, Math.max(1, Number(e.target.value) || 1)) })}
                     className="h-8 w-16 border-zinc-700 bg-black font-mono text-xs"
                   />
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Label className="text-[10px] text-zinc-500">Linha</Label>
+                  <select
+                    value={ma.lineWidth}
+                    onChange={(e) => updateMa(ma.id, { lineWidth: Number(e.target.value) as 1 | 2 | 3 })}
+                    className="h-8 rounded border border-zinc-700 bg-black px-1.5 font-mono text-[10px] text-zinc-300"
+                  >
+                    <option value={1}>1</option>
+                    <option value={2}>2</option>
+                    <option value={3}>3</option>
+                  </select>
                 </div>
 
                 {/* Remove */}
@@ -267,11 +362,24 @@ export function SettingsPanel() {
         <Section
           title="RSI"
           subtitle="Relative Strength Index · força do momento"
+          helpText="Oscilador 0–100 que mede a força dos últimos ganhos vs perdas. Zonas de sobrevenda/sobrecompra são referências comuns; aparece num painel separado abaixo do gráfico de preço quando ativo."
           enabled={rsi.enabled}
           onToggle={(v) => setRsi({ ...rsi, enabled: v })}
         >
           <div className="grid grid-cols-2 gap-2">
             <Num label="Período" value={rsi.period} min={2} max={100} onChange={(n) => setRsi({ ...rsi, period: n })} />
+            <div className="flex flex-col gap-1">
+              <Label className="text-[10px] text-zinc-500">Espessura</Label>
+              <select
+                value={rsi.lineWidth}
+                onChange={(e) => setRsi({ ...rsi, lineWidth: Number(e.target.value) as 1 | 2 | 3 })}
+                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </div>
             <div className="flex flex-col gap-1">
               <Label className="text-[10px] text-zinc-500">Linhas no gráfico</Label>
               <div className="flex h-9 items-center">
@@ -309,6 +417,7 @@ export function SettingsPanel() {
         <Section
           title="MACD"
           subtitle="Moving Average Convergence/Divergence"
+          helpText="Diferença entre duas EMAs do preço, com linha de sinal. O histograma mostra se o momentum está a acelerar ou a travar; painel dedicado abaixo do preço."
           enabled={macd.enabled}
           onToggle={(v) => setMacd({ ...macd, enabled: v })}
         >
@@ -316,6 +425,18 @@ export function SettingsPanel() {
             <Num label="Rápida" value={macd.fast} min={1} max={200} onChange={(n) => setMacd({ ...macd, fast: n })} />
             <Num label="Lenta" value={macd.slow} min={1} max={200} onChange={(n) => setMacd({ ...macd, slow: n })} />
             <Num label="Sinal" value={macd.signal} min={1} max={100} onChange={(n) => setMacd({ ...macd, signal: n })} />
+          </div>
+          <div className="mt-2">
+            <Label className="text-[10px] text-zinc-500">Espessura linha MACD</Label>
+            <select
+              value={macd.lineWidth}
+              onChange={(e) => setMacd({ ...macd, lineWidth: Number(e.target.value) as 1 | 2 | 3 })}
+              className="mt-1 h-9 w-full rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
           </div>
           <Rule />
           <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
@@ -339,6 +460,7 @@ export function SettingsPanel() {
         <Section
           title="Stochastic"
           subtitle="Oscilador %K e %D · 0–100"
+          helpText="%K compara o fecho com o intervalo recente; %D suaviza %K. Indica posição relativa dentro da gama (útil em ranges); painel separado."
           enabled={stoch.enabled}
           onToggle={(v) => setStoch({ ...stoch, enabled: v })}
         >
@@ -346,6 +468,18 @@ export function SettingsPanel() {
             <Num label="%K período" value={stoch.kPeriod} min={1} max={100} onChange={(n) => setStoch({ ...stoch, kPeriod: n })} />
             <Num label="%D período" value={stoch.dPeriod} min={1} max={50} onChange={(n) => setStoch({ ...stoch, dPeriod: n })} />
             <Num label="Suavização" value={stoch.smooth} min={1} max={20} onChange={(n) => setStoch({ ...stoch, smooth: n })} />
+          </div>
+          <div className="mt-2">
+            <Label className="text-[10px] text-zinc-500">Espessura %K</Label>
+            <select
+              value={stoch.lineWidth}
+              onChange={(e) => setStoch({ ...stoch, lineWidth: Number(e.target.value) as 1 | 2 | 3 })}
+              className="mt-1 h-9 w-full rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
           </div>
           <Rule />
           <p className="mb-2 text-[10px] text-zinc-600">Clica para mudar a cor</p>
@@ -366,12 +500,25 @@ export function SettingsPanel() {
         <Section
           title="Bollinger Bands"
           subtitle="Bandas de volatilidade ± desvio padrão"
+          helpText="Bandas superior e inferior à volta de uma SMA, à distância de N desvios padrão. Bandas largas = mais volatilidade; o preço a roçar nas bandas indica movimento forte no curto prazo."
           enabled={bollinger.enabled}
           onToggle={(v) => setBollinger({ ...bollinger, enabled: v })}
         >
           <div className="grid grid-cols-2 gap-2">
             <Num label="Período (SMA)" value={bollinger.period} min={5} max={200} onChange={(n) => setBollinger({ ...bollinger, period: n })} />
             <Num label="Desvio (σ)" value={bollinger.stdDev} min={0.5} max={4} step={0.1} onChange={(n) => setBollinger({ ...bollinger, stdDev: n })} />
+          </div>
+          <div className="mt-2">
+            <Label className="text-[10px] text-zinc-500">Espessura bandas</Label>
+            <select
+              value={bollinger.lineWidth}
+              onChange={(e) => setBollinger({ ...bollinger, lineWidth: Number(e.target.value) as 1 | 2 | 3 })}
+              className="mt-1 h-9 w-full rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
           </div>
           <Rule />
           <div className="space-y-2">
@@ -400,6 +547,7 @@ export function SettingsPanel() {
       <Section
         title="Zonas de Preço"
         subtitle="Linhas horizontais no gráfico (suporte, resistência, valor justo)"
+        helpText="Desenha linhas de preço fixas no gráfico principal: médias 50/100/200, máximo e mínimo das últimas 50 velas, e níveis = MA200 × fatores (desconto/prémio). Ajuda a marcar zonas sem olhar só para o zigzag do preço."
         enabled={zones.enabled}
         onToggle={(v) => setZones({ ...zones, enabled: v })}
       >
@@ -445,6 +593,133 @@ export function SettingsPanel() {
           ))}
         </div>
       </Section>
+
+      {/* ── On-chain (proxies) ─────────────────────────────────── */}
+      <Section
+        title="On-chain (simplificado)"
+        subtitle="Proxies calculadas só com preço — não são MVRV/SOPR/NUPL oficiais."
+        helpText="Nada disto vem da blockchain: são fórmulas a partir do preço para imitar a ‘forma’ de métricas conhecidas. Útil para estudo visual; para decisões sérias usa dados on-chain reais (ex.: Glassnode, CryptoQuant)."
+      >
+        <p className="mb-3 text-[11px] leading-relaxed text-amber-200/80">
+          Estas séries imitam o comportamento qualitativo de métricas Glassnode para estudo visual. Valida sempre com fontes
+          on-chain reais para decisões.
+        </p>
+
+        <div className="space-y-3">
+          <OnChainToggleRow
+            label="MVRV (proxy)"
+            helpText="Proxy de relação preço vs ‘custo’ aproximado (via média longa do preço). Valores baixos sugerem desconto relativo, altos prémio — painel próprio com linhas de referência 1, 2 e 3. Não é MVRV on-chain oficial."
+            checked={onChain.mvrv.enabled}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, enabled: c } }))}
+          />
+          {onChain.mvrv.enabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Num label="SMA base" value={onChain.mvrv.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, smaPeriod: n } }))} />
+              <div className="flex flex-col gap-1">
+                <Label className="text-[10px] text-zinc-500">Cor</Label>
+                <input
+                  type="color"
+                  value={onChain.mvrv.color}
+                  onChange={(e) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, color: e.target.value } }))}
+                  className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black"
+                />
+              </div>
+            </div>
+          )}
+
+          <OnChainToggleRow
+            label="MVRV Z-Score (proxy)"
+            helpText="Mede o quão ‘fora da média’ está a proxy MVRV numa janela recente (estilo Z-score). Painel separado com linhas em 0 e ±2; extremos são leituras estatísticas da série proxy, não da rede."
+            checked={onChain.mvrvZ.enabled}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, enabled: c } }))}
+          />
+          {onChain.mvrvZ.enabled && (
+            <Num label="Janela Z" value={onChain.mvrvZ.window} min={20} max={200} onChange={(n) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, window: n } }))} />
+          )}
+
+          <OnChainToggleRow
+            label="SOPR (proxy)"
+            helpText="Aproxima ideia de ‘lucro realizado’ com base no comportamento do preço (não em UTXOs). ~1 = zona neutra no painel; desvios são relativos à série proxy."
+            checked={onChain.sopr.enabled}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, enabled: c } }))}
+          />
+          {onChain.sopr.enabled && (
+            <Num label="EMA base" value={onChain.sopr.emaPeriod} min={5} max={50} onChange={(n) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, emaPeriod: n } }))} />
+          )}
+
+          <OnChainToggleRow
+            label="NUPL (proxy)"
+            helpText="Proxy de sentimento/lucro não realizado derivado do preço (0–100). Linha ou área num painel abaixo; faixas horizontais são guias visuais, não dados de endereços ou holders."
+            checked={onChain.nupl.enabled}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, enabled: c } }))}
+          />
+          {onChain.nupl.enabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Num label="SMA base" value={onChain.nupl.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, smaPeriod: n } }))} />
+              <div className="flex flex-col gap-1">
+                <Label className="text-[10px] text-zinc-500">Estilo</Label>
+                <select
+                  value={onChain.nupl.style}
+                  onChange={(e) =>
+                    setOnChain((p) => ({ ...p, nupl: { ...p.nupl, style: e.target.value as 'line' | 'area' } }))
+                  }
+                  className="h-9 rounded-md border border-zinc-700 bg-black px-2 text-xs text-zinc-300"
+                >
+                  <option value="line">Linha</option>
+                  <option value="area">Área</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-start justify-between gap-2 rounded-lg border border-zinc-800 bg-black/40 px-3 py-2">
+            <div className="min-w-0 pr-1">
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-zinc-300">STH vs LTH (proxy)</span>
+                <HelpTip text="Inspirado na ideia de ‘curto’ vs ‘longo’ prazo: uma EMA curta e uma SMA longa no mesmo gráfico do BTC (USD). O valor em cada momento é um preço — vês linhas horizontais no fim do gráfico e uma barrinha com os dois níveis. Não usa dados de holders on-chain." />
+              </div>
+              <p className="mt-1 text-[10px] leading-snug text-zinc-600">
+                Duas linhas <strong className="text-zinc-500">no gráfico de preço</strong>: EMA curta (STH) vs SMA longa (LTH), em USD — com linha de preço e valores na barra abaixo.
+              </p>
+            </div>
+            <Switch
+              checked={onChain.sthLth.enabled}
+              onCheckedChange={(c) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, enabled: c } }))}
+              className="shrink-0"
+            />
+          </div>
+          {onChain.sthLth.enabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Num
+                label="Período EMA (STH)"
+                value={onChain.sthLth.rsiPeriod}
+                min={3}
+                max={50}
+                onChange={(n) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, rsiPeriod: n } }))}
+              />
+              <Num
+                label="Período SMA (LTH)"
+                value={onChain.sthLth.smaPeriod}
+                min={20}
+                max={500}
+                onChange={(n) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, smaPeriod: n } }))}
+              />
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {embedded && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-white/10 bg-transparent text-xs text-zinc-400 hover:text-white"
+          onClick={resetDefaults}
+        >
+          <RotateCcw className="mr-2 h-3.5 w-3.5" />
+          Repor todos os indicadores
+        </Button>
+      )}
     </div>
   )
 }

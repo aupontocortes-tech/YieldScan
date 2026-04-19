@@ -221,7 +221,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         title={title}
         swipeNav={swipeNav}
         wideContent={
-          pathname.startsWith('/my-liquidity') || pathname.startsWith('/rebalance-pro')
+          pathname.startsWith('/my-liquidity') ||
+          pathname.startsWith('/rebalance-pro') ||
+          pathname.startsWith('/indicator')
         }
       >
         {children}

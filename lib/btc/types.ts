@@ -7,6 +7,7 @@ export type MaConfig = {
   period: number
   type: MaType
   color: string
+  lineWidth: 1 | 2 | 3
 }
 
 /** Cores das velas no gráfico principal (Lightweight Charts) */
@@ -21,12 +22,17 @@ export type CandlestickSettings = {
   }
 }
 
+/** `panel` = gráfico dedicado; `overlay` = sobre o preço (só faz sentido para alguns). */
+export type IndicatorViewMode = 'panel' | 'overlay'
+
 export type RsiSettings = {
   enabled: boolean
   period: number
   oversold: number
   overbought: number
   showLevels: boolean
+  view: IndicatorViewMode
+  lineWidth: 1 | 2 | 3
   colors: { line: string; oversold: string; overbought: string }
 }
 
@@ -35,6 +41,8 @@ export type MacdSettings = {
   fast: number
   slow: number
   signal: number
+  view: IndicatorViewMode
+  lineWidth: 1 | 2 | 3
   colors: { line: string; signal: string }
 }
 
@@ -43,6 +51,8 @@ export type StochSettings = {
   kPeriod: number
   dPeriod: number
   smooth: number
+  view: IndicatorViewMode
+  lineWidth: 1 | 2 | 3
   colors: { k: string; d: string }
 }
 
@@ -53,7 +63,48 @@ export type BollingerSettings = {
   showUpper: boolean
   showMiddle: boolean
   showLower: boolean
+  lineWidth: 1 | 2 | 3
   colors: { upper: string; middle: string; lower: string }
+}
+
+export type OnChainLineSettings = {
+  enabled: boolean
+  color: string
+  lineWidth: 1 | 2 | 3
+  style: 'line' | 'area'
+}
+
+export type MvrvSettings = OnChainLineSettings & {
+  smaPeriod: number
+}
+
+export type MvrvZSettings = OnChainLineSettings & {
+  window: number
+}
+
+export type SoprSettings = OnChainLineSettings & {
+  emaPeriod: number
+}
+
+export type NuplSettings = OnChainLineSettings & {
+  smaPeriod: number
+}
+
+export type SthLthSettings = {
+  enabled: boolean
+  rsiPeriod: number
+  smaPeriod: number
+  lineWidth: 1 | 2 | 3
+  colorSth: string
+  colorLth: string
+}
+
+export type OnChainBundle = {
+  mvrv: MvrvSettings
+  mvrvZ: MvrvZSettings
+  sopr: SoprSettings
+  nupl: NuplSettings
+  sthLth: SthLthSettings
 }
 
 export type ZonesSettings = {
@@ -80,6 +131,7 @@ export type TimeframePreset = {
   group: 'intra' | 'swing' | 'periodo'
 }
 
+/** Rótulos compactos e consistentes: m = minutos, h = horas, d = dia, w = semana, mo = mês, y = ano (1mo ≠ 1m). */
 export const TIMEFRAME_PRESETS: TimeframePreset[] = [
   // Intraday candles
   { id: '1m',  label: '1m',   interval: '1m',  limit: 500, group: 'intra' },
@@ -89,15 +141,45 @@ export const TIMEFRAME_PRESETS: TimeframePreset[] = [
   { id: '4h',  label: '4h',   interval: '4h',  limit: 500, group: 'intra' },
   // Multi-day candles
   { id: '1d',  label: '1d',   interval: '1d',  limit: 500, group: 'swing' },
-  { id: '1w',  label: '1sem', interval: '1w',  limit: 200, group: 'swing' },
-  { id: '1M',  label: '1mes', interval: '1M',  limit: 60,  group: 'swing' },
+  { id: '1w',  label: '1w',   interval: '1w',  limit: 200, group: 'swing' },
+  { id: '1M',  label: '1mo',  interval: '1M',  limit: 60,  group: 'swing' },
   // Period presets (fixed time window using daily/weekly candles)
-  { id: '2mo', label: '2M',   interval: '1d',  limit: 60,  group: 'periodo' },
-  { id: '3mo', label: '3M',   interval: '1d',  limit: 90,  group: 'periodo' },
-  { id: '6mo', label: '6M',   interval: '1d',  limit: 180, group: 'periodo' },
-  { id: '1y',  label: '1A',   interval: '1d',  limit: 365, group: 'periodo' },
-  { id: '3y',  label: '3A',   interval: '1w',  limit: 156, group: 'periodo' },
+  { id: '2mo', label: '2mo',  interval: '1d',  limit: 60,  group: 'periodo' },
+  { id: '3mo', label: '3mo',  interval: '1d',  limit: 90,  group: 'periodo' },
+  { id: '6mo', label: '6mo',  interval: '1d',  limit: 180, group: 'periodo' },
+  { id: '1y',  label: '1y',   interval: '1d',  limit: 365, group: 'periodo' },
+  { id: '3y',  label: '3y',   interval: '1w',  limit: 156, group: 'periodo' },
 ]
+
+/** Texto para tooltip na barra de tempo (minuto ≠ mês). */
+export const TIMEFRAME_TOOLTIP_PT: Record<string, string> = {
+  '1m': '1 minuto por vela',
+  '5m': '5 minutos por vela',
+  '15m': '15 minutos por vela',
+  '1h': '1 hora por vela',
+  '4h': '4 horas por vela',
+  '1d': '1 dia por vela',
+  '1w': '1 semana por vela',
+  '1M': '1 mês por vela (mensal)',
+  '2mo': 'Janela ~2 meses (fechos diários)',
+  '3mo': 'Janela ~3 meses (fechos diários)',
+  '6mo': 'Janela ~6 meses (fechos diários)',
+  '1y': 'Janela ~1 ano (fechos diários)',
+  '3y': 'Janela ~3 anos (fechos semanais)',
+}
+
+/** Barra principal do dashboard de indicadores (ordem fixa). */
+export const INDICATOR_TOOLBAR_TIMEFRAMES = [
+  '1m',
+  '5m',
+  '15m',
+  '1h',
+  '4h',
+  '1d',
+  '1w',
+  '1M',
+  '1y',
+] as const
 
 /** @deprecated Use TIMEFRAME_PRESETS */
 export const BINANCE_INTERVALS = TIMEFRAME_PRESETS.filter(t => t.group !== 'periodo').map(t => ({

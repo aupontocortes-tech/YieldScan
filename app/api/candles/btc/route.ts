@@ -1,3 +1,6 @@
+/**
+ * Alias de `/api/btc-klines` — alguns ambientes/proxies falham com o segmento `btc-klines`.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchBinanceKlinesArray } from '@/lib/btc/fetch-binance-klines-server'
 
