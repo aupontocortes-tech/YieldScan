@@ -27,6 +27,9 @@ const BG = '#050505'
 const GRID = '#1a1a1a'
 const TEXT = '#d4d4d8'
 
+/** Espaço extra (px) entre o último ponto e a régua de preços — evita que o rótulo tape a ponta da linha. */
+const TIME_SCALE_RIGHT_GAP_PX = 14
+
 function baseLayout(width: number, height: number) {
   return {
     width,
@@ -39,7 +42,12 @@ function baseLayout(width: number, height: number) {
     grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
     crosshair: { mode: CrosshairMode.Normal },
     rightPriceScale: { borderColor: '#27272a' },
-    timeScale: { borderColor: '#27272a', timeVisible: true, secondsVisible: false },
+    timeScale: {
+      borderColor: '#27272a',
+      timeVisible: true,
+      secondsVisible: false,
+      rightOffsetPixels: TIME_SCALE_RIGHT_GAP_PX,
+    },
   } as const
 }
 
