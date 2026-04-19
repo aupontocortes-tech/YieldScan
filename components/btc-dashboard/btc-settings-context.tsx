@@ -29,6 +29,9 @@ import type {
 } from '@/lib/btc/types'
 import { TIMEFRAME_PRESETS } from '@/lib/btc/types'
 
+/** Intervalo inicial do gráfico de indicadores (antes da hidratação e após “Repor tudo”). */
+const DEFAULT_TIMEFRAME_ID = '1d'
+
 const DEFAULT_MAS: MaConfig[] = []
 
 const DEFAULT_RSI: RsiSettings = {
@@ -258,7 +261,7 @@ function newMaId() {
 
 export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [timeframe, setTimeframe] = useState<TimeframePreset>(
-    () => TIMEFRAME_PRESETS.find((t) => t.id === '1h') ?? TIMEFRAME_PRESETS[3],
+    () => TIMEFRAME_PRESETS.find((t) => t.id === DEFAULT_TIMEFRAME_ID) ?? TIMEFRAME_PRESETS[3],
   )
   const [mas, setMas] = useState<MaConfig[]>(() => [])
   const [rsi, setRsi] = useState<RsiSettings>(() => ({ ...DEFAULT_RSI }))
@@ -401,7 +404,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetDefaults = useCallback(() => {
-    setTimeframe(TIMEFRAME_PRESETS.find((t) => t.id === '1h') ?? TIMEFRAME_PRESETS[3])
+    setTimeframe(TIMEFRAME_PRESETS.find((t) => t.id === DEFAULT_TIMEFRAME_ID) ?? TIMEFRAME_PRESETS[3])
     setMas(DEFAULT_MAS.map((m) => ({ ...m })))
     setRsi({ ...DEFAULT_RSI })
     setMacd({ ...DEFAULT_MACD })
