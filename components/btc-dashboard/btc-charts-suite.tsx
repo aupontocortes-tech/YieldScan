@@ -14,14 +14,27 @@ import {
 import type { IChartApi, Time } from 'lightweight-charts'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
-import { bollingerBands, ema, macd, movingAverage, rsi, sma, stochastic } from '@/lib/btc/indicators'
+import {
+  alignWeeklySeriesToBars,
+  bollingerBands,
+  ema,
+  macd,
+  movingAverage,
+  rsi,
+  sma,
+  stochastic,
+} from '@/lib/btc/indicators'
 import {
   syntheticMvrv,
   syntheticMvrvZScore,
   syntheticNupl,
   syntheticSopr,
 } from '@/lib/btc/on-chain-synthetic'
-import type { OhlcvBar } from '@/lib/btc/types'
+import {
+  BULL_MARKET_BAND_EMA_WEEKS,
+  BULL_MARKET_BAND_SMA_WEEKS,
+  type OhlcvBar,
+} from '@/lib/btc/types'
 
 const BG = '#050505'
 const GRID = '#1a1a1a'
@@ -69,12 +82,23 @@ function syncCharts(charts: IChartApi[]) {
 
 type BtcChartsSuiteProps = {
   bars: OhlcvBar[]
+  /** Velas 1w para Bull Market Support Band (só preenchido quando o indicador está ligado). */
+  weeklyBarsForBand?: OhlcvBar[]
   resetKey?: number
 }
 
-export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
-  const { mas, rsi: rsiCfg, macd: macdCfg, stoch: stochCfg, bollinger: bbCfg, zones: zonesCfg, candles, onChain } =
-    useBtcSettings()
+export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: BtcChartsSuiteProps) {
+  const {
+    mas,
+    rsi: rsiCfg,
+    macd: macdCfg,
+    stoch: stochCfg,
+    bollinger: bbCfg,
+    zones: zonesCfg,
+    candles,
+    onChain,
+    bullMarketBand,
+  } = useBtcSettings()
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
@@ -107,6 +131,17 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
     if (!bbCfg.enabled || closes.length < bbCfg.period) return null
     return bollingerBands(closes, bbCfg.period, bbCfg.stdDev)
   }, [closes, bbCfg.enabled, bbCfg.period, bbCfg.stdDev])
+
+  const bullBandOnChart = useMemo(() => {
+    if (!bullMarketBand.enabled || weeklyBarsForBand.length < BULL_MARKET_BAND_EMA_WEEKS + 1) return null
+    const wc = weeklyBarsForBand.map((b) => b.close)
+    const smaW = sma(wc, BULL_MARKET_BAND_SMA_WEEKS)
+    const emaW = ema(wc, BULL_MARKET_BAND_EMA_WEEKS)
+    return {
+      sma: alignWeeklySeriesToBars(bars, weeklyBarsForBand, smaW),
+      ema: alignWeeklySeriesToBars(bars, weeklyBarsForBand, emaW),
+    }
+  }, [bullMarketBand.enabled, weeklyBarsForBand, bars])
 
   const zoneValues = useMemo(() => {
     if (!zonesCfg.enabled || closes.length < 10) return null
@@ -217,6 +252,35 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
         lastValueVisible: true,
       }).setData(lineData)
     })
+
+    if (bullBandOnChart && bullMarketBand.enabled) {
+      const bw = bullMarketBand
+      const bandOpts = {
+        priceLineVisible: false,
+        lastValueVisible: true,
+        lineWidth: bw.lineWidth,
+      } as const
+      const smaLine = bars
+        .map((b, i) => ({ time: b.time as Time, value: bullBandOnChart.sma[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      const emaLine = bars
+        .map((b, i) => ({ time: b.time as Time, value: bullBandOnChart.ema[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (smaLine.length) {
+        cMain.addSeries(LineSeries, {
+          color: bw.colorSma,
+          title: `${BULL_MARKET_BAND_SMA_WEEKS}w SMA`,
+          ...bandOpts,
+        }).setData(smaLine)
+      }
+      if (emaLine.length) {
+        cMain.addSeries(LineSeries, {
+          color: bw.colorEma,
+          title: `${BULL_MARKET_BAND_EMA_WEEKS}w EMA`,
+          ...bandOpts,
+        }).setData(emaLine)
+      }
+    }
 
     if (bbSeries) {
       const bOpts = { priceLineVisible: false, lastValueVisible: false, lineWidth: bbCfg.lineWidth }
@@ -529,6 +593,8 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
     soprData,
     nuplData,
     resetKey,
+    bullMarketBand,
+    bullBandOnChart,
   ])
 
   if (bars.length < 10) {

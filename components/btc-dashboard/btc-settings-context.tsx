@@ -18,6 +18,7 @@ import {
 } from '@/lib/client-db/sqlite-core'
 import type {
   BollingerSettings,
+  BullMarketSupportBandSettings,
   CandlestickSettings,
   MaConfig,
   MacdSettings,
@@ -126,6 +127,13 @@ const DEFAULT_ON_CHAIN: OnChainBundle = {
   },
 }
 
+const DEFAULT_BULL_MARKET_BAND: BullMarketSupportBandSettings = {
+  enabled: false,
+  lineWidth: 2,
+  colorSma: '#22d3ee',
+  colorEma: '#e879f9',
+}
+
 const BTC_KV = 'btc_dashboard_v2' as const
 const LS_MIRROR = 'yieldscan_btc_layout_v2' as const
 
@@ -140,6 +148,7 @@ type BtcPersistV2 = {
   zones: ZonesSettings
   candles: CandlestickSettings
   onChain: OnChainBundle
+  bullMarketBand?: BullMarketSupportBandSettings
 }
 
 /** Migração de estado antigo (v1 em btc_dashboard_v1). */
@@ -226,6 +235,15 @@ function mergeOnChain(o: Partial<OnChainBundle> | undefined): OnChainBundle {
   }
 }
 
+function mergeBullMarketBand(b: Partial<BullMarketSupportBandSettings> | undefined): BullMarketSupportBandSettings {
+  const lw = b?.lineWidth
+  return {
+    ...DEFAULT_BULL_MARKET_BAND,
+    ...b,
+    lineWidth: lw === 1 || lw === 2 || lw === 3 ? lw : DEFAULT_BULL_MARKET_BAND.lineWidth,
+  }
+}
+
 type Ctx = {
   timeframe: TimeframePreset
   setTimeframe: (t: TimeframePreset) => void
@@ -248,6 +266,8 @@ type Ctx = {
   setCandles: (c: CandlestickSettings) => void
   onChain: OnChainBundle
   setOnChain: (o: OnChainBundle | ((prev: OnChainBundle) => OnChainBundle)) => void
+  bullMarketBand: BullMarketSupportBandSettings
+  setBullMarketBand: (b: BullMarketSupportBandSettings) => void
   resetDefaults: () => void
 }
 
@@ -271,6 +291,9 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [zones, setZones] = useState<ZonesSettings>(() => ({ ...DEFAULT_ZONES }))
   const [candles, setCandles] = useState<CandlestickSettings>(() => ({ ...DEFAULT_CANDLES }))
   const [onChain, setOnChainState] = useState<OnChainBundle>(() => mergeOnChain(undefined))
+  const [bullMarketBand, setBullMarketBand] = useState<BullMarketSupportBandSettings>(() => ({
+    ...DEFAULT_BULL_MARKET_BAND,
+  }))
   const [hydrated, setHydrated] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistRef = useRef<BtcPersistV2 | null>(null)
@@ -290,6 +313,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     zones,
     candles,
     onChain,
+    bullMarketBand,
   }
 
   useEffect(() => {
@@ -316,6 +340,9 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
           })
         }
         setOnChainState(mergeOnChain(v2.onChain))
+        if (v2.bullMarketBand && typeof v2.bullMarketBand === 'object') {
+          setBullMarketBand(mergeBullMarketBand(v2.bullMarketBand))
+        }
       } else {
         const legacyKey = 'btc_dashboard_v1' as const
         const s = kvGetJson<BtcPersistV1>(legacyKey)
@@ -364,7 +391,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
-  }, [hydrated, timeframe.id, mas, rsi, macd, stoch, bollinger, zones, candles, onChain])
+  }, [hydrated, timeframe.id, mas, rsi, macd, stoch, bollinger, zones, candles, onChain, bullMarketBand])
 
   useEffect(() => {
     if (!hydrated) return
@@ -413,6 +440,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setZones({ ...DEFAULT_ZONES })
     setCandles({ ...DEFAULT_CANDLES })
     setOnChainState(mergeOnChain(undefined))
+    setBullMarketBand({ ...DEFAULT_BULL_MARKET_BAND })
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(LS_MIRROR)
     } catch {
@@ -443,6 +471,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setCandles,
       onChain,
       setOnChain,
+      bullMarketBand,
+      setBullMarketBand,
       resetDefaults,
     }),
     [
@@ -455,6 +485,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       zones,
       candles,
       onChain,
+      bullMarketBand,
       addMa,
       updateMa,
       removeMa,

@@ -31,7 +31,7 @@ const TF_PRESETS: TimeframePreset[] = INDICATOR_TOOLBAR_TIMEFRAMES.map((id) =>
 ).filter((x): x is TimeframePreset => x != null)
 
 export function BtcDashboard() {
-  const { timeframe, setTimeframe, rsi, bollinger, resetDefaults } = useBtcSettings()
+  const { timeframe, setTimeframe, rsi, bollinger, resetDefaults, bullMarketBand } = useBtcSettings()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [chartResetKey, setChartResetKey] = useState(0)
 
@@ -49,6 +49,13 @@ export function BtcDashboard() {
     queryFn: () => fetchBtcKlines(timeframe.interval, timeframe.limit),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  })
+
+  const { data: weeklyBarsForBand = [] } = useQuery({
+    queryKey: ['btc-klines', '1w', 'bull-market-band'],
+    queryFn: () => fetchBtcKlines('1w', 280),
+    enabled: bullMarketBand.enabled,
+    staleTime: 60_000,
   })
 
   const signalResult = useMemo(() => {
@@ -167,7 +174,11 @@ export function BtcDashboard() {
 
         {!isLoading && !isError && (
           <div className="flex min-h-0 flex-1 flex-col">
-            <BtcChartsSuite bars={bars} resetKey={chartResetKey} />
+            <BtcChartsSuite
+              bars={bars}
+              weeklyBarsForBand={bullMarketBand.enabled ? weeklyBarsForBand : []}
+              resetKey={chartResetKey}
+            />
           </div>
         )}
       </div>

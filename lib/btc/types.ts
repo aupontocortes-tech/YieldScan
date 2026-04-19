@@ -114,6 +114,18 @@ export type ZonesSettings = {
   showSmartMultipliers: boolean
 }
 
+/** Bull Market Support Band (estilo TradingView): SMA 20 semanas + EMA 21 semanas em fechos semanais. */
+export type BullMarketSupportBandSettings = {
+  enabled: boolean
+  lineWidth: 1 | 2 | 3
+  colorSma: string
+  colorEma: string
+}
+
+/** Períodos fixos (velas 1w) — iguais ao script popular zkdev / TradingView. */
+export const BULL_MARKET_BAND_SMA_WEEKS = 20
+export const BULL_MARKET_BAND_EMA_WEEKS = 21
+
 export type OhlcvBar = {
   time: number
   open: number

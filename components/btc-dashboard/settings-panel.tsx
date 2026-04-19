@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import type { MaType } from '@/lib/btc/types'
+import { BULL_MARKET_BAND_EMA_WEEKS, BULL_MARKET_BAND_SMA_WEEKS } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -192,6 +193,8 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
     setCandles,
     onChain,
     setOnChain,
+    bullMarketBand,
+    setBullMarketBand,
     resetDefaults,
   } = useBtcSettings()
 
@@ -355,6 +358,49 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
         <Button type="button" variant="outline" size="sm" onClick={addMa} className="mt-3 h-8 w-full gap-1.5 border-zinc-700 text-xs text-zinc-400 hover:text-white">
           <Plus className="h-3.5 w-3.5" /> Adicionar média
         </Button>
+      </Section>
+
+      {/* ── Bull Market Support Band ─────────────────────────────── */}
+      <Section
+        title="Bull Market Support Band"
+        subtitle={`SMA ${BULL_MARKET_BAND_SMA_WEEKS} semanas e EMA ${BULL_MARKET_BAND_EMA_WEEKS} semanas em dados semanais (1w) — no gráfico de preço`}
+        helpText="Indicador popular (ex. zkdev no TradingView): duas linhas calculadas em fechos semanais. Funciona em qualquer intervalo do gráfico: as linhas seguem o último valor semanal disponível. Liga para ver a banda sobre as velas."
+        enabled={bullMarketBand.enabled}
+        onToggle={(v) => setBullMarketBand({ ...bullMarketBand, enabled: v })}
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Espessura</Label>
+            <select
+              value={bullMarketBand.lineWidth}
+              onChange={(e) =>
+                setBullMarketBand({
+                  ...bullMarketBand,
+                  lineWidth: Number(e.target.value) as 1 | 2 | 3,
+                })
+              }
+              className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
+          </div>
+        </div>
+        <Rule />
+        <p className="mb-2 text-[10px] text-zinc-600">Cores das linhas</p>
+        <div className="flex flex-wrap gap-3">
+          <ColorDot
+            label={`SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`}
+            color={bullMarketBand.colorSma}
+            onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorSma: c })}
+          />
+          <ColorDot
+            label={`EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`}
+            color={bullMarketBand.colorEma}
+            onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorEma: c })}
+          />
+        </div>
       </Section>
 
       {/* ── RSI + MACD side by side ──────────────────────────────── */}

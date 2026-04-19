@@ -2,6 +2,26 @@
  * Technical indicators — pure functions, reusable.
  */
 
+import type { OhlcvBar } from '@/lib/btc/types'
+
+/** Alinha uma série calculada em velas semanais aos timestamps das velas do gráfico atual (último fecho semanal ≤ t). */
+export function alignWeeklySeriesToBars(
+  bars: OhlcvBar[],
+  weeklyBars: OhlcvBar[],
+  weeklySeries: (number | null)[],
+): (number | null)[] {
+  const n = bars.length
+  if (n === 0 || weeklyBars.length === 0) return Array(n).fill(null)
+  const out: (number | null)[] = Array(n).fill(null)
+  let wi = 0
+  for (let i = 0; i < n; i++) {
+    const t = bars[i].time
+    while (wi + 1 < weeklyBars.length && weeklyBars[wi + 1].time <= t) wi++
+    if (weeklyBars[wi].time <= t) out[i] = weeklySeries[wi] ?? null
+  }
+  return out
+}
+
 /** Simple moving average; null until enough samples. */
 export function sma(values: number[], period: number): (number | null)[] {
   const n = values.length
