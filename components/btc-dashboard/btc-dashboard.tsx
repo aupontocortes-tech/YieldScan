@@ -67,9 +67,9 @@ export function BtcDashboard() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col bg-[#050505] text-zinc-100">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.06] px-2 py-2 sm:px-3">
-        <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-h-0 w-full flex-1 flex-col bg-[#050505] text-zinc-100">
+      <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-2 gap-y-1.5 border-b border-white/[0.06] px-2 py-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2 sm:px-3 sm:py-2">
+        <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1">
           <LayoutGrid className="h-4 w-4 shrink-0 text-[#d4af37]/90" aria-hidden />
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold text-white">BTC / USDT</p>
@@ -77,35 +77,16 @@ export function BtcDashboard() {
           </div>
         </div>
 
-        <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 overflow-x-auto rounded-lg border border-white/[0.06] bg-black/40 px-0.5 py-0.5">
-          {TF_PRESETS.map((tf) => (
-            <button
-              key={tf.id}
-              type="button"
-              title={TIMEFRAME_TOOLTIP_PT[tf.id] ?? tf.label}
-              onClick={() => setTimeframe(tf)}
-              className={cn(
-                'shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] font-medium tabular-nums tracking-tight transition-colors',
-                timeframe.id === tf.id
-                  ? 'bg-[#d4af37] text-black'
-                  : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200',
-              )}
-            >
-              {tf.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:col-start-3 sm:row-start-1 sm:gap-1">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]"
+            className="h-8 gap-1.5 px-2 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-[#d4af37] sm:px-3"
             onClick={() => setDrawerOpen(true)}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
-            Indicadores
+            <span className="hidden sm:inline">Indicadores</span>
           </Button>
           <Button
             type="button"
@@ -139,13 +120,35 @@ export function BtcDashboard() {
             Repor tudo
           </Button>
         </div>
+
+        <nav
+          aria-label="Intervalo das velas"
+          className="col-span-2 row-start-2 -mx-0.5 flex min-h-[36px] min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-0.5 py-0.5 [scrollbar-width:thin] sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mx-0"
+        >
+          {TF_PRESETS.map((tf) => (
+            <button
+              key={tf.id}
+              type="button"
+              title={TIMEFRAME_TOOLTIP_PT[tf.id] ?? tf.label}
+              onClick={() => setTimeframe(tf)}
+              className={cn(
+                'shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] font-medium tabular-nums tracking-tight transition-colors',
+                timeframe.id === tf.id
+                  ? 'bg-[#d4af37] text-black'
+                  : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200',
+              )}
+            >
+              {tf.label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <div className="shrink-0 border-b border-white/[0.04] px-3 py-2">
+      <div className="shrink-0 border-b border-white/[0.04] px-2 py-1.5 sm:px-3 sm:py-2">
         <MarketCard bars={bars} signal={signalResult} variant="strip" />
       </div>
 
-      <div className="flex min-h-0 min-h-[280px] flex-1 flex-col overflow-hidden p-2 md:p-3">
+      <div className="flex min-h-0 min-h-[240px] flex-1 flex-col overflow-hidden p-1.5 sm:p-2 md:p-3">
         {isError && (
           <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
             Não foi possível carregar as velas. Tenta outro intervalo ou atualiza.

@@ -59,11 +59,6 @@ function syncCharts(charts: IChartApi[]) {
   })
 }
 
-function mainChartHeight() {
-  if (typeof window === 'undefined') return 420
-  return Math.max(360, Math.min(720, Math.floor(window.innerHeight * 0.58)))
-}
-
 type BtcChartsSuiteProps = {
   bars: OhlcvBar[]
   resetKey?: number
@@ -167,11 +162,12 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
     const elM = mainRef.current
     if (!wrap || !elM || bars.length < 10) return
 
-    const w = Math.max(wrap.clientWidth, 200)
-    const hMain = mainChartHeight()
     const charts: ReturnType<typeof createChart>[] = []
 
-    const cMain = createChart(elM, { ...baseLayout(w, hMain) })
+    const cMain = createChart(elM, {
+      ...baseLayout(0, 0),
+      autoSize: true,
+    })
     charts.push(cMain)
 
     const { up, down, wickDown } = candles.colors
@@ -349,13 +345,14 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
     }
 
     const subH = 92
+    const chartW = Math.max(wrap.clientWidth, 200)
 
     const addOscillator = (
       el: HTMLDivElement | null,
       build: (chart: ReturnType<typeof createChart>) => void,
     ) => {
       if (!el) return
-      const c = createChart(el, { ...baseLayout(w, subH) })
+      const c = createChart(el, { ...baseLayout(chartW, subH) })
       charts.push(c)
       build(c)
     }
@@ -493,7 +490,6 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
 
     const ro = new ResizeObserver(() => {
       const nw = Math.max(wrap.clientWidth, 200)
-      cMain.applyOptions({ width: nw })
       charts.slice(1).forEach((c) => c.applyOptions({ width: nw }))
     })
     ro.observe(wrap)
@@ -541,7 +537,7 @@ export function BtcChartsSuite({ bars, resetKey = 0 }: BtcChartsSuiteProps) {
       data-no-swipe-nav
       className="flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden rounded-lg bg-[#050505]"
     >
-      <div ref={mainRef} className="w-full shrink-0" />
+      <div ref={mainRef} className="min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]" />
       {onChain.sthLth.enabled && sthLthLevels && (
         <div className="border-t border-white/[0.06] px-2 py-2">
           <div className="mb-1.5 flex flex-wrap gap-2">

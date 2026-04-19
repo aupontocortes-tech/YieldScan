@@ -65,7 +65,7 @@ export function MarketCard({
 
   if (variant === 'strip') {
     return (
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-zinc-400">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-zinc-400 sm:gap-x-5 sm:text-[11px] sm:gap-y-1.5">
         <span className="font-mono text-zinc-100">
           BTC{' '}
           {last
