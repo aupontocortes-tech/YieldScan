@@ -360,9 +360,9 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
         </Button>
       </Section>
 
-      {/* ── Bull Market Support Band ─────────────────────────────── */}
+      {/* ── Bull Market Support Bands ────────────────────────────── */}
       <Section
-        title="Bull Market Support Band"
+        title="Bull Market Support Bands"
         subtitle={`SMA ${BULL_MARKET_BAND_SMA_WEEKS} semanas e EMA ${BULL_MARKET_BAND_EMA_WEEKS} semanas em dados semanais (1w) — no gráfico de preço`}
         helpText="Indicador popular (ex. zkdev no TradingView): duas linhas calculadas em fechos semanais. Funciona em qualquer intervalo do gráfico: as linhas seguem o último valor semanal disponível. Liga para ver a banda sobre as velas."
         enabled={bullMarketBand.enabled}

@@ -85,7 +85,7 @@ const DEFAULT_ZONES: ZonesSettings = {
 }
 
 const DEFAULT_CANDLES: CandlestickSettings = {
-  colors: { up: '#d4af37', down: '#7f1d1d', wickDown: '#991b1b' },
+  colors: { up: '#14b8a6', down: '#f43f5e', wickDown: '#f43f5e' },
 }
 
 const DEFAULT_ON_CHAIN: OnChainBundle = {
@@ -130,8 +130,8 @@ const DEFAULT_ON_CHAIN: OnChainBundle = {
 const DEFAULT_BULL_MARKET_BAND: BullMarketSupportBandSettings = {
   enabled: false,
   lineWidth: 2,
-  colorSma: '#22d3ee',
-  colorEma: '#e879f9',
+  colorSma: '#22c55e',
+  colorEma: '#ef4444',
 }
 
 const BTC_KV = 'btc_dashboard_v2' as const
