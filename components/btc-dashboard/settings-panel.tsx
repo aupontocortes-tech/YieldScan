@@ -388,7 +388,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
         <Rule />
-        <p className="mb-2 text-[10px] text-zinc-600">Cores das linhas</p>
+        <p className="mb-2 text-[10px] text-zinc-600">Cores da banda</p>
         <div className="flex flex-wrap gap-3">
           <ColorDot
             label={`SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`}
@@ -399,6 +399,11 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
             label={`EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`}
             color={bullMarketBand.colorEma}
             onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorEma: c })}
+          />
+          <ColorDot
+            label="Faixa (cloud)"
+            color={bullMarketBand.colorFill}
+            onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorFill: c })}
           />
         </div>
       </Section>

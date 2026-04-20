@@ -120,6 +120,7 @@ export type BullMarketSupportBandSettings = {
   lineWidth: 1 | 2 | 3
   colorSma: string
   colorEma: string
+  colorFill: string
 }
 
 /** Períodos fixos (velas 1w) — iguais ao script popular zkdev / TradingView. */

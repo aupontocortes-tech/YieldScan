@@ -132,6 +132,7 @@ const DEFAULT_BULL_MARKET_BAND: BullMarketSupportBandSettings = {
   lineWidth: 2,
   colorSma: '#22c55e',
   colorEma: '#ef4444',
+  colorFill: '#a16207',
 }
 
 const BTC_KV = 'btc_dashboard_v2' as const

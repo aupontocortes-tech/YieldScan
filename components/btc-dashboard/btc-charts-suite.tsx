@@ -260,12 +260,30 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
         lastValueVisible: true,
         lineWidth: bw.lineWidth,
       } as const
+      const fillLineWidth = bw.lineWidth === 1 ? 6 : bw.lineWidth === 2 ? 8 : 10
+      const fillLine = bars
+        .map((b, i) => {
+          const s = bullBandOnChart.sma[i]
+          const e = bullBandOnChart.ema[i]
+          if (s == null || e == null) return { time: b.time as Time, value: null }
+          return { time: b.time as Time, value: (s + e) / 2 }
+        })
+        .filter((d): d is { time: Time; value: number } => d.value != null)
       const smaLine = bars
         .map((b, i) => ({ time: b.time as Time, value: bullBandOnChart.sma[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       const emaLine = bars
         .map((b, i) => ({ time: b.time as Time, value: bullBandOnChart.ema[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (fillLine.length) {
+        cMain.addSeries(LineSeries, {
+          color: `${bw.colorFill}99`,
+          lineWidth: fillLineWidth,
+          lineStyle: LineStyle.Solid,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        }).setData(fillLine)
+      }
       if (smaLine.length) {
         cMain.addSeries(LineSeries, {
           color: bw.colorSma,
