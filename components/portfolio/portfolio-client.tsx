@@ -269,12 +269,26 @@ export function PortfolioClient() {
   }, [data.snapshots])
 
   const [addOpen, setAddOpen] = useState(false)
+  /** Pré-preenche “Comprar” a partir de uma linha da carteira (uma vez por abertura). */
+  const [addDialogPrefillHoldingId, setAddDialogPrefillHoldingId] = useState<string | null>(null)
   const [overviewTab, setOverviewTab] = useState<'history' | 'allocation'>('allocation')
   const [allocHover, setAllocHover] = useState<number | null>(null)
 
   const handleAddDialogOpen = useCallback((next: boolean) => {
     setAddOpen(next)
-    if (!next) setAddDialogSymbol(null)
+    if (!next) {
+      setAddDialogSymbol(null)
+      setAddDialogPrefillHoldingId(null)
+    }
+  }, [])
+
+  const clearAddDialogBuyPrefill = useCallback(() => {
+    setAddDialogPrefillHoldingId(null)
+  }, [])
+
+  const openBuyMore = useCallback((h: PortfolioHolding) => {
+    setAddDialogPrefillHoldingId(h.id)
+    setAddOpen(true)
   }, [])
   const [editOpen, setEditOpen] = useState(false)
   const [sellOpen, setSellOpen] = useState(false)
@@ -695,7 +709,7 @@ export function PortfolioClient() {
           <CardHeader className="px-4 pb-2 pt-5 sm:px-6 sm:pt-6">
             <CardTitle className="text-base font-semibold">Ativos</CardTitle>
             <p className="text-xs text-muted-foreground md:hidden">
-              Cada posição num cartão; toca em (⋯) para editar, vender ou remover.
+              Cada posição num cartão; toca em (⋯) para editar, acrescentar, vender ou remover.
             </p>
           </CardHeader>
           <CardContent className="px-3 pb-4 sm:px-4 md:px-6">
@@ -741,6 +755,10 @@ export function PortfolioClient() {
                               <DropdownMenuItem onClick={() => openEdit(h)}>
                                 <Pencil className="size-4" />
                                 Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openBuyMore(h)}>
+                                <Plus className="size-4" />
+                                Acrescentar moedas
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openSell(h)}>
                                 <Tag className="size-4" />
@@ -931,6 +949,10 @@ export function PortfolioClient() {
                                     <Pencil className="size-4" />
                                     Editar
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openBuyMore(h)}>
+                                    <Plus className="size-4" />
+                                    Acrescentar moedas
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openSell(h)}>
                                     <Tag className="size-4" />
                                     Registrar venda
@@ -962,6 +984,8 @@ export function PortfolioClient() {
           holdings={data.holdings}
           spotPrices={prices}
           spotByGeckoId={byGeckoId}
+          initialBuyHoldingId={addDialogPrefillHoldingId}
+          onInitialBuyPrefillConsumed={clearAddDialogBuyPrefill}
           onActiveBuySymbolChange={setAddDialogSymbol}
           onBuy={addPurchase}
           onSell={sell}

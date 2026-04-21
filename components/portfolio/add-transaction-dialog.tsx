@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
-type SearchCoin = { id: string; symbol: string; name: string; iconUrl?: string }
+type SearchCoin = { id: string; symbol: string; name: string; iconUrl?: string; cmcId?: number }
 
 type TxTab = 'buy' | 'sell' | 'transfer'
 
@@ -219,6 +219,9 @@ type AddTransactionDialogProps = {
   holdings: PortfolioHolding[]
   spotPrices: Record<string, CmcQuote>
   spotByGeckoId?: Record<string, CmcQuote>
+  /** Abre o separador Comprar com esta posição, preço de mercado e data/hora atuais. */
+  initialBuyHoldingId?: string | null
+  onInitialBuyPrefillConsumed?: () => void
   /** Símbolo em “Comprar” para a página incluir na query de preços (cotação imediata). */
   onActiveBuySymbolChange?: (symbol: string | null) => void
   onBuy: (input: {
@@ -248,6 +251,8 @@ export function AddTransactionDialog({
   holdings,
   spotPrices,
   spotByGeckoId,
+  initialBuyHoldingId,
+  onInitialBuyPrefillConsumed,
   onActiveBuySymbolChange,
   onBuy,
   onSell,
@@ -340,6 +345,53 @@ export function AddTransactionDialog({
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
+
+  useEffect(() => {
+    if (!open || !initialBuyHoldingId) return
+    const h = holdings.find((x) => x.id === initialBuyHoldingId)
+    if (!h) {
+      onInitialBuyPrefillConsumed?.()
+      return
+    }
+    setTxTab('buy')
+    setPickerOpen(false)
+    setSearchQ('')
+    setSearchHits([])
+    skipAutoPrice.current = false
+    setSelectedCoin({
+      id: h.geckoId?.trim().toLowerCase() ?? '',
+      symbol: h.symbol,
+      name: h.name,
+      iconUrl: h.iconUrl,
+      cmcId: h.cmcId,
+    })
+    setSellHoldingId(null)
+    setQtyStr('')
+    setTotalUsdInputStr('')
+    setFeeStr('')
+    setNoteStr('')
+    setFeeOpen(false)
+    setNoteOpen(false)
+    setFormErr(null)
+    setDatetimeStr(toDatetimeLocalValue(new Date()))
+    const q = quoteForHolding(h, spotPrices, spotByGeckoId)
+    const p = q?.price
+    if (p != null && p > 0) {
+      setPriceStr(
+        p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+      )
+    } else {
+      setPriceStr('')
+    }
+    onInitialBuyPrefillConsumed?.()
+  }, [
+    open,
+    initialBuyHoldingId,
+    holdings,
+    spotPrices,
+    spotByGeckoId,
+    onInitialBuyPrefillConsumed,
+  ])
 
   useEffect(() => {
     if (!onActiveBuySymbolChange) return
@@ -626,8 +678,10 @@ export function AddTransactionDialog({
         setFormErr('Indica um preço unitário maior que zero (ou aguarda a cotação da API).')
         return
       }
+      const cid =
+        selectedCoin.cmcId != null && selectedCoin.cmcId > 0 ? selectedCoin.cmcId : 0
       onBuy({
-        cmcId: 0,
+        cmcId: cid,
         geckoId: selectedCoin.id.trim().toLowerCase(),
         symbol: selectedCoin.symbol,
         name: selectedCoin.name,
