@@ -3,7 +3,9 @@
  * Docs: https://docs.coingecko.com/reference
  */
 
+import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
+import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
 
 /** Moedas fiduciárias suportadas na UI (cotações e exibição). */
@@ -42,12 +44,32 @@ export type MarketApiPayload = {
   fonte: 'coingecko'
 }
 
-const TRENDING_URL = 'https://api.coingecko.com/api/v3/search/trending'
-const EXCHANGE_RATES_URL = 'https://api.coingecko.com/api/v3/exchange_rates'
-const MARKETS_URL =
-  'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1'
+const TRENDING_PATH = '/search/trending'
+const EXCHANGE_RATES_PATH = '/exchange_rates'
+const MARKETS_PATH =
+  '/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1'
 
-const UA = 'yieldscan-market/1 (public coingecko)'
+const UA = 'yieldscan-market/1'
+/** Evita 429 da API pública quando há muitos destaques + top10 + trending em paralelo. */
+const SIMPLE_PRICE_CHUNK = 5
+const SIMPLE_CHUNK_GAP_MS = 450
+const BETWEEN_ENDPOINTS_MS = 400
+const FETCH_MAX_RETRIES = 2
+const HIGHLIGHT_PRICE_CACHE_MS = 10 * 60 * 1000
+
+type SimplePriceEntry = {
+  usd?: number
+  brl?: number
+  eur?: number
+  usd_24h_change?: number
+  brl_24h_change?: number
+  eur_24h_change?: number
+  usd_market_cap?: number
+  brl_market_cap?: number
+  eur_market_cap?: number
+}
+
+const highlightSimpleCache = new Map<string, { at: number; entry: SimplePriceEntry }>()
 
 /** Nomes conhecidos para slugs frequentes (resto = título a partir do id). */
 const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
@@ -76,6 +98,16 @@ const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
   weth: { name: 'WETH', symbol: 'WETH' },
   'staked-ether': { name: 'Lido Staked Ether', symbol: 'STETH' },
   'ethereum-classic': { name: 'Ethereum Classic', symbol: 'ETC' },
+  'nasdaq-xstock': { name: 'Nasdaq', symbol: 'QQQX' },
+  'sp500-xstock': { name: 'S&P 500', symbol: 'SPYX' },
+  'nvidia-xstock': { name: 'NVIDIA', symbol: 'NVDAX' },
+  'tesla-xstock': { name: 'Tesla', symbol: 'TSLAX' },
+  'microsoft-xstock': { name: 'Microsoft', symbol: 'MSFTX' },
+  'alphabet-xstock': { name: 'Google', symbol: 'GOOGLX' },
+  'meta-xstock': { name: 'Meta', symbol: 'METAX' },
+  'amazon-xstock': { name: 'Amazon', symbol: 'AMZNX' },
+  'microstrategy-xstock': { name: 'MicroStrategy', symbol: 'MSTRX' },
+  'exxon-mobil-xstock': { name: 'Exxon Mobil', symbol: 'XOMX' },
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -84,22 +116,122 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     : null
 }
 
-async function fetchJson<T>(url: string, timeoutMs = 12_000): Promise<T | null> {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json', 'User-Agent': UA },
-      cache: 'no-store',
-      signal: ctrl.signal,
-    })
-    if (!res.ok) return null
-    return (await res.json()) as T
-  } catch {
-    return null
-  } finally {
-    clearTimeout(t)
+function cgApiUrl(path: string): string {
+  const { base } = getCoingeckoRequestParts()
+  const p = path.startsWith('/') ? path : `/${path}`
+  return `${base}${p}`
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchJson<T>(pathOrUrl: string, timeoutMs = 12_000): Promise<T | null> {
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : cgApiUrl(pathOrUrl)
+  const { headers: cgHeaders } = getCoingeckoRequestParts()
+  const headers = { ...cgHeaders, 'User-Agent': UA }
+
+  for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), timeoutMs)
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+        signal: ctrl.signal,
+      })
+      if (res.status === 429 && attempt < FETCH_MAX_RETRIES) {
+        await sleep(900 * (attempt + 1))
+        continue
+      }
+      if (!res.ok) return null
+      return (await res.json()) as T
+    } catch {
+      if (attempt < FETCH_MAX_RETRIES) {
+        await sleep(600 * (attempt + 1))
+        continue
+      }
+      return null
+    } finally {
+      clearTimeout(t)
+    }
+  }
+  return null
+}
+
+function rememberHighlightSimple(id: string, entry: SimplePriceEntry): void {
+  if (typeof entry.usd !== 'number' || !Number.isFinite(entry.usd)) return
+  highlightSimpleCache.set(id, { at: Date.now(), entry })
+}
+
+function cachedHighlightSimple(id: string): SimplePriceEntry | null {
+  const hit = highlightSimpleCache.get(id)
+  if (!hit || Date.now() - hit.at > HIGHLIGHT_PRICE_CACHE_MS) return null
+  return hit.entry
+}
+
+/** simple/price em lotes + cache por id (reduz 429 com muitos destaques). */
+async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntry>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const merged: Record<string, SimplePriceEntry> = {}
+
+  for (let i = 0; i < unique.length; i += SIMPLE_PRICE_CHUNK) {
+    const chunk = unique.slice(i, i + SIMPLE_PRICE_CHUNK)
+    const path = buildSimplePricePath(chunk)
+    const batch = await fetchJson<Record<string, SimplePriceEntry>>(path)
+    if (batch && typeof batch === 'object') {
+      for (const [id, entry] of Object.entries(batch)) {
+        if (entry && typeof entry === 'object') {
+          merged[id] = entry
+          rememberHighlightSimple(id, entry)
+        }
+      }
+    }
+    if (i + SIMPLE_PRICE_CHUNK < unique.length) {
+      await sleep(SIMPLE_CHUNK_GAP_MS)
+    }
+  }
+
+  for (const id of unique) {
+    if (merged[id]) continue
+    const cached = cachedHighlightSimple(id)
+    if (cached) merged[id] = cached
+  }
+
+  return merged
+}
+
+/** Preenche destaques sem preço a partir de cache global ou resposta anterior. */
+export function mergeHighlightCoinsWithCache(
+  ids: string[],
+  coins: (MercadoCoin | null)[],
+  byIdCache: Map<string, MercadoCoin>
+): (MercadoCoin | null)[] {
+  return ids.map((id, i) => {
+    const cur = coins[i]
+    if (cur?.price != null) return cur
+    const cached = byIdCache.get(id)
+    if (cached?.price != null) return fillHighlightStaticLogo(cached)
+    const simple = cachedHighlightSimple(id)
+    if (simple) {
+      const fromSimple = fromSimpleHighlightById(id, simple)
+      if (fromSimple?.price != null) return fillHighlightStaticLogo(fromSimple)
+    }
+    return cur
+  })
+}
+
+export function rememberHighlightCoinsInCache(
+  ids: string[],
+  coins: (MercadoCoin | null)[],
+  byIdCache: Map<string, MercadoCoin>
+): void {
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i]
+    const c = coins[i]
+    if (!id || c?.price == null) continue
+    byIdCache.set(id, c)
   }
 }
 
@@ -128,18 +260,6 @@ export function normalizeMarketsRow(raw: Record<string, unknown>): MercadoCoin |
     market_cap: cap,
     source: 'coingecko',
   }
-}
-
-type SimplePriceEntry = {
-  usd?: number
-  usd_24h_change?: number
-  usd_market_cap?: number
-  brl?: number
-  brl_24h_change?: number
-  brl_market_cap?: number
-  eur?: number
-  eur_24h_change?: number
-  eur_market_cap?: number
 }
 
 function parseFiatPerUsdFromExchangeRates(raw: unknown): { brlPerUsd: number; eurPerUsd: number } | null {
@@ -247,16 +367,23 @@ function usdOnlyQuotes(coin: MercadoCoin): MercadoCoin {
 function metaForHighlightId(id: string): { name: string; symbol: string } {
   const k = KNOWN_COIN_META[id]
   if (k) return k
-  const name = id
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-  const symbol = id
-    .replace(/-/g, '')
-    .slice(0, 8)
-    .toUpperCase()
-  return { name: name || id, symbol: symbol || id.toUpperCase().slice(0, 6) }
+  return highlightMetaFromPresetOrId(id)
+}
+
+/** Cartão em destaque quando a API falha mas há preço manual nas definições. */
+export function syntheticHighlightCoin(id: string): MercadoCoin {
+  const slug = id.trim().toLowerCase()
+  const m = metaForHighlightId(slug)
+  return {
+    id: slug,
+    name: m.name,
+    symbol: m.symbol,
+    price: null,
+    change_24h: null,
+    image: COINGECKO_LOGO_BY_ID[slug] ?? SYMBOL_LOGO_URL[m.symbol] ?? null,
+    market_cap: null,
+    source: 'coingecko',
+  }
 }
 
 function fromSimpleHighlightById(id: string, raw: SimplePriceEntry): MercadoCoin | null {
@@ -393,10 +520,10 @@ function emptyPayload(
   }
 }
 
-function buildSimplePriceUrl(ids: string[]): string {
+function buildSimplePricePath(ids: string[]): string {
   const unique = [...new Set(ids)].filter(Boolean)
-  const joined = unique.map((id) => encodeURIComponent(id)).join('%2C')
-  return `https://api.coingecko.com/api/v3/simple/price?ids=${joined}&vs_currencies=usd%2Cbrl%2Ceur&include_24hr_change=true&include_market_cap=true`
+  const joined = unique.map((id) => encodeURIComponent(id)).join(',')
+  return `/simple/price?ids=${joined}&vs_currencies=usd,brl,eur&include_24hr_change=true&include_market_cap=true`
 }
 
 /**
@@ -415,13 +542,13 @@ export async function agregarMercadoCoinGecko(
     )
   }
 
-  const simpleUrl = buildSimplePriceUrl(ids)
-
-  const [simpleRaw, trendingRaw, marketsRaw, exchangeRaw] = await Promise.all([
-    fetchJson<Record<string, SimplePriceEntry>>(simpleUrl),
-    fetchJson<{ coins?: unknown[] }>(TRENDING_URL),
-    fetchJson<unknown[]>(MARKETS_URL),
-    fetchJson<unknown>(EXCHANGE_RATES_URL),
+  const simpleRaw = await fetchSimplePricesForHighlights(ids)
+  await sleep(BETWEEN_ENDPOINTS_MS)
+  const exchangeRaw = await fetchJson<unknown>(EXCHANGE_RATES_PATH)
+  await sleep(BETWEEN_ENDPOINTS_MS)
+  const [marketsRaw, trendingRaw] = await Promise.all([
+    fetchJson<unknown[]>(MARKETS_PATH),
+    fetchJson<{ coins?: unknown[] }>(TRENDING_PATH),
   ])
 
   const fx = parseFiatPerUsdFromExchangeRates(exchangeRaw)
@@ -475,11 +602,26 @@ export async function agregarMercadoCoinGecko(
 
     if (!coin || coin.price == null) {
       partial = true
-      erros.push(`Preço ${id} indisponível.`)
     }
 
     return fillHighlightStaticLogo(coin)
   })
+
+  const missingHighlights = ids.filter((id, i) => {
+    const c = highlightCoins[i]
+    return !c || c.price == null
+  })
+  if (missingHighlights.length > 0) {
+    if (missingHighlights.length === ids.length && Object.keys(simpleRaw).length === 0) {
+      erros.push(
+        'CoinGecko ocupada (limite da API). Os preços voltam em breve — usa «Actualizar» ou espera ~1 minuto.'
+      )
+    } else {
+      erros.push(
+        `${missingHighlights.length} destaque(s) sem preço agora (${missingHighlights.slice(0, 3).join(', ')}${missingHighlights.length > 3 ? '…' : ''}).`
+      )
+    }
+  }
 
   const trending: MercadoCoin[] = []
   const coins = trendingRaw?.coins

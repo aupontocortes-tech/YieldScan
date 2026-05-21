@@ -4,6 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvDelete, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
+import { MERCADO_HIGHLIGHT_EXTRA_ALIASES } from '@/lib/mercado-highlight-presets'
 
 export const DEFAULT_MARKET_HIGHLIGHT_IDS = [
   'bitcoin',
@@ -62,6 +63,7 @@ export const COINGECKO_HIGHLIGHT_ALIASES: Record<string, string> = {
   weth: 'weth',
   steth: 'staked-ether',
   dai: 'dai',
+  ...MERCADO_HIGHLIGHT_EXTRA_ALIASES,
 }
 
 export function canonicalHighlightCoinGeckoId(raw: string): string {

@@ -43,7 +43,26 @@ export const COINGECKO_LOGO_BY_ID: Record<string, string> = {
   maker: 'https://assets.coingecko.com/coins/images/1364/small/Mark_Maker.png',
   frax: 'https://assets.coingecko.com/coins/images/13422/small/FRAX_icon.png',
   celo: 'https://assets.coingecko.com/coins/images/11090/small/icon_celo_0_73_2.png',
-  'ondo-finance': 'https://assets.coingecko.com/coins/images/26580/small/ONDO.png',
+  'nasdaq-xstock':
+    'https://coin-images.coingecko.com/coins/images/66696/thumb/QQQx.png',
+  'sp500-xstock':
+    'https://coin-images.coingecko.com/coins/images/66695/thumb/Ticker_SPX__Company_Name_SP500__size_200x200_2x.png',
+  'nvidia-xstock':
+    'https://coin-images.coingecko.com/coins/images/55633/thumb/Ticker_NVDA__Company_Name_NVIDIA_Corp__size_200x200_2x.png',
+  'tesla-xstock':
+    'https://coin-images.coingecko.com/coins/images/55638/thumb/Ticker_TSLA__Company_Name_Tesla_Inc.__size_200x200_2x.png',
+  'microsoft-xstock':
+    'https://coin-images.coingecko.com/coins/images/55630/thumb/Ticker_MSFT__Company_Name_Microsoft_Inc.__size_200x200_2x.png',
+  'alphabet-xstock':
+    'https://coin-images.coingecko.com/coins/images/55610/thumb/Ticker_GOOG__Company_Name_Alphabet_Inc.__size_200x200_2x.png',
+  'meta-xstock':
+    'https://coin-images.coingecko.com/coins/images/55628/thumb/Ticker_META__Company_Name_Meta_Platforms_Inc.__size_200x200_2x.png',
+  'amazon-xstock':
+    'https://coin-images.coingecko.com/coins/images/55590/thumb/Ticker_AMZN__Company_Name_Amazon.com_Inc.__size_200x200_2x.png',
+  'microstrategy-xstock':
+    'https://coin-images.coingecko.com/coins/images/55631/thumb/Ticker_MSTR__Company_Name_MicroStrategy__size_200x200_2x.png',
+  'exxon-mobil-xstock':
+    'https://coin-images.coingecko.com/coins/images/55644/thumb/Ticker_XOM__Company_Name_ExxonMobil__size_200x200_2x.png',
 }
 
 /** Símbolos comuns no par (ticker) → logo CoinGecko. */
@@ -116,6 +135,16 @@ export const SYMBOL_LOGO_URL: Record<string, string> = {
   SHIB: 'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
   ONDO: 'https://assets.coingecko.com/coins/images/26580/small/ONDO.png',
   USDY: 'https://assets.coingecko.com/coins/images/31701/small/usdy.png',
+  QQQX: COINGECKO_LOGO_BY_ID['nasdaq-xstock'],
+  SPYX: COINGECKO_LOGO_BY_ID['sp500-xstock'],
+  NVDAX: COINGECKO_LOGO_BY_ID['nvidia-xstock'],
+  TSLAX: COINGECKO_LOGO_BY_ID['tesla-xstock'],
+  MSFTX: COINGECKO_LOGO_BY_ID['microsoft-xstock'],
+  GOOGLX: COINGECKO_LOGO_BY_ID['alphabet-xstock'],
+  METAX: COINGECKO_LOGO_BY_ID['meta-xstock'],
+  AMZNX: COINGECKO_LOGO_BY_ID['amazon-xstock'],
+  MSTRX: COINGECKO_LOGO_BY_ID['microstrategy-xstock'],
+  XOMX: COINGECKO_LOGO_BY_ID['exxon-mobil-xstock'],
   XAUT: 'https://assets.coingecko.com/coins/images/10481/small/Tether_Gold.png',
   PAXG: 'https://assets.coingecko.com/coins/images/9519/small/paxgold.png',
   PYUSD: 'https://assets.coingecko.com/coins/images/31212/small/PYUSD_Logo.png',

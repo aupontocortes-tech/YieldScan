@@ -26,6 +26,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
+import { syntheticHighlightCoin } from '@/lib/coingecko-market'
+import {
+  highlightMetaFromPresetOrId,
+  MERCADO_HIGHLIGHT_QUICK_PRESETS,
+} from '@/lib/mercado-highlight-presets'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import {
@@ -229,6 +234,60 @@ function textsFromOverrides(o: MercadoPriceOverrides): OverrideTextDraft {
   return texts
 }
 
+function coinForHighlightDisplay(
+  coin: MercadoCoin | null,
+  id: string,
+  prefs: MercadoDisplayPrefs
+): MercadoCoin | null {
+  const slug = (coin?.id ?? canonicalHighlightCoinGeckoId(id)).trim().toLowerCase()
+  if (!slug) return coin
+
+  if (coin) {
+    const fiat = effectiveDisplayFiatForCoin(slug, prefs)
+    const q = resolveMercadoDisplay(coin, fiat, prefs.priceOverrides)
+    if (q.price != null) return coin
+  }
+
+  const synthetic = syntheticHighlightCoin(slug)
+  const fiat = effectiveDisplayFiatForCoin(slug, prefs)
+  const q = resolveMercadoDisplay(synthetic, fiat, prefs.priceOverrides)
+  if (q.price != null) return synthetic
+
+  return coin
+}
+
+function HighlightEmptyCard({
+  id,
+  mercadoPrefs,
+}: {
+  id: string
+  mercadoPrefs: MercadoDisplayPrefs
+}) {
+  const slug = canonicalHighlightCoinGeckoId(id)
+  const meta = highlightMetaFromPresetOrId(slug)
+  const synthetic = syntheticHighlightCoin(slug)
+  const fiat = effectiveDisplayFiatForCoin(slug, mercadoPrefs)
+  const q = resolveMercadoDisplay(synthetic, fiat, mercadoPrefs.priceOverrides)
+
+  if (q.price != null) {
+    return <HighlightCard coin={synthetic} mercadoPrefs={mercadoPrefs} />
+  }
+
+  return (
+    <div className="flex min-h-[10rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-amber-500/35 bg-amber-950/15 p-5 text-center">
+      <TokenSymbolAvatar symbol={meta.symbol} coingeckoId={slug} size={48} />
+      <div>
+        <p className="font-semibold text-foreground">{meta.name}</p>
+        <p className="text-xs text-muted-foreground">{meta.symbol}</p>
+      </div>
+      <p className="max-w-[14rem] text-xs leading-relaxed text-amber-200/90">
+        Preço da CoinGecko indisponível. Confirma o slug{' '}
+        <span className="font-mono text-foreground">{slug}</span> em ⚙ ou define preço manual em «Extra».
+      </p>
+    </div>
+  )
+}
+
 function parseOverrideTexts(texts: OverrideTextDraft): MercadoPriceOverrides {
   const out: MercadoPriceOverrides = {}
   for (const [id, slice] of Object.entries(texts)) {
@@ -274,7 +333,8 @@ export function DashbuddyCryptoMarket() {
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
     gcTime: 120_000,
-    retry: 1,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(15_000, 2_000 * 2 ** attempt),
   })
 
   const syncDraftFromIds = useCallback((ids: string[]) => {
@@ -324,6 +384,21 @@ export function DashbuddyCryptoMarket() {
     setDisplayPrefs(nextPrefs)
     setPrefsOpen(false)
   }, [draftSlots, draftFiat, draftFiatByCoin, draftOverrideText])
+
+  const addPresetToSlots = useCallback((presetId: string) => {
+    const canonical = canonicalHighlightCoinGeckoId(presetId)
+    setDraftSlots((rows) => {
+      if (rows.some((s) => canonicalHighlightCoinGeckoId(s) === canonical)) return rows
+      const emptyIdx = rows.findIndex((s) => !s.trim())
+      if (emptyIdx >= 0) {
+        const next = [...rows]
+        next[emptyIdx] = canonical
+        return next
+      }
+      if (rows.length >= MAX_MARKET_HIGHLIGHTS) return rows
+      return [...rows, canonical]
+    })
+  }, [])
 
   const restoreHighlightDefault = useCallback(() => {
     clearStoredHighlightIds()
@@ -423,10 +498,37 @@ export function DashbuddyCryptoMarket() {
                           Moedas em destaque
                         </h3>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Escreve o nome do ativo (ex. bitcoin, usdt). O segundo menu em cada linha também usa só{' '}
-                          <strong className="text-foreground">cotação automática</strong> — igual: escolhes BRL/USD/EUR e
-                          o valor vem do mercado.
+                          Escreve o <strong className="text-foreground">slug CoinGecko</strong> (ex.{' '}
+                          <span className="font-mono">bitcoin</span>, <span className="font-mono">tesla-xstock</span>,{' '}
+                          <span className="font-mono">alphabet-xstock</span>). Ticker:{' '}
+                          <span className="font-mono">TSLA</span>, <span className="font-mono">MSFT</span>,{' '}
+                          <span className="font-mono">GOOGL</span>, <span className="font-mono">XOM</span>.
                         </p>
+                        <div className="mt-3 space-y-2 rounded-lg border border-gold/25 bg-gold/5 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gold">
+                            Sugestões rápidas (um clique)
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {MERCADO_HIGHLIGHT_QUICK_PRESETS.map((p) => (
+                              <Button
+                                key={p.id}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 border-gold/30 bg-background/80 px-2 text-[11px] hover:border-gold/50"
+                                disabled={draftSlots.length >= MAX_MARKET_HIGHLIGHTS}
+                                title={`${p.name} (${p.symbol}) — slug: ${p.id}`}
+                                onClick={() => addPresetToSlots(p.id)}
+                              >
+                                <TokenSymbolAvatar symbol={p.symbol} coingeckoId={p.id} size={18} />
+                                {p.name}
+                              </Button>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Depois de adicionar, usa «Extra» abaixo só se quiseres um preço à mão (mapa BRL/USD/EUR).
+                          </p>
+                        </div>
                         <p className="mt-1.5 text-[11px] tabular-nums text-muted-foreground">
                           {draftSlots.filter((s) => s.trim().length > 0).length}/{MAX_MARKET_HIGHLIGHTS} linhas
                         </p>
@@ -451,10 +553,20 @@ export function DashbuddyCryptoMarket() {
                                   <Label htmlFor={`mercado-slot-${i}`} className="text-[11px] text-muted-foreground">
                                     Ativo {i + 1}
                                   </Label>
+                                  <div className="flex items-center gap-2">
+                                    {rowKey ? (
+                                      <TokenSymbolAvatar
+                                        symbol={
+                                          highlightMetaFromPresetOrId(rowKey).symbol
+                                        }
+                                        coingeckoId={rowKey}
+                                        size={28}
+                                      />
+                                    ) : null}
                                   <Input
                                     id={`mercado-slot-${i}`}
-                                    className="h-9 font-mono text-xs"
-                                    placeholder="ex.: bitcoin, usdt"
+                                    className="h-9 flex-1 font-mono text-xs"
+                                    placeholder="ex.: nasdaq-xstock, nvidia-xstock"
                                     value={slot}
                                     onChange={(e) => {
                                       const next = [...draftSlots]
@@ -464,6 +576,7 @@ export function DashbuddyCryptoMarket() {
                                     autoComplete="off"
                                     spellCheck={false}
                                   />
+                                  </div>
                                 </div>
                                 <Button
                                   type="button"
@@ -665,18 +778,26 @@ export function DashbuddyCryptoMarket() {
               Moedas em destaque
             </h3>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {highlightCoins.map((coin, i) =>
-                coin ? (
-                  <HighlightCard key={`${coin.id}-${i}`} coin={coin} mercadoPrefs={displayPrefs} />
-                ) : (
-                  <div
-                    key={`empty-${data.highlightIds[i] ?? i}`}
-                    className="rounded-2xl border border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground"
-                  >
-                    {data.highlightIds[i] ? `${data.highlightIds[i]} indisponível` : 'Sem dados'}
-                  </div>
+              {highlightCoins.map((coin, i) => {
+                const id = data.highlightIds[i] ?? ''
+                const displayCoin = coinForHighlightDisplay(coin, id, displayPrefs)
+                if (displayCoin) {
+                  return (
+                    <HighlightCard
+                      key={`${displayCoin.id}-${i}`}
+                      coin={displayCoin}
+                      mercadoPrefs={displayPrefs}
+                    />
+                  )
+                }
+                return (
+                  <HighlightEmptyCard
+                    key={`empty-${id || i}`}
+                    id={id}
+                    mercadoPrefs={displayPrefs}
+                  />
                 )
-              )}
+              })}
             </div>
           </div>
 
