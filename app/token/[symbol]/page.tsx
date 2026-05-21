@@ -26,6 +26,8 @@ import {
   YAxis,
 } from 'recharts'
 import { ChainBadge } from '@/components/chain-badge'
+import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 import {
   fetchPools,
   formatCurrency,
@@ -102,6 +104,7 @@ export default function TokenPage() {
         <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
+              <TokenSymbolAvatar symbol={symbol} size={44} />
               <h1 className="text-3xl font-bold text-foreground">{symbol}</h1>
               <Badge variant="outline" className="border-border">
                 Token
@@ -224,7 +227,9 @@ export default function TokenPage() {
                       style={{ animationDelay: `${index * 30}ms` }}
                     >
                       <TableCell>
-                        <div className="flex flex-col gap-0.5">
+                        <div className="flex items-start gap-2">
+                          <PairTokenAvatars pool={pool} size={28} />
+                          <div className="flex min-w-0 flex-col gap-0.5">
                           <span className="font-medium text-foreground">{pool.symbol}</span>
                           {dexHref ? (
                             <a
@@ -239,6 +244,7 @@ export default function TokenPage() {
                           ) : (
                             <span className="text-xs text-muted-foreground">{pool.project}</span>
                           )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

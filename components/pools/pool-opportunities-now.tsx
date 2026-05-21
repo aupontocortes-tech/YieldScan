@@ -5,6 +5,7 @@ import type { Pool, PoolAprPeriod } from '@/lib/types'
 import { formatCurrency, formatPercent, poolDisplayApr } from '@/lib/api'
 import { pickTopOpportunityPools } from '@/lib/pool-smart-rank'
 import { cn } from '@/lib/utils'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 
 export function PoolOpportunitiesNow({
   pools,
@@ -47,9 +48,12 @@ export function PoolOpportunitiesNow({
                   : 'border-border/70'
               )}
             >
-              <p className="truncate text-sm font-semibold text-foreground" title={pool.symbol}>
-                {pool.symbol}
-              </p>
+              <div className="flex items-center gap-2">
+                <PairTokenAvatars pool={pool} size={28} />
+                <p className="truncate text-sm font-semibold text-foreground" title={pool.symbol}>
+                  {pool.symbol}
+                </p>
+              </div>
               <p className="truncate text-[11px] text-muted-foreground" title={pool.project}>
                 {pool.project}
               </p>

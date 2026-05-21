@@ -43,6 +43,7 @@ export const COINGECKO_LOGO_BY_ID: Record<string, string> = {
   maker: 'https://assets.coingecko.com/coins/images/1364/small/Mark_Maker.png',
   frax: 'https://assets.coingecko.com/coins/images/13422/small/FRAX_icon.png',
   celo: 'https://assets.coingecko.com/coins/images/11090/small/icon_celo_0_73_2.png',
+  'ondo-finance': 'https://assets.coingecko.com/coins/images/26580/small/ONDO.png',
 }
 
 /** Símbolos comuns no par (ticker) → logo CoinGecko. */
@@ -113,4 +114,10 @@ export const SYMBOL_LOGO_URL: Record<string, string> = {
   WLD: 'https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg',
   PEPE: 'https://assets.coingecko.com/coins/images/29850/small/pepe-token.jpeg',
   SHIB: 'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
+  ONDO: 'https://assets.coingecko.com/coins/images/26580/small/ONDO.png',
+  USDY: 'https://assets.coingecko.com/coins/images/31701/small/usdy.png',
+  XAUT: 'https://assets.coingecko.com/coins/images/10481/small/Tether_Gold.png',
+  PAXG: 'https://assets.coingecko.com/coins/images/9519/small/paxgold.png',
+  PYUSD: 'https://assets.coingecko.com/coins/images/31212/small/PYUSD_Logo.png',
+  EURC: 'https://assets.coingecko.com/coins/images/26045/small/euro-coin.png',
 }

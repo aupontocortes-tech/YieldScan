@@ -43,6 +43,7 @@ import {
 import { SAFE_CHAINS } from '@/lib/pool-classification'
 import { canonicalLlamaChain } from '@/lib/llama-chain'
 import { sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
+import { sanitizeFiltersForCuratedRwa } from '@/lib/rwa-pools'
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -171,9 +172,11 @@ export function PoolFiltersComponent({
     (filters.safeAprProfile ? 1 : 0) +
     (filters.chainCategory === 'safe' ? 1 : 0) +
     (filters.curatedBlueChipsOnly ? 1 : 0) +
+    (filters.curatedRwaPoolsOnly ? 1 : 0) +
     (filters.search.trim() ? 1 : 0)
 
   const blueChipsOnly = filters.curatedBlueChipsOnly
+  const rwaPoolsOnly = filters.curatedRwaPoolsOnly
 
   const toggleBlueChipsOnly = () => {
     if (blueChipsOnly) {
@@ -189,6 +192,25 @@ export function PoolFiltersComponent({
       ...next,
       quickPreset: 'none',
       curatedBlueChipsOnly: true,
+      curatedRwaPoolsOnly: false,
+    })
+  }
+
+  const toggleRwaPoolsOnly = () => {
+    if (rwaPoolsOnly) {
+      onFiltersChange({
+        ...filters,
+        quickPreset: 'none',
+        curatedRwaPoolsOnly: false,
+      })
+      return
+    }
+    const next = sanitizeFiltersForCuratedRwa(filters)
+    onFiltersChange({
+      ...next,
+      quickPreset: 'none',
+      curatedRwaPoolsOnly: true,
+      curatedBlueChipsOnly: false,
     })
   }
 
@@ -231,6 +253,8 @@ export function PoolFiltersComponent({
           <span className="text-[10px] text-muted-foreground">
             {blueChipsOnly ? (
               <span className="text-success">Lista curada blue chip (Solana/Ethereum) · chips de rede/DEX acima</span>
+            ) : rwaPoolsOnly ? (
+              <span className="text-gold">Pools RWA (Solana, Hyperliquid, EVM) · refine rede/DEX nos chips</span>
             ) : (
               <>Nenhuma selecionada = todas · role para ver mais</>
             )}
@@ -392,6 +416,22 @@ export function PoolFiltersComponent({
           onClick={toggleBlueChipsOnly}
         >
           Só blue chips
+        </Button>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          title="Ativos do mundo real (ONDO, ouro, ações tokenizadas, treasury…) — foco Solana e Hyperliquid; resto nos filtros"
+          className={cn(
+            'h-10 bg-card/80',
+            rwaPoolsOnly
+              ? 'border-gold text-gold hover:bg-gold/10 hover:text-gold'
+              : 'border-border/80 text-foreground hover:border-gold/40'
+          )}
+          onClick={toggleRwaPoolsOnly}
+        >
+          Pools RWA
         </Button>
 
         <Button
@@ -574,6 +614,7 @@ export function PoolFiltersComponent({
         filters.safeAprProfile ||
         filters.chainCategory === 'safe' ||
         filters.curatedBlueChipsOnly ||
+        filters.curatedRwaPoolsOnly ||
         filters.smartHighApr ||
         filters.smartHighTvl ||
         filters.smartLowRisk ||
@@ -604,6 +645,22 @@ export function PoolFiltersComponent({
                 className="-m-0.5 inline-flex rounded p-0.5 text-success/80 hover:bg-background/60 hover:text-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Desligar lista curada blue chip"
                 onClick={() => updateFilter('curatedBlueChipsOnly', false)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.curatedRwaPoolsOnly && (
+            <Badge
+              variant="secondary"
+              className="gap-1 border-gold/35 bg-gold/10 px-2 py-0.5 text-xs text-gold"
+            >
+              Pools RWA
+              <button
+                type="button"
+                className="-m-0.5 inline-flex rounded p-0.5 text-gold/80 hover:bg-background/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Desligar lista curada RWA"
+                onClick={() => updateFilter('curatedRwaPoolsOnly', false)}
               >
                 <X className="h-3 w-3" />
               </button>

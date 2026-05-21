@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
+import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import {
   effectiveDisplayFiatForCoin,
   formatMercadoCap,
@@ -87,26 +88,14 @@ function coinThumbSrc(coin: MercadoCoin): string | null {
 
 function CoinThumb({ coin, size = 40 }: { coin: MercadoCoin; size?: number }) {
   const src = coinThumbSrc(coin)
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        className="rounded-full bg-muted/40 object-cover"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-      />
-    )
-  }
   return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-muted/50 text-muted-foreground"
-      style={{ width: size, height: size }}
-    >
-      <Coins className="h-1/2 w-1/2 opacity-60" />
-    </div>
+    <TokenSymbolAvatar
+      symbol={coin.symbol}
+      coingeckoId={coin.id}
+      iconUrl={src}
+      size={size}
+      className="bg-muted/40"
+    />
   )
 }
 

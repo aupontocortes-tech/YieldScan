@@ -197,9 +197,54 @@ export function buildAvatarUrlList(pool: Pool, slotIndex: 0 | 1): string[] {
     urls.push(...tokenLogoCandidates(pool.chain, address))
   }
 
-  const symLogo = SYMBOL_LOGO_URL[sym]
-  if (symLogo) urls.push(symLogo)
+  urls.push(...symbolIconUrls(sym))
 
+  return [...new Set(urls)]
+}
+
+/** Logo CoinGecko por id (ex.: `ethereum`, `ondo-finance`). */
+export function coingeckoIdLogoUrl(coingeckoId: string): string | undefined {
+  const id = coingeckoId.trim().toLowerCase().replace(/\s+/g, '-')
+  if (!id) return undefined
+  return COINGECKO_LOGO_BY_ID[id]
+}
+
+/**
+ * Fallback universal por ticker: mapa estático + cryptocurrency-icons (spothq).
+ */
+export function symbolIconUrls(symbol: string): string[] {
+  const sym = normalizeTokenSymbol(symbol)
+  const urls: string[] = []
+  const staticLogo = SYMBOL_LOGO_URL[sym]
+  if (staticLogo) urls.push(staticLogo)
+  const slug = sym.toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (slug) {
+    urls.push(
+      `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@0.18.1/128/color/${slug}.png`,
+      `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${slug}.png`,
+    )
+  }
+  return urls
+}
+
+/** URLs para um único símbolo (mercado, swap, rebalance, etc.). */
+export function buildAvatarUrlListFromSymbol(
+  symbol: string,
+  opts?: { chain?: string; coingeckoId?: string; iconUrl?: string | null },
+): string[] {
+  const urls: string[] = []
+  const trimmedUrl = opts?.iconUrl?.trim()
+  if (trimmedUrl && /^https?:\/\//i.test(trimmedUrl)) urls.push(trimmedUrl)
+  if (opts?.coingeckoId) {
+    const cg = coingeckoIdLogoUrl(opts.coingeckoId)
+    if (cg) urls.push(cg)
+  }
+  const sym = normalizeTokenSymbol(symbol)
+  if (opts?.chain) {
+    const address = KNOWN_TOKEN_ADDRESSES[opts.chain]?.[sym]
+    if (address) urls.push(...tokenLogoCandidates(opts.chain, address))
+  }
+  urls.push(...symbolIconUrls(symbol))
   return [...new Set(urls)]
 }
 
@@ -211,16 +256,7 @@ export function buildAvatarUrlListFromPairSymbols(
   slotIndex: 0 | 1,
 ): string[] {
   const raw = slotIndex === 0 ? symbolA : symbolB
-  const sym = normalizeTokenSymbol(raw.trim())
-  const urls: string[] = []
-  const chainKnown = KNOWN_TOKEN_ADDRESSES[chain]
-  const address = chainKnown?.[sym]
-  if (address) {
-    urls.push(...tokenLogoCandidates(chain, address))
-  }
-  const symLogo = SYMBOL_LOGO_URL[sym]
-  if (symLogo) urls.push(symLogo)
-  return [...new Set(urls)]
+  return buildAvatarUrlListFromSymbol(raw.trim(), { chain })
 }
 
 /** @deprecated use buildAvatarUrlList — mantido para imports externos */

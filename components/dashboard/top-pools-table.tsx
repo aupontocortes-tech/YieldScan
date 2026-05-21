@@ -19,6 +19,7 @@ import { getDexScreenerUrl } from '@/lib/dexscreener'
 import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
 import { ExternalLink, LineChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 
 interface TopPoolsTableProps {
   pools: Pool[]
@@ -93,7 +94,9 @@ export function TopPoolsTable({ pools, isLoading, title, sortBy }: TopPoolsTable
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <TableCell>
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex items-start gap-2">
+                      <PairTokenAvatars pool={pool} size={28} />
+                      <div className="flex min-w-0 flex-col gap-0.5">
                       <span className="font-medium text-foreground">{pool.symbol}</span>
                       {dexHref ? (
                         <a
@@ -108,6 +111,7 @@ export function TopPoolsTable({ pools, isLoading, title, sortBy }: TopPoolsTable
                       ) : (
                         <span className="text-xs text-muted-foreground">{pool.project}</span>
                       )}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>

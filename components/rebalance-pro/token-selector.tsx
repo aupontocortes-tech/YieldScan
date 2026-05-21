@@ -13,6 +13,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 
 export type TokenOption = {
   id: string
@@ -116,9 +117,8 @@ export function TokenSelector({ value, onChange, excludeIds, className }: TokenS
         >
           {value ? (
             <span className="flex items-center gap-2">
-              <span className="rounded-md bg-gradient-to-br from-violet-500/20 to-cyan-500/20 px-2 py-0.5 font-mono text-sm font-semibold tracking-tight">
-                {value.symbol}
-              </span>
+              <TokenSymbolAvatar symbol={value.symbol} coingeckoId={value.coingeckoId} size={24} />
+              <span className="font-mono text-sm font-semibold tracking-tight">{value.symbol}</span>
               <span className="truncate text-muted-foreground">{value.name}</span>
             </span>
           ) : (
@@ -154,6 +154,7 @@ export function TokenSelector({ value, onChange, excludeIds, className }: TokenS
                       value?.id === t.id ? 'opacity-100 text-emerald-400' : 'opacity-0',
                     )}
                   />
+                  <TokenSymbolAvatar symbol={t.symbol} coingeckoId={t.coingeckoId} size={22} className="mr-1" />
                   <span className="font-mono font-semibold">{t.symbol}</span>
                   <span className="ml-2 truncate text-muted-foreground">{t.name}</span>
                 </CommandItem>

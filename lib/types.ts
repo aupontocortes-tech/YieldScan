@@ -125,6 +125,10 @@ export interface PoolFilters {
    * Lista curada “Só blue chips” (pares fortes + DEXs por rede em Solana/Ethereum) — mesmo critério do botão da barra.
    */
   curatedBlueChipsOnly: boolean
+  /**
+   * Lista curada “Pools RWA” (ativos do mundo real; foco Solana + Hyperliquid e EVMs com RWA).
+   */
+  curatedRwaPoolsOnly: boolean
 }
 
 export type PoolAprPeriod = PoolFilters['period']
@@ -177,6 +181,7 @@ export const DEFAULT_FILTERS: PoolFilters = {
   smartLowRisk: false,
   safeAprProfile: false,
   curatedBlueChipsOnly: false,
+  curatedRwaPoolsOnly: false,
 }
 
 // Stats type

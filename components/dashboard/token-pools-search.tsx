@@ -34,6 +34,7 @@ import { getDexScreenerUrl } from '@/lib/dexscreener'
 import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
 import { Search, Coins, ExternalLink, LineChart, TrendingUp, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 
 const POPULAR_TOKENS = ['ETH', 'USDC', 'USDT', 'BTC', 'WBTC', 'DAI', 'SOL', 'MATIC', 'ARB', 'OP']
 
@@ -193,7 +194,9 @@ export function TokenPoolsSearch() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex items-start gap-2">
+                              <PairTokenAvatars pool={pool} size={28} />
+                              <div className="flex min-w-0 flex-col gap-0.5">
                               <div className="font-medium text-foreground">{pool.symbol}</div>
                               {dexHref ? (
                                 <a
@@ -208,6 +211,7 @@ export function TokenPoolsSearch() {
                               ) : (
                                 <div className="text-xs text-muted-foreground">{pool.project}</div>
                               )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell>

@@ -1,21 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { buildAvatarUrlListFromSymbol } from '@/lib/token-icons'
 import { cn } from '@/lib/utils'
 
 /** CDN CoinMarketCap (mesmos assets que o site oficial). */
 export function cmcCoinPngUrl(cmcId: number, pixelSize: 64 | 128 = 128): string {
   return `https://s2.coinmarketcap.com/static/img/coins/${pixelSize}x${pixelSize}/${cmcId}.png`
-}
-
-/** Ícone por ticker (spothq/cryptocurrency-icons). */
-function cryptoIconUrls(symbol: string): string[] {
-  const slug = symbol.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (!slug) return []
-  return [
-    `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@0.18.1/128/color/${slug}.png`,
-    `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${slug}.png`,
-  ]
 }
 
 function isHttpUrl(s: string): boolean {
@@ -54,8 +45,8 @@ export function CoinAvatar({
         list.push(cmcCoinPngUrl(cmcId, px))
       }
     }
-    list.push(...cryptoIconUrls(symbol))
-    return list.filter(Boolean)
+    list.push(...buildAvatarUrlListFromSymbol(symbol))
+    return [...new Set(list)]
   }, [cmcId, iconUrl, symbol, pngSizes])
 
   const [attempt, setAttempt] = useState(0)

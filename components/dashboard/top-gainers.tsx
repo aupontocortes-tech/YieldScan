@@ -34,6 +34,7 @@ import { getPoolMetaHint, getPoolSwapFeeLabel } from '@/lib/pool-fee'
 import { Pool } from '@/lib/types'
 import { TrendingUp, Flame, ExternalLink, LineChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 
 type TimePeriod = '5m' | '10m' | '1h' | '24h' | '7d' | '30d'
 
@@ -171,9 +172,12 @@ export function TopGainers() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <div className="font-medium text-foreground">{pool.symbol}</div>
-                          <div className="text-xs text-muted-foreground">{pool.project}</div>
+                        <div className="flex items-center gap-2">
+                          <PairTokenAvatars pool={pool} size={28} />
+                          <div>
+                            <div className="font-medium text-foreground">{pool.symbol}</div>
+                            <div className="text-xs text-muted-foreground">{pool.project}</div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

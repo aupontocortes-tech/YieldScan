@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { DataLoadError } from '@/components/data-load-error'
 import { fetchPools, formatCurrency, formatPercent } from '@/lib/api'
 import type { Pool } from '@/lib/types'
+import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 import {
   aplicarFiltroBlueChips,
   BLUE_CHIP_CHAINS,
@@ -199,7 +200,8 @@ export default function BlueChipsPoolsPage() {
                   return (
                     <TableRow key={pool.pool} className="border-border/50">
                       <TableCell>
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <PairTokenAvatars pool={pool} size={28} />
                           <span className="font-semibold">{pool.symbol}</span>
                           {isStableStablePair(pool) && (
                             <Badge variant="outline" className="border-success/60 text-success text-[10px]">

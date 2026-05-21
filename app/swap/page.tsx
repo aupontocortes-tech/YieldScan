@@ -27,6 +27,7 @@ import { SUPPORTED_CHAINS } from '@/lib/types'
 import { formatNumber } from '@/lib/api'
 import { ArrowDownUp, ExternalLink, Sparkles, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 
 // Common tokens for swap
 const COMMON_TOKENS = [
@@ -111,14 +112,24 @@ export default function SwapPage() {
               <Label>Token de Origem</Label>
               <div className="flex gap-3">
                 <Select value={fromToken} onValueChange={setFromToken}>
-                  <SelectTrigger className="w-[180px] bg-secondary border-border">
-                    <SelectValue />
+                  <SelectTrigger className="w-[200px] bg-secondary border-border">
+                    <SelectValue>
+                      {fromToken ? (
+                        <span className="flex items-center gap-2">
+                          <TokenSymbolAvatar symbol={fromToken} chain="Ethereum" size={22} />
+                          <span className="font-medium">{fromToken}</span>
+                        </span>
+                      ) : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {COMMON_TOKENS.map((token) => (
                       <SelectItem key={token.symbol} value={token.symbol}>
-                        <span className="font-medium">{token.symbol}</span>
-                        <span className="ml-2 text-muted-foreground">{token.name}</span>
+                        <span className="flex items-center gap-2">
+                          <TokenSymbolAvatar symbol={token.symbol} chain="Ethereum" size={22} />
+                          <span className="font-medium">{token.symbol}</span>
+                          <span className="text-muted-foreground">{token.name}</span>
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -150,13 +161,23 @@ export default function SwapPage() {
               <Label>Token de Destino</Label>
               <Select value={toToken} onValueChange={setToToken}>
                 <SelectTrigger className="bg-secondary border-border">
-                  <SelectValue />
+                  <SelectValue>
+                    {toToken ? (
+                      <span className="flex items-center gap-2">
+                        <TokenSymbolAvatar symbol={toToken} chain="Ethereum" size={22} />
+                        <span className="font-medium">{toToken}</span>
+                      </span>
+                    ) : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {COMMON_TOKENS.filter(t => t.symbol !== fromToken).map((token) => (
                     <SelectItem key={token.symbol} value={token.symbol}>
-                      <span className="font-medium">{token.symbol}</span>
-                      <span className="ml-2 text-muted-foreground">{token.name}</span>
+                      <span className="flex items-center gap-2">
+                        <TokenSymbolAvatar symbol={token.symbol} chain="Ethereum" size={22} />
+                        <span className="font-medium">{token.symbol}</span>
+                        <span className="text-muted-foreground">{token.name}</span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>

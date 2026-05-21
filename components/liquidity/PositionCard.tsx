@@ -4,6 +4,8 @@ import { AlertTriangle, Info } from 'lucide-react'
 import type { AggregatorLiquidityPosition } from '@/services/types'
 import { RangeBar } from '@/components/liquidity/RangeBar'
 import { cn } from '@/lib/utils'
+import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
+import { canonicalLlamaChain } from '@/lib/llama-chain'
 
 function fmtUsd(n: number) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
@@ -55,11 +57,24 @@ export function LiquidityPositionCard({ position: p }: PositionCardProps) {
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-foreground">
-            <span className="text-foreground">{p.token0.symbol}</span>
-            <span className="mx-1.5 text-muted-foreground">/</span>
-            <span className="text-foreground">{p.token1.symbol}</span>
-          </h3>
+          <div className="flex items-center gap-2">
+            <TokenSymbolAvatar
+              symbol={p.token0.symbol}
+              chain={canonicalLlamaChain(p.chain) === 'Solana' ? 'Solana' : 'Ethereum'}
+              size={28}
+            />
+            <TokenSymbolAvatar
+              symbol={p.token1.symbol}
+              chain={canonicalLlamaChain(p.chain) === 'Solana' ? 'Solana' : 'Ethereum'}
+              size={28}
+              className="-ml-2"
+            />
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">
+              <span className="text-foreground">{p.token0.symbol}</span>
+              <span className="mx-1.5 text-muted-foreground">/</span>
+              <span className="text-foreground">{p.token1.symbol}</span>
+            </h3>
+          </div>
           <span
             className={cn(
               'mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
@@ -81,12 +96,26 @@ export function LiquidityPositionCard({ position: p }: PositionCardProps) {
 
       <div className="grid gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-3 sm:grid-cols-2">
         <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{p.token0.symbol}</p>
+          <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <TokenSymbolAvatar
+              symbol={p.token0.symbol}
+              chain={canonicalLlamaChain(p.chain) === 'Solana' ? 'Solana' : 'Ethereum'}
+              size={18}
+            />
+            {p.token0.symbol}
+          </p>
           <p className="font-mono text-sm font-medium text-foreground">{fmtToken(p.token0.amount, p.token0.symbol)}</p>
           <p className="text-xs text-muted-foreground">~ {fmtUsd(p.token0.usdValue)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{p.token1.symbol}</p>
+          <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <TokenSymbolAvatar
+              symbol={p.token1.symbol}
+              chain={canonicalLlamaChain(p.chain) === 'Solana' ? 'Solana' : 'Ethereum'}
+              size={18}
+            />
+            {p.token1.symbol}
+          </p>
           <p className="font-mono text-sm font-medium text-foreground">{fmtToken(p.token1.amount, p.token1.symbol)}</p>
           <p className="text-xs text-muted-foreground">~ {fmtUsd(p.token1.usdValue)}</p>
         </div>

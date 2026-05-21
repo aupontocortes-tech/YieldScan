@@ -8,6 +8,7 @@ import { PoolOpportunitiesNow } from '@/components/pools/pool-opportunities-now'
 import { PoolTable } from '@/components/pools/pool-table'
 import { fetchPools, filterPools, sortPools } from '@/lib/api'
 import { aplicarFiltroBlueChips, sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
+import { aplicarFiltroRwa, sanitizeFiltersForCuratedRwa } from '@/lib/rwa-pools'
 import { PoolAprPeriod, PoolFilters, DEFAULT_FILTERS } from '@/lib/types'
 import { useNovelChains } from '@/hooks/use-novel-chains'
 import { DataLoadError } from '@/components/data-load-error'
@@ -40,14 +41,16 @@ export default function PoolsPage() {
 
   const poolsForExplorer = useMemo(() => {
     if (!pools?.length) return []
-    if (!filters.curatedBlueChipsOnly) return pools
-    return aplicarFiltroBlueChips(pools)
-  }, [pools, filters.curatedBlueChipsOnly])
+    if (filters.curatedBlueChipsOnly) return aplicarFiltroBlueChips(pools)
+    if (filters.curatedRwaPoolsOnly) return aplicarFiltroRwa(pools)
+    return pools
+  }, [pools, filters.curatedBlueChipsOnly, filters.curatedRwaPoolsOnly])
 
   /** Com lista curada ativa, evita combinações de filtro que esvaziam a tabela. */
   const filtersEffective = useMemo((): PoolFilters => {
-    if (!filters.curatedBlueChipsOnly) return filters
-    return sanitizeFiltersForCuratedBlueChips(filters)
+    if (filters.curatedBlueChipsOnly) return sanitizeFiltersForCuratedBlueChips(filters)
+    if (filters.curatedRwaPoolsOnly) return sanitizeFiltersForCuratedRwa(filters)
+    return filters
   }, [filters])
 
   const chainOptions = useMemo(() => {
@@ -125,6 +128,18 @@ export default function PoolsPage() {
                   . Liga/desliga pelo botão «Só blue chips» na barra de filtros.
                 </p>
               )}
+              {filters.curatedRwaPoolsOnly && pools && pools.length > 0 && (
+                <p className="mt-2 text-sm font-medium text-gold">
+                  {poolsForExplorer.length.toLocaleString()} pools na lista «Pools RWA» neste carregamento
+                  {poolsForExplorer.length < pools.length && (
+                    <span className="font-normal text-muted-foreground">
+                      {' '}
+                      (de {pools.length.toLocaleString()} no total)
+                    </span>
+                  )}
+                  . Prioridade Solana e Hyperliquid; usa os chips de rede/DEX e TVL para refinar.
+                </p>
+              )}
               {filters.curatedBlueChipsOnly && (
                 <p className="mt-3 max-w-2xl rounded-lg border border-success/35 bg-success/10 px-3 py-2 text-xs leading-relaxed text-foreground">
                   <span className="font-semibold text-success">Só blue chips ativo:</span> prioridade{' '}
@@ -137,7 +152,16 @@ export default function PoolsPage() {
                   .
                 </p>
               )}
-              {filters.curatedBlueChipsOnly &&
+              {filters.curatedRwaPoolsOnly && (
+                <p className="mt-3 max-w-2xl rounded-lg border border-gold/35 bg-gold/10 px-3 py-2 text-xs leading-relaxed text-foreground">
+                  <span className="font-semibold text-gold">Pools RWA ativo:</span> pares com ativos do mundo real
+                  (ONDO, treasury, ouro, ações tokenizadas, etc.) em{' '}
+                  <span className="font-medium">Solana</span>, <span className="font-medium">Hyperliquid</span> e EVMs
+                  (Ethereum, Arbitrum, Base). DEXs Solana: Raydium · Orca · Meteora · Ondo. O resto (APR, TVL, rede)
+                  configuras nos filtros abaixo.
+                </p>
+              )}
+              {(filters.curatedBlueChipsOnly || filters.curatedRwaPoolsOnly) &&
                 poolsForExplorer.length > 0 &&
                 filteredPools.length === 0 &&
                 !isLoading && (
