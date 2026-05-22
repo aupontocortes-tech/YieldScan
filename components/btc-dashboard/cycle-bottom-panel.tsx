@@ -12,6 +12,8 @@ import { TrendingUp } from 'lucide-react'
 
 type CycleBottomPanelProps = {
   variant?: 'settings' | 'inline'
+  /** Sem cabeçalho duplicado (dentro de acordeão no painel). */
+  compact?: boolean
   /** Fecha o painel lateral para ver o gráfico no intervalo correcto. */
   onChartViewApplied?: () => void
   /** Abre o gráfico em ecrã inteiro (Golden / Death Cross). */
@@ -23,6 +25,7 @@ type CycleBottomPanelProps = {
  */
 export function CycleBottomPanel({
   variant = 'settings',
+  compact = false,
   onChartViewApplied,
   onFullscreenFocus,
 }: CycleBottomPanelProps) {
@@ -85,27 +88,7 @@ export function CycleBottomPanel({
 
   const isSettings = variant === 'settings'
 
-  return (
-    <section
-      className={cn(
-        'rounded-xl border p-3 sm:p-4',
-        isSettings
-          ? 'border-[#d4af37]/25 bg-[#0d0d0d]'
-          : 'border-[#d4af37]/30 bg-gradient-to-br from-[#d4af37]/8 via-[#0a0a0a] to-[#050505]',
-      )}
-      aria-label="Indicadores de fundo de ciclo"
-    >
-      <div className="mb-3 flex items-start gap-2">
-        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#d4af37]" aria-hidden />
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-white">Fundos de ciclo · Bull market (Pompx)</p>
-          <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500 sm:text-[11px]">
-            Quatro cartões no mesmo formato. O <span className="text-zinc-400">Golden Cross</span> abre em ecrã inteiro
-            (SMA 50 + 200 no diário).
-          </p>
-        </div>
-      </div>
-
+  const grid = (
       <div className="grid grid-cols-2 gap-2">
         {CYCLE_BOTTOM_INDICATORS.map((meta) => {
           const { checked, setEnabled } = stateById[meta.id]
@@ -162,6 +145,33 @@ export function CycleBottomPanel({
           )
         })}
       </div>
+  )
+
+  if (compact) {
+    return <div aria-label="Indicadores de fundo de ciclo">{grid}</div>
+  }
+
+  return (
+    <section
+      className={cn(
+        'rounded-xl border p-3 sm:p-4',
+        isSettings
+          ? 'border-[#d4af37]/25 bg-[#0d0d0d]'
+          : 'border-[#d4af37]/30 bg-gradient-to-br from-[#d4af37]/8 via-[#0a0a0a] to-[#050505]',
+      )}
+      aria-label="Indicadores de fundo de ciclo"
+    >
+      <div className="mb-3 flex items-start gap-2">
+        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#d4af37]" aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">Fundos de ciclo · Bull market (Pompx)</p>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500 sm:text-[11px]">
+            Quatro cartões no mesmo formato. O <span className="text-zinc-400">Golden Cross</span> abre em ecrã inteiro
+            (SMA 50 + 200 no diário).
+          </p>
+        </div>
+      </div>
+      {grid}
     </section>
   )
 }

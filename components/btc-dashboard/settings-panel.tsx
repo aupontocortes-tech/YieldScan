@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { CycleBottomPanel } from '@/components/btc-dashboard/cycle-bottom-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import type { MaType } from '@/lib/btc/types'
@@ -11,7 +13,7 @@ import { BULL_MARKET_BAND_EMA_WEEKS, BULL_MARKET_BAND_SMA_WEEKS } from '@/lib/bt
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Plus, Trash2, RotateCcw, CircleHelp } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, CircleHelp, ChevronDown } from 'lucide-react'
 
 function HelpTip({ text }: { text: string }) {
   return (
@@ -42,13 +44,14 @@ const MA_PALETTE = [
   '#78716c', '#6366f1', '#14b8a6', '#facc15',
 ]
 
-// ── Section card wrapper ────────────────────────────────────────────────────
-function Section({
+// ── Indicador em acordeão (título clicável abre opções) ─────────────────────
+function IndicatorSection({
   title,
   subtitle,
   helpText,
   enabled,
   onToggle,
+  defaultOpen = false,
   children,
 }: {
   title: string
@@ -56,25 +59,72 @@ function Section({
   helpText?: string
   enabled?: boolean
   onToggle?: (v: boolean) => void
+  defaultOpen?: boolean
   children: React.ReactNode
 }) {
-  const dimmed = enabled === false
+  const [open, setOpen] = useState(defaultOpen)
+  const dimmed = onToggle != null && enabled === false
+
   return (
-    <div className={`rounded-xl border bg-[#0d0d0d] p-4 transition-all ${dimmed ? 'border-zinc-800/60 opacity-60' : 'border-[#d4af37]/20'}`}>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1">
-            <p className="text-sm font-semibold text-white">{title}</p>
-            {helpText ? <HelpTip text={helpText} /> : null}
-          </div>
-          <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>
-        </div>
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className={cn(
+        'rounded-xl border bg-[#0d0d0d] transition-all',
+        dimmed ? 'border-zinc-800/60 opacity-60' : 'border-[#d4af37]/20',
+      )}
+    >
+      <div className="flex items-start gap-2 px-3 py-2.5">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-start gap-2 rounded-md text-left transition-colors hover:bg-zinc-900/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#d4af37]/40"
+          >
+            <ChevronDown
+              className={cn(
+                'mt-0.5 h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200',
+                open && 'rotate-180',
+              )}
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-semibold text-white">{title}</span>
+                {helpText ? (
+                  <span
+                    className="inline-flex"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <HelpTip text={helpText} />
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>
+            </div>
+          </button>
+        </CollapsibleTrigger>
         {onToggle != null && (
-          <Switch checked={enabled ?? true} onCheckedChange={onToggle} className="shrink-0 mt-0.5" />
+          <div
+            className="shrink-0 pt-0.5"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <Switch checked={enabled ?? true} onCheckedChange={onToggle} />
+          </div>
         )}
       </div>
-      <div className={dimmed ? 'pointer-events-none select-none' : ''}>{children}</div>
-    </div>
+      <CollapsibleContent>
+        <div
+          className={cn(
+            'border-t border-zinc-800/70 px-3 pb-3 pt-3',
+            dimmed && 'pointer-events-none select-none',
+          )}
+        >
+          {children}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -118,29 +168,6 @@ function Num({
 // ── Dot separator ─────────────────────────────────────────────────────────
 function Rule() {
   return <div className="my-4 border-t border-zinc-800/70" />
-}
-
-/** Linha de toggle on-chain com ícone de ajuda ao lado do nome */
-function OnChainToggleRow({
-  label,
-  helpText,
-  checked,
-  onCheckedChange,
-}: {
-  label: string
-  helpText: string
-  checked: boolean
-  onCheckedChange: (c: boolean) => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/40 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-1">
-        <span className="text-xs text-zinc-300">{label}</span>
-        <HelpTip text={helpText} />
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  )
 }
 
 // ── Interactive color dot — click to open native color picker ──────────────
@@ -206,22 +233,16 @@ export function SettingsPanel({
     setOnChain,
     bullMarketBand,
     setBullMarketBand,
-    sma200Daily,
-    setSma200Daily,
-    sma50Weekly,
-    setSma50Weekly,
-    goldenCrossDaily,
-    setGoldenCrossDaily,
     resetDefaults,
   } = useBtcSettings()
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {!embedded && (
-        <div className="flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white">Configurações</h2>
-            <p className="text-xs text-zinc-500">Todos os indicadores e zonas do gráfico</p>
+            <p className="text-xs text-zinc-500">Clica no nome do indicador para abrir as opções</p>
           </div>
           <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 border-zinc-700 text-xs text-zinc-400 hover:text-white" onClick={resetDefaults}>
             <RotateCcw className="h-3 w-3" />
@@ -230,121 +251,20 @@ export function SettingsPanel({
         </div>
       )}
 
-      <CycleBottomPanel
-        variant="settings"
-        onChartViewApplied={onChartViewApplied}
-        onFullscreenFocus={onGoldenCrossFullscreen}
-      />
+      <IndicatorSection
+        title="Fundos de ciclo · Bull market (Pompx)"
+        subtitle="Golden Cross, SMA 200, SMA 50 semanal, Bull Market Band"
+        helpText="Quatro cartões no mesmo formato. O Golden Cross abre em ecrã inteiro (SMA 50 + 200 no diário)."
+      >
+        <CycleBottomPanel
+          variant="settings"
+          compact
+          onChartViewApplied={onChartViewApplied}
+          onFullscreenFocus={onGoldenCrossFullscreen}
+        />
+      </IndicatorSection>
 
-      {goldenCrossDaily.enabled && (
-        <Section
-          title="Golden / Death Cross"
-          subtitle="SMA 50 e SMA 200 no diário"
-          helpText="Clica no cartão no bloco acima para ver em ecrã inteiro. Golden Cross = SMA 50 cruza acima da 200; Death Cross = cruza abaixo."
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-[10px] text-zinc-500">Espessura</Label>
-              <select
-                value={goldenCrossDaily.lineWidth}
-                onChange={(e) =>
-                  setGoldenCrossDaily({
-                    ...goldenCrossDaily,
-                    lineWidth: Number(e.target.value) as 1 | 2 | 3,
-                  })
-                }
-                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
-              >
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-              </select>
-            </div>
-          </div>
-          <Rule />
-          <ColorDot
-            label="SMA 50 (diário)"
-            color={goldenCrossDaily.colorSma50}
-            onChange={(c) => setGoldenCrossDaily({ ...goldenCrossDaily, colorSma50: c })}
-          />
-          <ColorDot
-            label="SMA 200 (diário)"
-            color={goldenCrossDaily.colorSma200}
-            onChange={(c) => setGoldenCrossDaily({ ...goldenCrossDaily, colorSma200: c })}
-          />
-        </Section>
-      )}
-
-      {sma200Daily.enabled && (
-        <Section
-          title="SMA 200 (Diário)"
-          subtitle="Gráfico diário · aparência da linha"
-          helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Diário. Rompimento acima da SMA 200 = Sinal 1 (fim do fundo / início de bull)."
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-[10px] text-zinc-500">Espessura</Label>
-              <select
-                value={sma200Daily.lineWidth}
-                onChange={(e) =>
-                  setSma200Daily({
-                    ...sma200Daily,
-                    lineWidth: Number(e.target.value) as 1 | 2 | 3,
-                  })
-                }
-                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
-              >
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-              </select>
-            </div>
-          </div>
-          <Rule />
-          <ColorDot
-            label="Linha SMA 200"
-            color={sma200Daily.color}
-            onChange={(c) => setSma200Daily({ ...sma200Daily, color: c })}
-          />
-        </Section>
-      )}
-
-      {sma50Weekly.enabled && (
-        <Section
-          title="SMA 50 (Semanal)"
-          subtitle="Gráfico semanal · aparência da linha"
-          helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Semanal. Média dos últimos 50 fechos semanais."
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-[10px] text-zinc-500">Espessura</Label>
-              <select
-                value={sma50Weekly.lineWidth}
-                onChange={(e) =>
-                  setSma50Weekly({
-                    ...sma50Weekly,
-                    lineWidth: Number(e.target.value) as 1 | 2 | 3,
-                  })
-                }
-                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
-              >
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-              </select>
-            </div>
-          </div>
-          <Rule />
-          <ColorDot
-            label="Linha SMA 50"
-            color={sma50Weekly.color}
-            onChange={(c) => setSma50Weekly({ ...sma50Weekly, color: c })}
-          />
-        </Section>
-      )}
-
-      {/* ── Velas BTC ───────────────────────────────────────────── */}
-      <Section
+      <IndicatorSection
         title="Velas (BTC / USDT)"
         subtitle="Corpo, bordas e pavios do gráfico de velas — clica na cor para mudar"
         helpText="Define apenas as cores das velas (alta, baixa e pavio da baixa). Não altera preços nem intervalo — é puramente aparência."
@@ -367,10 +287,9 @@ export function SettingsPanel({
             onChange={(c) => setCandles({ ...candles, colors: { ...candles.colors, wickDown: c } })}
           />
         </div>
-      </Section>
+      </IndicatorSection>
 
-      {/* ── Moving Averages ─────────────────────────────────────── */}
-      <Section
+      <IndicatorSection
         title="Moving Averages"
         subtitle="Médias móveis sobre o preço de fecho — clica nas bolinhas para mudar a cor"
         helpText="SMA ou EMA do fecho, desenhadas no mesmo gráfico do preço. Períodos maiores reagem mais devagar; podes empilhar várias médias para ver tendência e possíveis suportes/resistências dinâmicos."
@@ -488,10 +407,9 @@ export function SettingsPanel({
         <Button type="button" variant="outline" size="sm" onClick={addMa} className="mt-3 h-8 w-full gap-1.5 border-zinc-700 text-xs text-zinc-400 hover:text-white">
           <Plus className="h-3.5 w-3.5" /> Adicionar média
         </Button>
-      </Section>
+      </IndicatorSection>
 
-      {bullMarketBand.enabled && (
-      <Section
+      <IndicatorSection
         title="Bull Market Band — aparência"
         subtitle={`Gráfico mensal (Heikin Ashi) · SMA ${BULL_MARKET_BAND_SMA_WEEKS}w + EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`}
         helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Mensal com velas HA e duas linhas da banda (calculadas em fechos semanais)."
@@ -534,12 +452,9 @@ export function SettingsPanel({
             onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorFill: c })}
           />
         </div>
-      </Section>
-      )}
+      </IndicatorSection>
 
-      {/* ── RSI + MACD side by side ──────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Section
+      <IndicatorSection
           title="RSI"
           subtitle="Relative Strength Index · força do momento"
           helpText="Oscilador 0–100 que mede a força dos últimos ganhos vs perdas. Zonas de sobrevenda/sobrecompra são referências comuns; aparece num painel separado abaixo do gráfico de preço quando ativo."
@@ -592,9 +507,9 @@ export function SettingsPanel({
               </>
             )}
           </div>
-        </Section>
+      </IndicatorSection>
 
-        <Section
+      <IndicatorSection
           title="MACD"
           subtitle="Moving Average Convergence/Divergence"
           helpText="Diferença entre duas EMAs do preço, com linha de sinal. O histograma mostra se o momentum está a acelerar ou a travar; painel dedicado abaixo do preço."
@@ -632,12 +547,9 @@ export function SettingsPanel({
               onChange={(c) => setMacd({ ...macd, colors: { ...macd.colors, signal: c } })}
             />
           </div>
-        </Section>
-      </div>
+      </IndicatorSection>
 
-      {/* ── Stochastic + Bollinger ───────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Section
+      <IndicatorSection
           title="Stochastic"
           subtitle="Oscilador %K e %D · 0–100"
           helpText="%K compara o fecho com o intervalo recente; %D suaviza %K. Indica posição relativa dentro da gama (útil em ranges); painel separado."
@@ -675,9 +587,9 @@ export function SettingsPanel({
               onChange={(c) => setStoch({ ...stoch, colors: { ...stoch.colors, d: c } })}
             />
           </div>
-        </Section>
+      </IndicatorSection>
 
-        <Section
+      <IndicatorSection
           title="Bollinger Bands"
           subtitle="Bandas de volatilidade ± desvio padrão"
           helpText="Bandas superior e inferior à volta de uma SMA, à distância de N desvios padrão. Bandas largas = mais volatilidade; o preço a roçar nas bandas indica movimento forte no curto prazo."
@@ -720,11 +632,9 @@ export function SettingsPanel({
               </div>
             ))}
           </div>
-        </Section>
-      </div>
+      </IndicatorSection>
 
-      {/* ── Zonas de Preço ───────────────────────────────────────── */}
-      <Section
+      <IndicatorSection
         title="Zonas de Preço"
         subtitle="Linhas horizontais no gráfico (suporte, resistência, valor justo)"
         helpText="Desenha linhas de preço fixas no gráfico principal: médias 50/100/200, máximo e mínimo das últimas 50 velas, e níveis = MA200 × fatores (desconto/prémio). Ajuda a marcar zonas sem olhar só para o zigzag do preço."
@@ -772,145 +682,129 @@ export function SettingsPanel({
             </span>
           ))}
         </div>
-      </Section>
+      </IndicatorSection>
 
-      {/* ── On-chain (proxies) ─────────────────────────────────── */}
-      <Section
-        title="On-chain (simplificado)"
-        subtitle="Proxies calculadas só com preço — não são MVRV/SOPR/NUPL oficiais."
-        helpText="Nada disto vem da blockchain: são fórmulas a partir do preço para imitar a ‘forma’ de métricas conhecidas. Útil para estudo visual; para decisões sérias usa dados on-chain reais (ex.: Glassnode, CryptoQuant)."
+      <p className="px-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+        On-chain no gráfico de preço
+      </p>
+      <p className="px-1 pb-1 text-[11px] leading-relaxed text-amber-200/80">
+        Linha tracejada no gráfico (USD), com nome e valor na escala. Proxies só com preço — valida com fontes on-chain
+        reais para decisões.
+      </p>
+
+      <IndicatorSection
+        title="Mayer Multiple (proxy)"
+        subtitle="Preço ÷ SMA · linha no gráfico de preço"
+        helpText="Preço ÷ SMA (200 por defeito). Mostra linha horizontal no gráfico ao nível da SMA (Mayer = 1) e o valor actual da métrica no rótulo."
+        enabled={onChain.mayer.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, enabled: c } }))}
       >
-        <p className="mb-3 text-[11px] leading-relaxed text-amber-200/80">
-          Linha tracejada no gráfico de preço (USD), com nome e valor na escala — como no exemplo de overlays. Proxies só com
-          preço; valida com fontes on-chain reais para decisões.
-        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="SMA base" value={onChain.mayer.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, smaPeriod: n } }))} />
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <input type="color" value={onChain.mayer.color} onChange={(e) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+          </div>
+        </div>
+      </IndicatorSection>
 
-        <div className="space-y-3">
-          <OnChainToggleRow
-            label="Mayer Multiple (proxy)"
-            helpText="Preço ÷ SMA (200 por defeito). Mostra linha horizontal no gráfico ao nível da SMA (Mayer = 1) e o valor actual da métrica no rótulo."
-            checked={onChain.mayer.enabled}
-            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, enabled: c } }))}
-          />
-          {onChain.mayer.enabled && (
-            <div className="grid grid-cols-2 gap-2">
-              <Num label="SMA base" value={onChain.mayer.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, smaPeriod: n } }))} />
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] text-zinc-500">Cor</Label>
-                <input type="color" value={onChain.mayer.color} onChange={(e) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
-              </div>
-            </div>
-          )}
+      <IndicatorSection
+        title="AVIV (proxy)"
+        subtitle="Preço ÷ SMA · linha no gráfico de preço"
+        helpText="Proxy preço ÷ SMA (100 por defeito). Linha no gráfico de preço com rótulo AVIV e preço USD na escala."
+        enabled={onChain.aviv.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, enabled: c } }))}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="SMA base" value={onChain.aviv.smaPeriod} min={20} max={300} onChange={(n) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, smaPeriod: n } }))} />
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <input type="color" value={onChain.aviv.color} onChange={(e) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+          </div>
+        </div>
+      </IndicatorSection>
 
-          <OnChainToggleRow
-            label="AVIV (proxy)"
-            helpText="Proxy preço ÷ SMA (100 por defeito). Linha no gráfico de preço com rótulo AVIV e preço USD na escala."
-            checked={onChain.aviv.enabled}
-            onCheckedChange={(c) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, enabled: c } }))}
-          />
-          {onChain.aviv.enabled && (
-            <div className="grid grid-cols-2 gap-2">
-              <Num label="SMA base" value={onChain.aviv.smaPeriod} min={20} max={300} onChange={(n) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, smaPeriod: n } }))} />
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] text-zinc-500">Cor</Label>
-                <input type="color" value={onChain.aviv.color} onChange={(e) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
-              </div>
-            </div>
-          )}
-
-          <OnChainToggleRow
-            label="MVRV (proxy)"
-            helpText="Linha no gráfico ao preço ‘justo’ (MVRV proxy = 1). Rótulo com valor actual e tag WATCH/NORMAL."
-            checked={onChain.mvrv.enabled}
-            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, enabled: c } }))}
-          />
-          {onChain.mvrv.enabled && (
-            <div className="grid grid-cols-2 gap-2">
-              <Num label="SMA base" value={onChain.mvrv.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, smaPeriod: n } }))} />
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] text-zinc-500">Cor</Label>
-                <input
-                  type="color"
-                  value={onChain.mvrv.color}
-                  onChange={(e) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, color: e.target.value } }))}
-                  className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black"
-                />
-              </div>
-            </div>
-          )}
-
-          <OnChainToggleRow
-            label="MVRV Z-Score (proxy)"
-            helpText="Linha no gráfico no preço onde a proxy MVRV está na média da janela; rótulo com Z-score actual."
-            checked={onChain.mvrvZ.enabled}
-            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, enabled: c } }))}
-          />
-          {onChain.mvrvZ.enabled && (
-            <Num label="Janela Z" value={onChain.mvrvZ.window} min={20} max={200} onChange={(n) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, window: n } }))} />
-          )}
-
-          <OnChainToggleRow
-            label="SOPR (proxy)"
-            helpText="Linha no gráfico na EMA base (SOPR proxy ≈ 1). Nome e valor na escala de preços."
-            checked={onChain.sopr.enabled}
-            onCheckedChange={(c) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, enabled: c } }))}
-          />
-          {onChain.sopr.enabled && (
-            <Num label="EMA base" value={onChain.sopr.emaPeriod} min={5} max={50} onChange={(n) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, emaPeriod: n } }))} />
-          )}
-
-          <OnChainToggleRow
-            label="NUPL (proxy)"
-            helpText="Linha no gráfico no preço neutro (NUPL proxy = 50). Rótulo com valor 0–100 e tag na escala USD."
-            checked={onChain.nupl.enabled}
-            onCheckedChange={(c) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, enabled: c } }))}
-          />
-          {onChain.nupl.enabled && (
-            <div className="grid grid-cols-2 gap-2">
-              <Num label="SMA base" value={onChain.nupl.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, smaPeriod: n } }))} />
-              <div className="flex flex-col gap-1">
-                <Label className="text-[10px] text-zinc-500">Cor</Label>
-                <input type="color" value={onChain.nupl.color} onChange={(e) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-start justify-between gap-2 rounded-lg border border-zinc-800 bg-black/40 px-3 py-2">
-            <div className="min-w-0 pr-1">
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-zinc-300">STH vs LTH (proxy)</span>
-                <HelpTip text="Inspirado na ideia de ‘curto’ vs ‘longo’ prazo: uma EMA curta e uma SMA longa no mesmo gráfico do BTC (USD). O valor em cada momento é um preço — vês linhas horizontais no fim do gráfico e uma barrinha com os dois níveis. Não usa dados de holders on-chain." />
-              </div>
-              <p className="mt-1 text-[10px] leading-snug text-zinc-600">
-                Duas linhas <strong className="text-zinc-500">no gráfico de preço</strong>: EMA curta (STH) vs SMA longa (LTH), em USD — com linha de preço e valores na barra abaixo.
-              </p>
-            </div>
-            <Switch
-              checked={onChain.sthLth.enabled}
-              onCheckedChange={(c) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, enabled: c } }))}
-              className="shrink-0"
+      <IndicatorSection
+        title="MVRV (proxy)"
+        subtitle="Linha no preço ‘justo’ (MVRV proxy = 1)"
+        helpText="Linha no gráfico ao preço ‘justo’ (MVRV proxy = 1). Rótulo com valor actual e tag WATCH/NORMAL."
+        enabled={onChain.mvrv.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, enabled: c } }))}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="SMA base" value={onChain.mvrv.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, smaPeriod: n } }))} />
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <input
+              type="color"
+              value={onChain.mvrv.color}
+              onChange={(e) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, color: e.target.value } }))}
+              className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black"
             />
           </div>
-          {onChain.sthLth.enabled && (
-            <div className="grid grid-cols-2 gap-2">
-              <Num
-                label="Período EMA (STH)"
-                value={onChain.sthLth.rsiPeriod}
-                min={3}
-                max={50}
-                onChange={(n) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, rsiPeriod: n } }))}
-              />
-              <Num
-                label="Período SMA (LTH)"
-                value={onChain.sthLth.smaPeriod}
-                min={20}
-                max={500}
-                onChange={(n) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, smaPeriod: n } }))}
-              />
-            </div>
-          )}
         </div>
-      </Section>
+      </IndicatorSection>
+
+      <IndicatorSection
+        title="MVRV Z-Score (proxy)"
+        subtitle="Z-score da proxy MVRV"
+        helpText="Linha no gráfico no preço onde a proxy MVRV está na média da janela; rótulo com Z-score actual."
+        enabled={onChain.mvrvZ.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, enabled: c } }))}
+      >
+        <Num label="Janela Z" value={onChain.mvrvZ.window} min={20} max={200} onChange={(n) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, window: n } }))} />
+      </IndicatorSection>
+
+      <IndicatorSection
+        title="SOPR (proxy)"
+        subtitle="Linha na EMA base (SOPR proxy ≈ 1)"
+        helpText="Linha no gráfico na EMA base (SOPR proxy ≈ 1). Nome e valor na escala de preços."
+        enabled={onChain.sopr.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, enabled: c } }))}
+      >
+        <Num label="EMA base" value={onChain.sopr.emaPeriod} min={5} max={50} onChange={(n) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, emaPeriod: n } }))} />
+      </IndicatorSection>
+
+      <IndicatorSection
+        title="NUPL (proxy)"
+        subtitle="Linha no preço neutro (NUPL proxy = 50)"
+        helpText="Linha no gráfico no preço neutro (NUPL proxy = 50). Rótulo com valor 0–100 e tag na escala USD."
+        enabled={onChain.nupl.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, enabled: c } }))}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="SMA base" value={onChain.nupl.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, smaPeriod: n } }))} />
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <input type="color" value={onChain.nupl.color} onChange={(e) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+          </div>
+        </div>
+      </IndicatorSection>
+
+      <IndicatorSection
+        title="STH vs LTH (proxy)"
+        subtitle="EMA curta vs SMA longa no gráfico de preço"
+        helpText="Inspirado na ideia de ‘curto’ vs ‘longo’ prazo: uma EMA curta e uma SMA longa no mesmo gráfico do BTC (USD). O valor em cada momento é um preço — vês linhas horizontais no fim do gráfico e uma barrinha com os dois níveis. Não usa dados de holders on-chain."
+        enabled={onChain.sthLth.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, enabled: c } }))}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Num
+            label="Período EMA (STH)"
+            value={onChain.sthLth.rsiPeriod}
+            min={3}
+            max={50}
+            onChange={(n) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, rsiPeriod: n } }))}
+          />
+          <Num
+            label="Período SMA (LTH)"
+            value={onChain.sthLth.smaPeriod}
+            min={20}
+            max={500}
+            onChange={(n) => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, smaPeriod: n } }))}
+          />
+        </div>
+      </IndicatorSection>
 
       {embedded && (
         <Button
