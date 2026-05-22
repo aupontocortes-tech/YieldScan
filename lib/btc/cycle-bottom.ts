@@ -7,7 +7,13 @@ import {
 } from '@/lib/btc/types'
 
 export const SMA_200_DAILY_PERIOD = 200
+export const SMA_50_DAILY_PERIOD = 50
 export const SMA_50_WEEKLY_PERIOD = 50
+
+export type GoldenCrossState = {
+  regime: 'golden' | 'death' | 'neutral'
+  message: string
+}
 
 export type CycleBottomSignalState = {
   signal1: boolean
@@ -41,6 +47,16 @@ export function computeSma200OnDailyAligned(
   const closes = dailyBars.map((b) => b.close)
   const sma200 = sma(closes, SMA_200_DAILY_PERIOD)
   return alignDailySeriesToBars(displayBars, dailyBars, sma200)
+}
+
+export function computeSma50OnDailyAligned(
+  displayBars: OhlcvBar[],
+  dailyBars: OhlcvBar[],
+): (number | null)[] {
+  if (dailyBars.length < SMA_50_DAILY_PERIOD) return Array(displayBars.length).fill(null)
+  const closes = dailyBars.map((b) => b.close)
+  const sma50 = sma(closes, SMA_50_DAILY_PERIOD)
+  return alignDailySeriesToBars(displayBars, dailyBars, sma50)
 }
 
 export function computeSma50OnWeeklyAligned(
@@ -120,4 +136,45 @@ export function evaluateCycleBottomSignals(
   }
 
   return { signal1, signal2, messages }
+}
+
+/** Estado actual das médias 50/200 diárias (Golden Cross / Death Cross). */
+export function evaluateGoldenCrossState(dailyBars: OhlcvBar[]): GoldenCrossState {
+  if (dailyBars.length < SMA_200_DAILY_PERIOD) {
+    return { regime: 'neutral', message: 'Aguarda dados diários (mín. 200 velas).' }
+  }
+  const closes = dailyBars.map((b) => b.close)
+  const sma50 = sma(closes, SMA_50_DAILY_PERIOD)
+  const sma200 = sma(closes, SMA_200_DAILY_PERIOD)
+  const i = dailyBars.length - 1
+  const v50 = sma50[i]
+  const v200 = sma200[i]
+  const p50 = sma50[i - 1]
+  const p200 = sma200[i - 1]
+
+  if (v50 == null || v200 == null) {
+    return { regime: 'neutral', message: 'Médias ainda não disponíveis neste ponto.' }
+  }
+
+  if (v50 > v200) {
+    if (p50 != null && p200 != null && p50 <= p200) {
+      return {
+        regime: 'golden',
+        message: 'Golden Cross: SMA 50 cruzou acima da SMA 200 (sinal bullish).',
+      }
+    }
+    return { regime: 'golden', message: 'SMA 50 acima da SMA 200 — tendência bullish.' }
+  }
+
+  if (v50 < v200) {
+    if (p50 != null && p200 != null && p50 >= p200) {
+      return {
+        regime: 'death',
+        message: 'Death Cross: SMA 50 cruzou abaixo da SMA 200 (sinal bearish).',
+      }
+    }
+    return { regime: 'death', message: 'SMA 50 abaixo da SMA 200 — tendência bearish.' }
+  }
+
+  return { regime: 'neutral', message: 'SMA 50 e SMA 200 muito próximas.' }
 }

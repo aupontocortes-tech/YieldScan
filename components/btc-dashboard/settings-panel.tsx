@@ -177,10 +177,13 @@ function ColorDot({
 export function SettingsPanel({
   embedded = false,
   onChartViewApplied,
+  onGoldenCrossFullscreen,
 }: {
   embedded?: boolean
   /** Ao mudar o intervalo via fundos de ciclo, fecha o painel para ver o gráfico. */
   onChartViewApplied?: () => void
+  /** Abre Golden / Death Cross em ecrã inteiro. */
+  onGoldenCrossFullscreen?: () => void
 }) {
   const {
     mas,
@@ -207,6 +210,8 @@ export function SettingsPanel({
     setSma200Daily,
     sma50Weekly,
     setSma50Weekly,
+    goldenCrossDaily,
+    setGoldenCrossDaily,
     resetDefaults,
   } = useBtcSettings()
 
@@ -225,7 +230,50 @@ export function SettingsPanel({
         </div>
       )}
 
-      <CycleBottomPanel variant="settings" onChartViewApplied={onChartViewApplied} />
+      <CycleBottomPanel
+        variant="settings"
+        onChartViewApplied={onChartViewApplied}
+        onFullscreenFocus={onGoldenCrossFullscreen}
+      />
+
+      {goldenCrossDaily.enabled && (
+        <Section
+          title="Golden / Death Cross"
+          subtitle="SMA 50 e SMA 200 no diário"
+          helpText="Clica no cartão no bloco acima para ver em ecrã inteiro. Golden Cross = SMA 50 cruza acima da 200; Death Cross = cruza abaixo."
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-[10px] text-zinc-500">Espessura</Label>
+              <select
+                value={goldenCrossDaily.lineWidth}
+                onChange={(e) =>
+                  setGoldenCrossDaily({
+                    ...goldenCrossDaily,
+                    lineWidth: Number(e.target.value) as 1 | 2 | 3,
+                  })
+                }
+                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </div>
+          </div>
+          <Rule />
+          <ColorDot
+            label="SMA 50 (diário)"
+            color={goldenCrossDaily.colorSma50}
+            onChange={(c) => setGoldenCrossDaily({ ...goldenCrossDaily, colorSma50: c })}
+          />
+          <ColorDot
+            label="SMA 200 (diário)"
+            color={goldenCrossDaily.colorSma200}
+            onChange={(c) => setGoldenCrossDaily({ ...goldenCrossDaily, colorSma200: c })}
+          />
+        </Section>
+      )}
 
       {sma200Daily.enabled && (
         <Section
@@ -733,14 +781,46 @@ export function SettingsPanel({
         helpText="Nada disto vem da blockchain: são fórmulas a partir do preço para imitar a ‘forma’ de métricas conhecidas. Útil para estudo visual; para decisões sérias usa dados on-chain reais (ex.: Glassnode, CryptoQuant)."
       >
         <p className="mb-3 text-[11px] leading-relaxed text-amber-200/80">
-          Estas séries imitam o comportamento qualitativo de métricas Glassnode para estudo visual. Valida sempre com fontes
-          on-chain reais para decisões.
+          Linha tracejada no gráfico de preço (USD), com nome e valor na escala — como no exemplo de overlays. Proxies só com
+          preço; valida com fontes on-chain reais para decisões.
         </p>
 
         <div className="space-y-3">
           <OnChainToggleRow
+            label="Mayer Multiple (proxy)"
+            helpText="Preço ÷ SMA (200 por defeito). Mostra linha horizontal no gráfico ao nível da SMA (Mayer = 1) e o valor actual da métrica no rótulo."
+            checked={onChain.mayer.enabled}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, enabled: c } }))}
+          />
+          {onChain.mayer.enabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Num label="SMA base" value={onChain.mayer.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, smaPeriod: n } }))} />
+              <div className="flex flex-col gap-1">
+                <Label className="text-[10px] text-zinc-500">Cor</Label>
+                <input type="color" value={onChain.mayer.color} onChange={(e) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+              </div>
+            </div>
+          )}
+
+          <OnChainToggleRow
+            label="AVIV (proxy)"
+            helpText="Proxy preço ÷ SMA (100 por defeito). Linha no gráfico de preço com rótulo AVIV e preço USD na escala."
+            checked={onChain.aviv.enabled}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, enabled: c } }))}
+          />
+          {onChain.aviv.enabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Num label="SMA base" value={onChain.aviv.smaPeriod} min={20} max={300} onChange={(n) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, smaPeriod: n } }))} />
+              <div className="flex flex-col gap-1">
+                <Label className="text-[10px] text-zinc-500">Cor</Label>
+                <input type="color" value={onChain.aviv.color} onChange={(e) => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+              </div>
+            </div>
+          )}
+
+          <OnChainToggleRow
             label="MVRV (proxy)"
-            helpText="Proxy de relação preço vs ‘custo’ aproximado (via média longa do preço). Valores baixos sugerem desconto relativo, altos prémio — painel próprio com linhas de referência 1, 2 e 3. Não é MVRV on-chain oficial."
+            helpText="Linha no gráfico ao preço ‘justo’ (MVRV proxy = 1). Rótulo com valor actual e tag WATCH/NORMAL."
             checked={onChain.mvrv.enabled}
             onCheckedChange={(c) => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, enabled: c } }))}
           />
@@ -761,7 +841,7 @@ export function SettingsPanel({
 
           <OnChainToggleRow
             label="MVRV Z-Score (proxy)"
-            helpText="Mede o quão ‘fora da média’ está a proxy MVRV numa janela recente (estilo Z-score). Painel separado com linhas em 0 e ±2; extremos são leituras estatísticas da série proxy, não da rede."
+            helpText="Linha no gráfico no preço onde a proxy MVRV está na média da janela; rótulo com Z-score actual."
             checked={onChain.mvrvZ.enabled}
             onCheckedChange={(c) => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, enabled: c } }))}
           />
@@ -771,7 +851,7 @@ export function SettingsPanel({
 
           <OnChainToggleRow
             label="SOPR (proxy)"
-            helpText="Aproxima ideia de ‘lucro realizado’ com base no comportamento do preço (não em UTXOs). ~1 = zona neutra no painel; desvios são relativos à série proxy."
+            helpText="Linha no gráfico na EMA base (SOPR proxy ≈ 1). Nome e valor na escala de preços."
             checked={onChain.sopr.enabled}
             onCheckedChange={(c) => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, enabled: c } }))}
           />
@@ -781,7 +861,7 @@ export function SettingsPanel({
 
           <OnChainToggleRow
             label="NUPL (proxy)"
-            helpText="Proxy de sentimento/lucro não realizado derivado do preço (0–100). Linha ou área num painel abaixo; faixas horizontais são guias visuais, não dados de endereços ou holders."
+            helpText="Linha no gráfico no preço neutro (NUPL proxy = 50). Rótulo com valor 0–100 e tag na escala USD."
             checked={onChain.nupl.enabled}
             onCheckedChange={(c) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, enabled: c } }))}
           />
@@ -789,17 +869,8 @@ export function SettingsPanel({
             <div className="grid grid-cols-2 gap-2">
               <Num label="SMA base" value={onChain.nupl.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, smaPeriod: n } }))} />
               <div className="flex flex-col gap-1">
-                <Label className="text-[10px] text-zinc-500">Estilo</Label>
-                <select
-                  value={onChain.nupl.style}
-                  onChange={(e) =>
-                    setOnChain((p) => ({ ...p, nupl: { ...p.nupl, style: e.target.value as 'line' | 'area' } }))
-                  }
-                  className="h-9 rounded-md border border-zinc-700 bg-black px-2 text-xs text-zinc-300"
-                >
-                  <option value="line">Linha</option>
-                  <option value="area">Área</option>
-                </select>
+                <Label className="text-[10px] text-zinc-500">Cor</Label>
+                <input type="color" value={onChain.nupl.color} onChange={(e) => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
               </div>
             </div>
           )}

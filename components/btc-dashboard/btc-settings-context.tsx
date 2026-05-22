@@ -22,6 +22,7 @@ import type {
   CandlestickSettings,
   Sma200DailySettings,
   Sma50WeeklySettings,
+  GoldenCrossDailySettings,
   MaConfig,
   MacdSettings,
   OnChainBundle,
@@ -121,8 +122,20 @@ const DEFAULT_ON_CHAIN: OnChainBundle = {
     enabled: false,
     color: '#fbbf24',
     lineWidth: 2,
-    style: 'area',
+    style: 'line',
     smaPeriod: 200,
+  },
+  mayer: {
+    enabled: false,
+    color: '#fb923c',
+    lineWidth: 2,
+    smaPeriod: 200,
+  },
+  aviv: {
+    enabled: false,
+    color: '#f472b6',
+    lineWidth: 2,
+    smaPeriod: 100,
   },
   sthLth: {
     enabled: false,
@@ -154,6 +167,13 @@ const DEFAULT_SMA_50_WEEKLY: Sma50WeeklySettings = {
   color: '#38bdf8',
 }
 
+const DEFAULT_GOLDEN_CROSS: GoldenCrossDailySettings = {
+  enabled: false,
+  lineWidth: 2,
+  colorSma50: '#22d3ee',
+  colorSma200: '#fbbf24',
+}
+
 const BTC_KV = 'btc_dashboard_v2' as const
 const LS_MIRROR = 'yieldscan_btc_layout_v2' as const
 
@@ -173,6 +193,7 @@ type BtcPersistV2 = {
   bullMarketBand?: BullMarketSupportBandSettings
   sma200Daily?: Sma200DailySettings
   sma50Weekly?: Sma50WeeklySettings
+  goldenCrossDaily?: GoldenCrossDailySettings
   /** Legado: migrado para sma50Weekly se estiver ligado. */
   cycleBottomAlerts?: { enabled?: boolean }
 }
@@ -257,6 +278,8 @@ function mergeOnChain(o: Partial<OnChainBundle> | undefined): OnChainBundle {
     mvrvZ: { ...DEFAULT_ON_CHAIN.mvrvZ, ...o?.mvrvZ },
     sopr: { ...DEFAULT_ON_CHAIN.sopr, ...o?.sopr },
     nupl: { ...DEFAULT_ON_CHAIN.nupl, ...o?.nupl },
+    mayer: { ...DEFAULT_ON_CHAIN.mayer, ...o?.mayer },
+    aviv: { ...DEFAULT_ON_CHAIN.aviv, ...o?.aviv },
     sthLth: { ...DEFAULT_ON_CHAIN.sthLth, ...o?.sthLth },
   }
 }
@@ -300,6 +323,8 @@ type Ctx = {
   setSma200Daily: (s: Sma200DailySettings) => void
   sma50Weekly: Sma50WeeklySettings
   setSma50Weekly: (s: Sma50WeeklySettings) => void
+  goldenCrossDaily: GoldenCrossDailySettings
+  setGoldenCrossDaily: (g: GoldenCrossDailySettings) => void
   resetDefaults: () => void
 }
 
@@ -329,6 +354,9 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   }))
   const [sma200Daily, setSma200Daily] = useState<Sma200DailySettings>(() => ({ ...DEFAULT_SMA_200_DAILY }))
   const [sma50Weekly, setSma50Weekly] = useState<Sma50WeeklySettings>(() => ({ ...DEFAULT_SMA_50_WEEKLY }))
+  const [goldenCrossDaily, setGoldenCrossDaily] = useState<GoldenCrossDailySettings>(() => ({
+    ...DEFAULT_GOLDEN_CROSS,
+  }))
   const [hydrated, setHydrated] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistRef = useRef<BtcPersistV2 | null>(null)
@@ -352,6 +380,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     bullMarketBand,
     sma200Daily,
     sma50Weekly,
+    goldenCrossDaily,
   }
 
   useEffect(() => {
@@ -399,6 +428,14 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
         })
       } else if (v2.cycleBottomAlerts?.enabled) {
         setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY, enabled: true })
+      }
+      if (v2.goldenCrossDaily && typeof v2.goldenCrossDaily === 'object') {
+        const g = v2.goldenCrossDaily
+        setGoldenCrossDaily({
+          ...DEFAULT_GOLDEN_CROSS,
+          ...g,
+          lineWidth: g.lineWidth === 1 || g.lineWidth === 3 ? g.lineWidth : 2,
+        })
       }
     }
 
@@ -489,6 +526,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     bullMarketBand,
     sma200Daily,
     sma50Weekly,
+    goldenCrossDaily,
   ])
 
   useEffect(() => {
@@ -542,6 +580,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setBullMarketBand({ ...DEFAULT_BULL_MARKET_BAND })
     setSma200Daily({ ...DEFAULT_SMA_200_DAILY })
     setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY })
+    setGoldenCrossDaily({ ...DEFAULT_GOLDEN_CROSS })
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(LS_MIRROR)
     } catch {
@@ -580,6 +619,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setSma200Daily,
       sma50Weekly,
       setSma50Weekly,
+      goldenCrossDaily,
+      setGoldenCrossDaily,
       resetDefaults,
     }),
     [
@@ -596,6 +637,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       bullMarketBand,
       sma200Daily,
       sma50Weekly,
+      goldenCrossDaily,
       addMa,
       updateMa,
       removeMa,

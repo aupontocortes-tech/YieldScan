@@ -99,11 +99,25 @@ export type SthLthSettings = {
   colorLth: string
 }
 
+/** Linha horizontal no gráfico de preço (proxy on-chain). */
+export type OnChainPriceOverlaySettings = {
+  enabled: boolean
+  color: string
+  lineWidth: 1 | 2 | 3
+  smaPeriod: number
+}
+
+export type MayerMultipleSettings = OnChainPriceOverlaySettings
+
+export type AvivSettings = OnChainPriceOverlaySettings
+
 export type OnChainBundle = {
   mvrv: MvrvSettings
   mvrvZ: MvrvZSettings
   sopr: SoprSettings
   nupl: NuplSettings
+  mayer: MayerMultipleSettings
+  aviv: AvivSettings
   sthLth: SthLthSettings
 }
 
@@ -135,6 +149,14 @@ export type Sma50WeeklySettings = {
   enabled: boolean
   lineWidth: 1 | 2 | 3
   color: string
+}
+
+/** Golden Cross / Death Cross — SMA 50 e SMA 200 no diário. */
+export type GoldenCrossDailySettings = {
+  enabled: boolean
+  lineWidth: 1 | 2 | 3
+  colorSma50: string
+  colorSma200: string
 }
 
 /** Períodos fixos (velas 1w) — iguais ao script popular zkdev / TradingView. */

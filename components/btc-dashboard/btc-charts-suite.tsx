@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import {
-  AreaSeries,
   CandlestickSeries,
   ColorType,
   createChart,
@@ -23,15 +22,11 @@ import {
   sma,
   stochastic,
 } from '@/lib/btc/indicators'
-import {
-  syntheticMvrv,
-  syntheticMvrvZScore,
-  syntheticNupl,
-  syntheticSopr,
-} from '@/lib/btc/on-chain-synthetic'
+import { buildOnChainChartOverlays, overlayAxisTitle } from '@/lib/btc/on-chain-overlays'
 import {
   computeBullMarketBandOnChart,
   computeSma200OnDailyAligned,
+  computeSma50OnDailyAligned,
   computeSma50OnWeeklyAligned,
 } from '@/lib/btc/cycle-bottom'
 import { toHeikinAshi } from '@/lib/btc/heikin-ashi'
@@ -96,6 +91,11 @@ type BtcChartsSuiteProps = {
   bullBandLoading?: boolean
   sma200Loading?: boolean
   sma50Loading?: boolean
+  /** Velas 1d para Golden Cross (SMA 50 + 200 diárias). */
+  dailyBarsForGoldenCross?: OhlcvBar[]
+  goldenCrossLoading?: boolean
+  /** Só preço + indicadores de ciclo (modo ecrã inteiro). */
+  priceOnlyFocus?: boolean
   resetKey?: number
 }
 
@@ -107,6 +107,9 @@ export function BtcChartsSuite({
   bullBandLoading = false,
   sma200Loading = false,
   sma50Loading = false,
+  dailyBarsForGoldenCross = [],
+  goldenCrossLoading = false,
+  priceOnlyFocus = false,
   resetKey = 0,
 }: BtcChartsSuiteProps) {
   const {
@@ -121,20 +124,23 @@ export function BtcChartsSuite({
     bullMarketBand,
     sma200Daily,
     sma50Weekly,
+    goldenCrossDaily,
     timeframe,
   } = useBtcSettings()
+
+  const focusPrice = priceOnlyFocus
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
   const macdRef = useRef<HTMLDivElement>(null)
   const stochRef = useRef<HTMLDivElement>(null)
-  const mvrvRef = useRef<HTMLDivElement>(null)
-  const mvrvZRef = useRef<HTMLDivElement>(null)
-  const soprRef = useRef<HTMLDivElement>(null)
-  const nuplRef = useRef<HTMLDivElement>(null)
-
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
+
+  const onChainOverlays = useMemo(
+    () => (!focusPrice ? buildOnChainChartOverlays(closes, onChain) : []),
+    [closes, onChain, focusPrice],
+  )
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
   const lows = useMemo(() => bars.map((b) => b.low), [bars])
 
@@ -157,9 +163,19 @@ export function BtcChartsSuite({
   }, [closes, bbCfg.enabled, bbCfg.period, bbCfg.stdDev])
 
   const sma200OnChart = useMemo(() => {
-    if (!sma200Daily.enabled || dailyBarsForSma200.length < 200) return null
+    if (!sma200Daily.enabled || goldenCrossDaily.enabled || dailyBarsForSma200.length < 200) return null
     return computeSma200OnDailyAligned(bars, dailyBarsForSma200)
-  }, [sma200Daily.enabled, dailyBarsForSma200, bars])
+  }, [sma200Daily.enabled, goldenCrossDaily.enabled, dailyBarsForSma200, bars])
+
+  const goldenSma50OnChart = useMemo(() => {
+    if (!goldenCrossDaily.enabled || dailyBarsForGoldenCross.length < 50) return null
+    return computeSma50OnDailyAligned(bars, dailyBarsForGoldenCross)
+  }, [goldenCrossDaily.enabled, dailyBarsForGoldenCross, bars])
+
+  const goldenSma200OnChart = useMemo(() => {
+    if (!goldenCrossDaily.enabled || dailyBarsForGoldenCross.length < 200) return null
+    return computeSma200OnDailyAligned(bars, dailyBarsForGoldenCross)
+  }, [goldenCrossDaily.enabled, dailyBarsForGoldenCross, bars])
 
   const bullBandOnChart = useMemo(() => {
     if (!bullMarketBand.enabled) return null
@@ -195,28 +211,6 @@ export function BtcChartsSuite({
     const recentLow = Math.min(...lows.slice(-50))
     return { ma50v, ma100v, ma200v, recentHigh, recentLow }
   }, [closes, highs, lows, zonesCfg.enabled])
-
-  const mvrvData = useMemo(
-    () => (onChain.mvrv.enabled ? syntheticMvrv(closes, onChain.mvrv.smaPeriod) : null),
-    [closes, onChain.mvrv.enabled, onChain.mvrv.smaPeriod],
-  )
-  const mvrvForZ = useMemo(() => {
-    if (!onChain.mvrvZ.enabled) return null
-    return syntheticMvrv(closes, onChain.mvrv.smaPeriod)
-  }, [closes, onChain.mvrvZ.enabled, onChain.mvrv.smaPeriod])
-  const mvrvZData = useMemo(() => {
-    if (!onChain.mvrvZ.enabled || !mvrvForZ) return null
-    return syntheticMvrvZScore(mvrvForZ, onChain.mvrvZ.window)
-  }, [onChain.mvrvZ.enabled, onChain.mvrvZ.window, mvrvForZ])
-
-  const soprData = useMemo(
-    () => (onChain.sopr.enabled ? syntheticSopr(closes, onChain.sopr.emaPeriod) : null),
-    [closes, onChain.sopr.enabled, onChain.sopr.emaPeriod],
-  )
-  const nuplData = useMemo(
-    () => (onChain.nupl.enabled ? syntheticNupl(closes, onChain.nupl.smaPeriod) : null),
-    [closes, onChain.nupl.enabled, onChain.nupl.smaPeriod],
-  )
 
   /** Últimos níveis USD das proxies STH/LTH (mesma lógica do gráfico) — para a barrinha abaixo do preço */
   const sthLthLevels = useMemo(() => {
@@ -282,7 +276,19 @@ export function BtcChartsSuite({
     cMain.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } })
     cMain.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.18 } })
 
+    for (const ov of onChainOverlays) {
+      candle.createPriceLine({
+        price: ov.price,
+        color: ov.color,
+        lineWidth: ov.lineWidth,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: overlayAxisTitle(ov),
+      })
+    }
+
     mas.forEach((ma) => {
+      if (focusPrice) return
       const vals = movingAverage(closes, ma.period, ma.type)
       const lineData = bars
         .map((b, i) => ({ time: b.time as Time, value: vals[i] }))
@@ -296,7 +302,7 @@ export function BtcChartsSuite({
       }).setData(lineData)
     })
 
-    if (sma200OnChart && sma200Daily.enabled) {
+    if (!focusPrice && sma200OnChart && sma200Daily.enabled) {
       const s200 = sma200Daily
       const smaLine = bars
         .map((b, i) => ({ time: b.time as Time, value: sma200OnChart[i] }))
@@ -312,7 +318,7 @@ export function BtcChartsSuite({
       }
     }
 
-    if (sma50OnChart && sma50Weekly.enabled) {
+    if (!focusPrice && sma50OnChart && sma50Weekly.enabled) {
       const s50 = sma50Weekly
       const smaLine = bars
         .map((b, i) => ({ time: b.time as Time, value: sma50OnChart[i] }))
@@ -328,7 +334,39 @@ export function BtcChartsSuite({
       }
     }
 
-    if (bullBandOnChart && bullMarketBand.enabled) {
+    if (goldenSma50OnChart && goldenCrossDaily.enabled) {
+      const gc = goldenCrossDaily
+      const line50 = bars
+        .map((b, i) => ({ time: b.time as Time, value: goldenSma50OnChart[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (line50.length) {
+        cMain.addSeries(LineSeries, {
+          color: gc.colorSma50,
+          title: 'SMA 50 (Diário)',
+          lineWidth: gc.lineWidth,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        }).setData(line50)
+      }
+    }
+
+    if (goldenSma200OnChart && goldenCrossDaily.enabled) {
+      const gc = goldenCrossDaily
+      const line200 = bars
+        .map((b, i) => ({ time: b.time as Time, value: goldenSma200OnChart[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (line200.length) {
+        cMain.addSeries(LineSeries, {
+          color: gc.colorSma200,
+          title: 'SMA 200 (Diário)',
+          lineWidth: gc.lineWidth,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        }).setData(line200)
+      }
+    }
+
+    if (!focusPrice && bullBandOnChart && bullMarketBand.enabled) {
       const bw = bullMarketBand
       const bandOpts = {
         priceLineVisible: false,
@@ -378,7 +416,7 @@ export function BtcChartsSuite({
       }
     }
 
-    if (bbSeries) {
+    if (!focusPrice && bbSeries) {
       const bOpts = { priceLineVisible: false, lastValueVisible: false, lineWidth: bbCfg.lineWidth }
       if (bbCfg.showUpper)
         cMain
@@ -407,7 +445,7 @@ export function BtcChartsSuite({
     }
 
     /** STH/LTH (proxy): no mesmo eixo do preço — EMA curta (comportamento “curto prazo”) vs SMA longa (“macro”). */
-    if (onChain.sthLth.enabled) {
+    if (!focusPrice && onChain.sthLth.enabled) {
       const st = onChain.sthLth
       const sthVals = ema(closes, st.rsiPeriod)
       const lthVals = sma(closes, st.smaPeriod)
@@ -438,7 +476,7 @@ export function BtcChartsSuite({
         )
     }
 
-    if (zonesCfg.enabled && zoneValues) {
+    if (!focusPrice && zonesCfg.enabled && zoneValues) {
       const { ma50v, ma100v, ma200v, recentHigh, recentLow } = zoneValues
       const anchor = cMain.addSeries(LineSeries, { visible: false, priceLineVisible: false, lastValueVisible: false })
       if (zonesCfg.showMaZones) {
@@ -525,7 +563,7 @@ export function BtcChartsSuite({
       build(c)
     }
 
-    if (rsiCfg.enabled && rsiSeries && rsiCfg.view === 'panel') {
+    if (!focusPrice && rsiCfg.enabled && rsiSeries && rsiCfg.view === 'panel') {
       addOscillator(rsiRef.current, (cRsi) => {
         const line = cRsi.addSeries(LineSeries, {
           color: rsiCfg.colors.line,
@@ -557,7 +595,7 @@ export function BtcChartsSuite({
       })
     }
 
-    if (macdCfg.enabled && macdOut) {
+    if (!focusPrice && macdCfg.enabled && macdOut) {
       addOscillator(macdRef.current, (cMacd) => {
         cMacd.addSeries(HistogramSeries, { priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } }).setData(
           bars.map((b, i) => ({
@@ -575,7 +613,7 @@ export function BtcChartsSuite({
       })
     }
 
-    if (stochCfg.enabled && stochOut) {
+    if (!focusPrice && stochCfg.enabled && stochOut) {
       addOscillator(stochRef.current, (cStoch) => {
         cStoch
           .addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: stochCfg.lineWidth, priceLineVisible: false })
@@ -583,73 +621,6 @@ export function BtcChartsSuite({
         cStoch
           .addSeries(LineSeries, { color: stochCfg.colors.d, lineWidth: 1, priceLineVisible: false })
           .setData(bars.map((b, i) => ({ time: b.time as Time, value: stochOut.d[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-      })
-    }
-
-    const addLinePane = (
-      el: HTMLDivElement | null,
-      data: (number | null)[] | null,
-      color: string,
-      lw: 1 | 2 | 3,
-      extras?: (line: ReturnType<ReturnType<typeof createChart>['addSeries']>) => void,
-    ) => {
-      if (!el || !data) return
-      addOscillator(el, (c) => {
-        const line = c.addSeries(LineSeries, { color, lineWidth: lw, priceLineVisible: false })
-        line.setData(bars.map((b, i) => ({ time: b.time as Time, value: data[i] })).filter((d): d is { time: Time; value: number } => d.value != null))
-        extras?.(line)
-      })
-    }
-
-    if (onChain.mvrv.enabled && mvrvData) {
-      addLinePane(mvrvRef.current, mvrvData, onChain.mvrv.color, onChain.mvrv.lineWidth, (line) => {
-        line.createPriceLine({ price: 1, color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '1' })
-        line.createPriceLine({ price: 2, color: '#a1a1aa', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '2' })
-        line.createPriceLine({ price: 3, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '3' })
-      })
-    }
-
-    if (onChain.mvrvZ.enabled && mvrvZData) {
-      addLinePane(mvrvZRef.current, mvrvZData, onChain.mvrvZ.color, onChain.mvrvZ.lineWidth, (line) => {
-        line.createPriceLine({ price: 0, color: '#71717a', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '0' })
-        line.createPriceLine({ price: 2, color: '#ef4444', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '+2' })
-        line.createPriceLine({ price: -2, color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '−2' })
-      })
-    }
-
-    if (onChain.sopr.enabled && soprData) {
-      addLinePane(soprRef.current, soprData, onChain.sopr.color, onChain.sopr.lineWidth, (line) => {
-        line.createPriceLine({ price: 1, color: '#71717a', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title: '1' })
-      })
-    }
-
-    if (onChain.nupl.enabled && nuplData) {
-      addOscillator(nuplRef.current, (c) => {
-        const data = bars.map((b, i) => ({ time: b.time as Time, value: nuplData[i] })).filter((d): d is { time: Time; value: number } => d.value != null)
-        if (onChain.nupl.style === 'area') {
-          c.addSeries(AreaSeries, {
-            lineColor: onChain.nupl.color,
-            topColor: `${onChain.nupl.color}55`,
-            bottomColor: `${onChain.nupl.color}08`,
-            lineWidth: onChain.nupl.lineWidth,
-          }).setData(data)
-        } else {
-          c.addSeries(LineSeries, {
-            color: onChain.nupl.color,
-            lineWidth: onChain.nupl.lineWidth,
-            priceLineVisible: false,
-          }).setData(data)
-        }
-        const ref = c.addSeries(LineSeries, {
-          color: 'transparent',
-          lineWidth: 0,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        })
-        ref.setData(data)
-        ref.createPriceLine({ price: 25, color: '#52525b', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false })
-        ref.createPriceLine({ price: 45, color: '#52525b', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false })
-        ref.createPriceLine({ price: 65, color: '#52525b', lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false })
       })
     }
 
@@ -684,10 +655,7 @@ export function BtcChartsSuite({
     lows,
     candles,
     onChain,
-    mvrvData,
-    mvrvZData,
-    soprData,
-    nuplData,
+    onChainOverlays,
     resetKey,
     bullMarketBand,
     bullBandOnChart,
@@ -695,6 +663,10 @@ export function BtcChartsSuite({
     sma200OnChart,
     sma50Weekly,
     sma50OnChart,
+    goldenCrossDaily,
+    goldenSma50OnChart,
+    goldenSma200OnChart,
+    focusPrice,
     candleBars,
     timeframe.id,
   ])
@@ -745,8 +717,20 @@ export function BtcChartsSuite({
             Sem dados semanais suficientes para SMA 50. Tenta outro par ou atualiza.
           </div>
         )}
+        {goldenCrossDaily.enabled && goldenCrossLoading && (
+          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-cyan-500/30 bg-black/80 px-2 py-1 text-[10px] text-cyan-300">
+            A carregar Golden / Death Cross (dados diários)…
+          </div>
+        )}
+        {goldenCrossDaily.enabled &&
+          !goldenCrossLoading &&
+          (!goldenSma50OnChart || !goldenSma200OnChart) && (
+            <div className="pointer-events-none absolute left-2 top-9 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+              Sem dados diários suficientes para SMA 50 e 200. Usa Diário ou atualiza.
+            </div>
+          )}
       </div>
-      {onChain.sthLth.enabled && sthLthLevels && (
+      {!focusPrice && onChain.sthLth.enabled && sthLthLevels && (
         <div className="border-t border-white/[0.06] px-2 py-2">
           <div className="mb-1.5 flex flex-wrap gap-2">
             <div
@@ -770,7 +754,7 @@ export function BtcChartsSuite({
         </div>
       )}
 
-      {rsiCfg.enabled && rsiCfg.view === 'panel' && (
+      {!focusPrice && rsiCfg.enabled && rsiCfg.view === 'panel' && (
         <>
           <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             RSI ({rsiCfg.period})
@@ -779,48 +763,40 @@ export function BtcChartsSuite({
         </>
       )}
 
-      {macdCfg.enabled && (
+      {!focusPrice && macdCfg.enabled && (
         <>
           <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">MACD</div>
           <div ref={macdRef} className="w-full shrink-0" />
         </>
       )}
 
-      {stochCfg.enabled && (
+      {!focusPrice && stochCfg.enabled && (
         <>
           <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Stochastic</div>
           <div ref={stochRef} className="w-full shrink-0" />
         </>
       )}
 
-      {onChain.mvrv.enabled && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">
-            MVRV (proxy) · &lt;1 barato · &gt;3 caro
+      {!focusPrice && onChainOverlays.length > 0 && (
+        <div className="border-t border-white/[0.06] px-2 py-2">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            On-chain no gráfico de preço
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {onChainOverlays.map((ov) => (
+              <span
+                key={ov.id}
+                className="inline-flex max-w-full items-center gap-1 rounded-md border border-white/[0.08] bg-black/50 px-2 py-1 text-[10px] text-zinc-300"
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: ov.color }} />
+                <span className="truncate font-medium">{overlayAxisTitle(ov)}</span>
+                <span className="font-mono tabular-nums text-zinc-500">
+                  {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(ov.price)}
+                </span>
+              </span>
+            ))}
           </div>
-          <div ref={mvrvRef} className="w-full shrink-0" />
-        </>
-      )}
-
-      {onChain.mvrvZ.enabled && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">MVRV Z-Score (proxy)</div>
-          <div ref={mvrvZRef} className="w-full shrink-0" />
-        </>
-      )}
-
-      {onChain.sopr.enabled && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">SOPR (proxy) · ~1 neutro</div>
-          <div ref={soprRef} className="w-full shrink-0" />
-        </>
-      )}
-
-      {onChain.nupl.enabled && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] text-zinc-500">NUPL (proxy) · 0–100</div>
-          <div ref={nuplRef} className="w-full shrink-0" />
-        </>
+        </div>
       )}
     </div>
   )

@@ -7,6 +7,7 @@ import { BtcChartsSuite } from '@/components/btc-dashboard/btc-charts-suite'
 import { IndicatorPairSelector } from '@/components/btc-dashboard/indicator-pair-selector'
 import { MarketCard } from '@/components/btc-dashboard/market-card'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
+import { evaluateGoldenCrossState } from '@/lib/btc/cycle-bottom'
 import { fetchIndicatorKlines, fetchPairKlinesByInterval } from '@/lib/btc/klines-client'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,7 +26,8 @@ import {
 } from '@/lib/btc/types'
 import { runSignalEngine } from '@/lib/btc/signal-engine'
 import { cn } from '@/lib/utils'
-import { LayoutGrid, Loader2, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { GoldenCrossStatus } from '@/components/btc-dashboard/golden-cross-status'
 
 const SettingsPanelLazy = dynamic(
   () =>
@@ -59,9 +61,25 @@ export function BtcDashboard() {
     bullMarketBand,
     sma200Daily,
     sma50Weekly,
+    goldenCrossDaily,
+    setGoldenCrossDaily,
   } = useBtcSettings()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [chartFocus, setChartFocus] = useState<'none' | 'goldenCross'>('none')
   const [chartResetKey, setChartResetKey] = useState(0)
+
+  const openGoldenCrossFullscreen = () => {
+    const tf = TIMEFRAME_PRESETS.find((t) => t.id === '1d')
+    if (tf) setTimeframe(tf)
+    setGoldenCrossDaily({ ...goldenCrossDaily, enabled: true })
+    setChartFocus('goldenCross')
+    setDrawerOpen(false)
+  }
+
+  const backFromChartFocus = () => {
+    setChartFocus('none')
+    setDrawerOpen(true)
+  }
 
   useEffect(() => {
     try {
@@ -83,21 +101,36 @@ export function BtcDashboard() {
   })
 
   const needWeekly = bullMarketBand.enabled || sma50Weekly.enabled
-  const needDailySupplement = sma200Daily.enabled && timeframe.interval !== '1d'
+  const needDailySupplement =
+    (sma200Daily.enabled || goldenCrossDaily.enabled) && timeframe.interval !== '1d'
 
   const { data: dailyBarsSupplement = [] } = useQuery({
-    queryKey: ['indicator-daily', pair.id, 'sma200-full'],
+    queryKey: ['indicator-daily', pair.id, 'full'],
     queryFn: () => fetchPairKlinesByInterval(pair, '1d', 0),
     enabled: needDailySupplement,
     staleTime: 300_000,
   })
 
-  /** SMA 200: mesmas velas do gráfico em 1d; senão série diária completa alinhada. */
+  const dailyBarsResolved = useMemo(() => {
+    if (!sma200Daily.enabled && !goldenCrossDaily.enabled) return []
+    if (timeframe.interval === '1d' && bars.length > 0) return bars
+    return dailyBarsSupplement
+  }, [sma200Daily.enabled, goldenCrossDaily.enabled, timeframe.interval, bars, dailyBarsSupplement])
+
   const dailyBarsForSma200 = useMemo(() => {
     if (!sma200Daily.enabled) return []
-    if (timeframe.interval === '1d' && bars.length >= 200) return bars
-    return dailyBarsSupplement
-  }, [sma200Daily.enabled, timeframe.interval, bars, dailyBarsSupplement])
+    return dailyBarsResolved
+  }, [sma200Daily.enabled, dailyBarsResolved])
+
+  const dailyBarsForGoldenCross = useMemo(() => {
+    if (!goldenCrossDaily.enabled) return []
+    return dailyBarsResolved
+  }, [goldenCrossDaily.enabled, dailyBarsResolved])
+
+  const goldenCrossState = useMemo(
+    () => evaluateGoldenCrossState(dailyBarsForGoldenCross),
+    [dailyBarsForGoldenCross],
+  )
 
   const { data: weeklyBarsSupplement = [] } = useQuery({
     queryKey: ['indicator-weekly', pair.id, 'full'],
@@ -137,6 +170,112 @@ export function BtcDashboard() {
 
   const resetLayout = () => {
     setChartResetKey((k) => k + 1)
+  }
+
+  const chartSuite = (
+    <BtcChartsSuite
+      bars={bars}
+      dailyBarsForSma200={dailyBarsForSma200}
+      dailyBarsForGoldenCross={dailyBarsForGoldenCross}
+      sma200Loading={
+        sma200Daily.enabled &&
+        dailyBarsForSma200.length < 200 &&
+        (timeframe.interval !== '1d' || bars.length < 200)
+      }
+      goldenCrossLoading={
+        goldenCrossDaily.enabled &&
+        dailyBarsForGoldenCross.length < 200 &&
+        (timeframe.interval !== '1d' || bars.length < 200)
+      }
+      weeklyBarsForBand={weeklyBarsForBandResolved}
+      weeklyBarsForSma50={weeklyBarsForSma50Resolved}
+      bullBandLoading={
+        bullMarketBand.enabled &&
+        weeklyBarsForBandResolved.length < 22 &&
+        (timeframe.interval !== '1w' || bars.length < 22)
+      }
+      sma50Loading={
+        sma50Weekly.enabled &&
+        weeklyBarsForSma50Resolved.length < 50 &&
+        (timeframe.interval !== '1w' || bars.length < 50)
+      }
+      priceOnlyFocus={chartFocus === 'goldenCross'}
+      resetKey={chartResetKey}
+    />
+  )
+
+  if (chartFocus === 'goldenCross') {
+    return (
+      <div className="fixed inset-0 z-[200] flex min-h-0 flex-col bg-[#050505] text-zinc-100">
+        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.06] px-3 py-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 border-zinc-700 bg-black/60 text-xs text-zinc-200 hover:bg-white/5"
+            onClick={backFromChartFocus}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar aos indicadores
+          </Button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white">Golden Cross · Death Cross</p>
+            <p className="text-[10px] text-zinc-500">
+              {pair.label} · Diário · SMA 50 e SMA 200
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-zinc-400"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+          </Button>
+        </header>
+        <div className="shrink-0 border-b border-white/[0.04] px-3 py-2">
+          <GoldenCrossStatus state={goldenCrossState} />
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
+          {isError && (
+            <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
+              Não foi possível carregar as velas.
+            </div>
+          )}
+          {isLoading ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">
+              A carregar {pair.label}…
+            </div>
+          ) : (
+            chartSuite
+          )}
+        </div>
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen} modal>
+          <SheetContent
+            side="right"
+            className="z-[210] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg"
+          >
+            <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
+              <SheetTitle className="text-base text-white">Indicadores &amp; aparência</SheetTitle>
+              <SheetDescription className="text-[11px] leading-relaxed text-zinc-500">
+                Fundos de ciclo, Golden Cross e restantes indicadores.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">
+              {drawerOpen ? (
+                <SettingsPanelLazy
+                  embedded
+                  onChartViewApplied={() => setDrawerOpen(false)}
+                  onGoldenCrossFullscreen={openGoldenCrossFullscreen}
+                />
+              ) : null}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    )
   }
 
   return (
@@ -234,32 +373,7 @@ export function BtcDashboard() {
           </div>
         )}
 
-        {!isLoading && !isError && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <BtcChartsSuite
-              bars={bars}
-              dailyBarsForSma200={dailyBarsForSma200}
-              sma200Loading={
-                sma200Daily.enabled &&
-                dailyBarsForSma200.length < 200 &&
-                (timeframe.interval !== '1d' || bars.length < 200)
-              }
-              weeklyBarsForBand={weeklyBarsForBandResolved}
-              weeklyBarsForSma50={weeklyBarsForSma50Resolved}
-              bullBandLoading={
-                bullMarketBand.enabled &&
-                weeklyBarsForBandResolved.length < 22 &&
-                (timeframe.interval !== '1w' || bars.length < 22)
-              }
-              sma50Loading={
-                sma50Weekly.enabled &&
-                weeklyBarsForSma50Resolved.length < 50 &&
-                (timeframe.interval !== '1w' || bars.length < 50)
-              }
-              resetKey={chartResetKey}
-            />
-          </div>
-        )}
+        {!isLoading && !isError && <div className="flex min-h-0 flex-1 flex-col">{chartSuite}</div>}
       </div>
 
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen} modal>
@@ -276,7 +390,11 @@ export function BtcDashboard() {
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">
             {drawerOpen ? (
-              <SettingsPanelLazy embedded onChartViewApplied={() => setDrawerOpen(false)} />
+              <SettingsPanelLazy
+                embedded
+                onChartViewApplied={() => setDrawerOpen(false)}
+                onGoldenCrossFullscreen={openGoldenCrossFullscreen}
+              />
             ) : null}
           </div>
         </SheetContent>
