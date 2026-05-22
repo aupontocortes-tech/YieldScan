@@ -4,9 +4,12 @@ export const dynamic = 'force-dynamic'
 
 type GeckoPrice = Record<string, { usd?: number; usd_24h_change?: number | null }>
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const coinId = (url.searchParams.get('id') ?? 'bitcoin').replace(/[^a-z0-9_-]/gi, '') || 'bitcoin'
+
   const out = {
-    coingecko: null as { usd: number; change24h: number | null } | null,
+    coingecko: null as { usd: number; change24h: number | null; id: string } | null,
     defiTvlUsd: null as number | null,
     hashRateEH: null as number | null,
     errors: [] as string[],
@@ -14,14 +17,14 @@ export async function GET() {
 
   try {
     const gRes = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true',
+      `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coinId)}&vs_currencies=usd&include_24hr_change=true`,
       { headers: { Accept: 'application/json' }, next: { revalidate: 0 }, signal: AbortSignal.timeout(12_000) }
     )
     if (gRes.ok) {
       const j = (await gRes.json()) as GeckoPrice
-      const b = j.bitcoin
+      const b = j[coinId]
       if (b?.usd != null) {
-        out.coingecko = { usd: b.usd, change24h: b.usd_24h_change ?? null }
+        out.coingecko = { usd: b.usd, change24h: b.usd_24h_change ?? null, id: coinId }
       }
     } else out.errors.push(`coingecko ${gRes.status}`)
   } catch {

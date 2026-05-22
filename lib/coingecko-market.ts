@@ -51,8 +51,9 @@ const MARKETS_PATH =
 
 const UA = 'yieldscan-market/1'
 /** Evita 429 da API pública quando há muitos destaques + top10 + trending em paralelo. */
-const SIMPLE_PRICE_CHUNK = 5
-const SIMPLE_CHUNK_GAP_MS = 450
+const SIMPLE_PRICE_CHUNK = 3
+const SIMPLE_CHUNK_GAP_MS = 550
+const SIMPLE_RETRY_GAP_MS = 650
 const BETWEEN_ENDPOINTS_MS = 400
 const FETCH_MAX_RETRIES = 2
 const HIGHLIGHT_PRICE_CACHE_MS = 10 * 60 * 1000
@@ -171,35 +172,58 @@ function cachedHighlightSimple(id: string): SimplePriceEntry | null {
   return hit.entry
 }
 
-/** simple/price em lotes + cache por id (reduz 429 com muitos destaques). */
+function hasValidUsd(entry: SimplePriceEntry | undefined): boolean {
+  return typeof entry?.usd === 'number' && Number.isFinite(entry.usd)
+}
+
+async function fetchSimplePriceChunk(ids: string[]): Promise<Record<string, SimplePriceEntry>> {
+  if (ids.length === 0) return {}
+  const path = buildSimplePricePath(ids)
+  const batch = await fetchJson<Record<string, SimplePriceEntry>>(path)
+  const out: Record<string, SimplePriceEntry> = {}
+  if (batch && typeof batch === 'object') {
+    for (const [id, entry] of Object.entries(batch)) {
+      if (entry && typeof entry === 'object' && hasValidUsd(entry)) {
+        out[id] = entry
+        rememberHighlightSimple(id, entry)
+      }
+    }
+  }
+  return out
+}
+
+/** simple/price em lotes + retry por id + cache (RWAs/xStock são sensíveis a 429). */
 async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntry>> {
   const unique = [...new Set(ids.filter(Boolean))]
   const merged: Record<string, SimplePriceEntry> = {}
 
   for (let i = 0; i < unique.length; i += SIMPLE_PRICE_CHUNK) {
     const chunk = unique.slice(i, i + SIMPLE_PRICE_CHUNK)
-    const path = buildSimplePricePath(chunk)
-    const batch = await fetchJson<Record<string, SimplePriceEntry>>(path)
-    if (batch && typeof batch === 'object') {
-      for (const [id, entry] of Object.entries(batch)) {
-        if (entry && typeof entry === 'object') {
-          merged[id] = entry
-          rememberHighlightSimple(id, entry)
-        }
-      }
-    }
+    Object.assign(merged, await fetchSimplePriceChunk(chunk))
     if (i + SIMPLE_PRICE_CHUNK < unique.length) {
       await sleep(SIMPLE_CHUNK_GAP_MS)
     }
   }
 
   for (const id of unique) {
-    if (merged[id]) continue
+    if (hasValidUsd(merged[id])) continue
     const cached = cachedHighlightSimple(id)
-    if (cached) merged[id] = cached
+    if (cached && hasValidUsd(cached)) merged[id] = cached
+  }
+
+  const stillMissing = unique.filter((id) => !hasValidUsd(merged[id]))
+  for (const id of stillMissing) {
+    await sleep(SIMPLE_RETRY_GAP_MS)
+    const one = await fetchSimplePriceChunk([id])
+    if (hasValidUsd(one[id])) merged[id] = one[id]
   }
 
   return merged
+}
+
+/** Garante USD/BRL/EUR no cliente quando a resposta veio incompleta ou de cache antigo. */
+export function withDisplayQuotes(coin: MercadoCoin, brlPerUsd = 5.5, eurPerUsd = 0.92): MercadoCoin {
+  return enrichCoinQuotesFromUsd(usdOnlyQuotes(coin), brlPerUsd, eurPerUsd)
 }
 
 /** Preenche destaques sem preço a partir de cache global ou resposta anterior. */
@@ -547,8 +571,8 @@ export async function agregarMercadoCoinGecko(
   const exchangeRaw = await fetchJson<unknown>(EXCHANGE_RATES_PATH)
   await sleep(BETWEEN_ENDPOINTS_MS)
   const [marketsRaw, trendingRaw] = await Promise.all([
-    fetchJson<unknown[]>(MARKETS_PATH),
-    fetchJson<{ coins?: unknown[] }>(TRENDING_PATH),
+    fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
+    fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
   ])
 
   const fx = parseFiatPerUsdFromExchangeRates(exchangeRaw)

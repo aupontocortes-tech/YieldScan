@@ -97,19 +97,20 @@ export function parseHighlightsQueryParam(param: string | null): string[] {
 
 export function readStoredHighlightIds(): string[] | null {
   if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (Array.isArray(parsed)) return sanitizeHighlightIds(parsed.map(String))
+    }
+  } catch {
+    /* ignore */
+  }
   if (isYieldscanSqliteOpen()) {
     const parsed = kvGetJson<unknown>(KV_KEY)
     if (Array.isArray(parsed)) return sanitizeHighlightIds(parsed.map(String))
   }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return null
-    return sanitizeHighlightIds(parsed.map(String))
-  } catch {
-    return null
-  }
+  return null
 }
 
 export function writeStoredHighlightIds(ids: string[]): void {

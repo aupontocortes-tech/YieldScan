@@ -15,7 +15,6 @@ import type { IChartApi, Time } from 'lightweight-charts'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import {
-  alignWeeklySeriesToBars,
   bollingerBands,
   ema,
   macd,
@@ -30,6 +29,8 @@ import {
   syntheticNupl,
   syntheticSopr,
 } from '@/lib/btc/on-chain-synthetic'
+import { computeBullMarketBandOnChart, computeSma200OnDailyAligned } from '@/lib/btc/cycle-bottom'
+import { toHeikinAshi } from '@/lib/btc/heikin-ashi'
 import {
   BULL_MARKET_BAND_EMA_WEEKS,
   BULL_MARKET_BAND_SMA_WEEKS,
@@ -82,12 +83,21 @@ function syncCharts(charts: IChartApi[]) {
 
 type BtcChartsSuiteProps = {
   bars: OhlcvBar[]
+  /** Velas 1d para SMA 200 diária (só quando o indicador está ligado). */
+  dailyBarsForSma200?: OhlcvBar[]
   /** Velas 1w para Bull Market Support Band (só preenchido quando o indicador está ligado). */
   weeklyBarsForBand?: OhlcvBar[]
+  bullBandLoading?: boolean
   resetKey?: number
 }
 
-export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: BtcChartsSuiteProps) {
+export function BtcChartsSuite({
+  bars,
+  dailyBarsForSma200 = [],
+  weeklyBarsForBand = [],
+  bullBandLoading = false,
+  resetKey = 0,
+}: BtcChartsSuiteProps) {
   const {
     mas,
     rsi: rsiCfg,
@@ -98,6 +108,8 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
     candles,
     onChain,
     bullMarketBand,
+    sma200Daily,
+    timeframe,
   } = useBtcSettings()
 
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -132,16 +144,28 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
     return bollingerBands(closes, bbCfg.period, bbCfg.stdDev)
   }, [closes, bbCfg.enabled, bbCfg.period, bbCfg.stdDev])
 
+  const sma200OnChart = useMemo(() => {
+    if (!sma200Daily.enabled || dailyBarsForSma200.length < 200) return null
+    return computeSma200OnDailyAligned(bars, dailyBarsForSma200)
+  }, [sma200Daily.enabled, dailyBarsForSma200, bars])
+
   const bullBandOnChart = useMemo(() => {
-    if (!bullMarketBand.enabled || weeklyBarsForBand.length < BULL_MARKET_BAND_EMA_WEEKS + 1) return null
-    const wc = weeklyBarsForBand.map((b) => b.close)
-    const smaW = sma(wc, BULL_MARKET_BAND_SMA_WEEKS)
-    const emaW = ema(wc, BULL_MARKET_BAND_EMA_WEEKS)
-    return {
-      sma: alignWeeklySeriesToBars(bars, weeklyBarsForBand, smaW),
-      ema: alignWeeklySeriesToBars(bars, weeklyBarsForBand, emaW),
-    }
+    if (!bullMarketBand.enabled) return null
+    return computeBullMarketBandOnChart(bars, weeklyBarsForBand)
   }, [bullMarketBand.enabled, weeklyBarsForBand, bars])
+
+  /** Pompx: gráfico mensal com velas Heikin Ashi quando a banda está ligada. */
+  const candleBars = useMemo(() => {
+    if (!bullMarketBand.enabled || timeframe.id !== '1M' || bars.length < 2) return bars
+    return toHeikinAshi(bars).map((b) => ({
+      time: b.time,
+      open: b.haOpen,
+      high: b.haHigh,
+      low: b.haLow,
+      close: b.haClose,
+      volume: b.volume,
+    }))
+  }, [bars, bullMarketBand.enabled, timeframe.id])
 
   const zoneValues = useMemo(() => {
     if (!zonesCfg.enabled || closes.length < 10) return null
@@ -222,7 +246,9 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
       wickUpColor: up,
       wickDownColor: wickDown,
     })
-    candle.setData(bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })))
+    candle.setData(
+      candleBars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })),
+    )
 
     cMain.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
@@ -253,6 +279,22 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
       }).setData(lineData)
     })
 
+    if (sma200OnChart && sma200Daily.enabled) {
+      const s200 = sma200Daily
+      const smaLine = bars
+        .map((b, i) => ({ time: b.time as Time, value: sma200OnChart[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (smaLine.length) {
+        cMain.addSeries(LineSeries, {
+          color: s200.color,
+          title: 'SMA 200 (Diário)',
+          lineWidth: s200.lineWidth,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        }).setData(smaLine)
+      }
+    }
+
     if (bullBandOnChart && bullMarketBand.enabled) {
       const bw = bullMarketBand
       const bandOpts = {
@@ -260,7 +302,7 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
         lastValueVisible: true,
         lineWidth: bw.lineWidth,
       } as const
-      const fillLineWidth = bw.lineWidth === 1 ? 6 : bw.lineWidth === 2 ? 8 : 10
+      const fillLineWidth = Math.min(4, bw.lineWidth + 1) as 1 | 2 | 3 | 4
       const fillLine = bars
         .map((b, i) => {
           const s = bullBandOnChart.sma[i]
@@ -284,18 +326,21 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
           lastValueVisible: false,
         }).setData(fillLine)
       }
+      const bandLineWidth = Math.min(4, Math.max(bw.lineWidth, 2)) as 1 | 2 | 3 | 4
       if (smaLine.length) {
         cMain.addSeries(LineSeries, {
-          color: bw.colorSma,
-          title: `${BULL_MARKET_BAND_SMA_WEEKS}w SMA`,
           ...bandOpts,
+          color: bw.colorSma,
+          title: `BMSB SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`,
+          lineWidth: bandLineWidth,
         }).setData(smaLine)
       }
       if (emaLine.length) {
         cMain.addSeries(LineSeries, {
-          color: bw.colorEma,
-          title: `${BULL_MARKET_BAND_EMA_WEEKS}w EMA`,
           ...bandOpts,
+          color: bw.colorEma,
+          title: `BMSB EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
+          lineWidth: bandLineWidth,
         }).setData(emaLine)
       }
     }
@@ -613,6 +658,10 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
     resetKey,
     bullMarketBand,
     bullBandOnChart,
+    sma200Daily,
+    sma200OnChart,
+    candleBars,
+    timeframe.id,
   ])
 
   if (bars.length < 10) {
@@ -629,7 +678,19 @@ export function BtcChartsSuite({ bars, weeklyBarsForBand = [], resetKey = 0 }: B
       data-no-swipe-nav
       className="flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden rounded-lg bg-[#050505]"
     >
-      <div ref={mainRef} className="min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]" />
+      <div className="relative min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]">
+        <div ref={mainRef} className="absolute inset-0" />
+        {bullMarketBand.enabled && bullBandLoading && (
+          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-[10px] text-[#d4af37]">
+            A carregar Bull Market Band (dados semanais)…
+          </div>
+        )}
+        {bullMarketBand.enabled && !bullBandLoading && !bullBandOnChart && (
+          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+            Sem dados semanais suficientes para a banda. Tenta BTC/USDT ou atualiza.
+          </div>
+        )}
+      </div>
       {onChain.sthLth.enabled && sthLthLevels && (
         <div className="border-t border-white/[0.06] px-2 py-2">
           <div className="mb-1.5 flex flex-wrap gap-2">

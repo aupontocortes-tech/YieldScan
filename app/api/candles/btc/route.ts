@@ -10,8 +10,9 @@ export const runtime = 'nodejs'
 export async function GET(req: NextRequest) {
   const interval = req.nextUrl.searchParams.get('interval') ?? '1h'
   const limit = Math.min(1000, Math.max(50, Number(req.nextUrl.searchParams.get('limit')) || 500))
+  const symbol = (req.nextUrl.searchParams.get('symbol') ?? 'BTCUSDT').toUpperCase()
 
-  const result = await fetchBinanceKlinesArray(interval, limit)
+  const result = await fetchBinanceKlinesArray(interval, limit, symbol)
   if ('error' in result) {
     const status = result.error === 'Invalid interval' ? 400 : 502
     return NextResponse.json({ error: result.error }, { status })

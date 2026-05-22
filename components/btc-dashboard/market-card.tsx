@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import type { MarketRegime, SignalEngineResult, TradeSignal } from '@/lib/btc/signal-engine'
+import type { IndicatorPair } from '@/lib/btc/indicator-pairs'
 import type { OhlcvBar } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
 
@@ -28,8 +29,12 @@ type BtcContextPayload = {
   errors: string[]
 }
 
-async function fetchBtcContext(): Promise<BtcContextPayload> {
-  const r = await fetch('/api/btc-context')
+async function fetchBtcContext(coingeckoId: string | null): Promise<BtcContextPayload> {
+  const q =
+    coingeckoId != null
+      ? `?id=${encodeURIComponent(coingeckoId)}`
+      : ''
+  const r = await fetch(`/api/btc-context${q}`)
   if (!r.ok) throw new Error('context')
   return r.json() as Promise<BtcContextPayload>
 }
@@ -37,15 +42,43 @@ async function fetchBtcContext(): Promise<BtcContextPayload> {
 export function MarketCard({
   bars,
   signal,
+  pair,
   variant = 'default',
 }: {
   bars: OhlcvBar[]
   signal: SignalEngineResult | null
+  pair: IndicatorPair
   variant?: 'default' | 'strip'
 }) {
+  const CG_BY_BASE: Record<string, string> = {
+    BTC: 'bitcoin',
+    ETH: 'ethereum',
+    SOL: 'solana',
+    BNB: 'binancecoin',
+    XRP: 'ripple',
+    ADA: 'cardano',
+    LINK: 'chainlink',
+    AVAX: 'avalanche-2',
+    DOGE: 'dogecoin',
+    DOT: 'polkadot',
+    LTC: 'litecoin',
+    TRX: 'tron',
+    ATOM: 'cosmos',
+    NEAR: 'near',
+    ARB: 'arbitrum',
+    OP: 'optimism',
+    SUI: 'sui',
+    APT: 'aptos',
+    INJ: 'injective-protocol',
+    PEPE: 'pepe',
+    SHIB: 'shiba-inu',
+    HYPE: 'hyperliquid',
+  }
+  const cgId = pair.coingeckoId ?? CG_BY_BASE[pair.base] ?? null
+
   const { data: ctx } = useQuery({
-    queryKey: ['btc-context'],
-    queryFn: fetchBtcContext,
+    queryKey: ['btc-context', cgId ?? 'none'],
+    queryFn: () => fetchBtcContext(cgId),
     staleTime: 60_000,
     refetchInterval: 120_000,
     retry: 1,
@@ -67,9 +100,11 @@ export function MarketCard({
     return (
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-zinc-400 sm:gap-x-5 sm:text-[11px] sm:gap-y-1.5">
         <span className="font-mono text-zinc-100">
-          BTC{' '}
+          {pair.base}{' '}
           {last
-            ? `US$ ${last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ? pair.quote === 'USD'
+              ? `US$ ${last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              : `${last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ${pair.quote}`
             : '—'}
         </span>
         {ch != null && (
@@ -108,7 +143,9 @@ export function MarketCard({
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-[#d4af37]/35 bg-gradient-to-br from-black via-[#0a0a0a] to-[#111] p-4 shadow-[inset_0_1px_0_rgba(212,175,55,0.12)]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">BTC / USDT</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4af37]/90">
+            {pair.label}
+          </p>
           <p className="mt-2 font-mono text-2xl font-bold tabular-nums text-white">
             {last
               ? `US$ ${last.close.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -120,7 +157,9 @@ export function MarketCard({
               {ch.toFixed(2)}% vs. vela anterior
             </p>
           )}
-          <p className="mt-2 text-[11px] text-zinc-500">Binance — última vela (klines)</p>
+          <p className="mt-2 text-[11px] text-zinc-500">
+            {pair.source === 'binance' ? 'Binance' : 'CoinGecko'} — última vela
+          </p>
         </div>
 
         <div className="rounded-xl border border-[#d4af37]/35 bg-gradient-to-br from-black via-[#0a0a0a] to-[#111] p-4">

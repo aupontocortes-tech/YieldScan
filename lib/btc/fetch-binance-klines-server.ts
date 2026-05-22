@@ -7,9 +7,9 @@ const BINANCE_KLINE_BASES = [
   'https://data-api.binance.vision',
 ] as const
 
-function buildPath(interval: string, limit: number) {
+function buildPath(symbol: string, interval: string, limit: number) {
   const q = new URLSearchParams({
-    symbol: 'BTCUSDT',
+    symbol: symbol.toUpperCase(),
     interval,
     limit: String(limit),
   })
@@ -19,12 +19,18 @@ function buildPath(interval: string, limit: number) {
 export async function fetchBinanceKlinesArray(
   interval: string,
   limit: number,
+  symbol = 'BTCUSDT',
 ): Promise<{ data: unknown[] } | { error: string }> {
   if (!ALLOWED.has(interval)) {
     return { error: 'Invalid interval' }
   }
 
-  const path = buildPath(interval, limit)
+  const sym = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (sym.length < 6 || sym.length > 24) {
+    return { error: 'Invalid symbol' }
+  }
+
+  const path = buildPath(sym, interval, limit)
   const headers: HeadersInit = {
     Accept: 'application/json',
     'User-Agent': 'YieldScan/1.0 (+https://github.com/aupontocortes-tech/YieldScan)',

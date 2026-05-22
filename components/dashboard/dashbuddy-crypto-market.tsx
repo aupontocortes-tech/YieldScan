@@ -26,7 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
-import { syntheticHighlightCoin } from '@/lib/coingecko-market'
+import { syntheticHighlightCoin, withDisplayQuotes } from '@/lib/coingecko-market'
 import {
   highlightMetaFromPresetOrId,
   MERCADO_HIGHLIGHT_QUICK_PRESETS,
@@ -140,8 +140,8 @@ function CoinRowCard({
             </Badge>
           )}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-semibold tabular-nums text-foreground">
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="max-w-full break-words text-sm font-semibold tabular-nums leading-tight text-foreground">
             {formatMercadoFiatAmount(q.price, displayFiat)}
           </span>
           <Variacao value={q.change_24h} />
@@ -161,20 +161,25 @@ function HighlightCard({ coin, mercadoPrefs }: { coin: MercadoCoin; mercadoPrefs
   const href = `https://www.coingecko.com/en/coins/${encodeURIComponent(coin.id)}`
   const displayFiat = effectiveDisplayFiatForCoin(coin.id, mercadoPrefs)
   const q = resolveMercadoDisplay(coin, displayFiat, mercadoPrefs.priceOverrides)
+  const priceLabel = formatMercadoFiatAmount(q.price, displayFiat)
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-card/90 to-background p-5 transition-all hover:border-cyan-500/45 hover:shadow-lg"
+      className="group relative flex min-w-0 flex-col rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-card/90 to-background p-3.5 sm:p-5 transition-all hover:border-cyan-500/45 hover:shadow-lg"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-cyan-400/90">Em destaque</p>
-          <h3 className="mt-1 text-lg font-bold text-foreground">{coin.name}</h3>
-          <p className="text-xs text-muted-foreground">{coin.symbol}</p>
+      <div className="flex items-start gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-cyan-400/90 sm:text-[11px]">
+            Em destaque
+          </p>
+          <h3 className="mt-0.5 line-clamp-2 text-sm font-bold leading-snug text-foreground sm:mt-1 sm:text-lg">
+            {coin.name}
+          </h3>
+          <p className="text-[10px] text-muted-foreground sm:text-xs">{coin.symbol}</p>
         </div>
-        <CoinThumb coin={coin} size={52} />
+        <CoinThumb coin={coin} size={40} />
       </div>
       {q.priceSource === 'override' && (
         <Badge
@@ -184,19 +189,22 @@ function HighlightCard({ coin, mercadoPrefs }: { coin: MercadoCoin; mercadoPrefs
           Valor manual
         </Badge>
       )}
-      <p className="mt-4 text-3xl font-bold tabular-nums tracking-tight text-foreground">
-        {formatMercadoFiatAmount(q.price, displayFiat)}
+      <p
+        className="mt-3 w-full min-w-0 text-lg font-bold leading-tight tabular-nums tracking-tight text-foreground sm:mt-4 sm:text-2xl lg:text-3xl"
+        style={{ fontSize: priceLabel.length > 14 ? 'clamp(0.95rem, 3.8vw, 1.75rem)' : undefined }}
+      >
+        {priceLabel}
       </p>
-      <div className="mt-2 flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">24h</span>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:mt-2">
+        <span className="text-[10px] text-muted-foreground sm:text-xs">24h</span>
         <Variacao value={q.change_24h} />
       </div>
       {q.market_cap != null && (
-        <p className="mt-3 text-[11px] text-muted-foreground">
+        <p className="mt-2 break-words text-[10px] leading-snug text-muted-foreground sm:mt-3 sm:text-[11px]">
           Capitalização · {formatMercadoCap(q.market_cap, displayFiat)}
         </p>
       )}
-      <ExternalLink className="absolute right-4 top-4 h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-60" />
+      <ExternalLink className="absolute right-3 top-3 hidden h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-60 sm:right-4 sm:top-4 sm:block" />
     </a>
   )
 }
@@ -243,9 +251,10 @@ function coinForHighlightDisplay(
   if (!slug) return coin
 
   if (coin) {
+    const enriched = withDisplayQuotes(coin)
     const fiat = effectiveDisplayFiatForCoin(slug, prefs)
-    const q = resolveMercadoDisplay(coin, fiat, prefs.priceOverrides)
-    if (q.price != null) return coin
+    const q = resolveMercadoDisplay(enriched, fiat, prefs.priceOverrides)
+    if (q.price != null) return enriched
   }
 
   const synthetic = syntheticHighlightCoin(slug)
@@ -326,7 +335,7 @@ export function DashbuddyCryptoMarket() {
 
   const highlightsCacheKey = highlightIds.join('|')
 
-  const { data, isLoading, isFetching, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['crypto-market', highlightsCacheKey],
     queryFn: () => fetchMercado(highlightIds),
     staleTime: 55_000,
@@ -336,6 +345,8 @@ export function DashbuddyCryptoMarket() {
     retry: 2,
     retryDelay: (attempt) => Math.min(15_000, 2_000 * 2 ** attempt),
   })
+
+  const marketLoading = isLoading && !data
 
   const syncDraftFromIds = useCallback((ids: string[]) => {
     setDraftSlots(ids.length > 0 ? [...ids] : [...DEFAULT_MARKET_HIGHLIGHT_IDS])
@@ -754,15 +765,15 @@ export function DashbuddyCryptoMarket() {
         </div>
       )}
 
-      {error && (
+      {isError && error && (
         <div className="rounded-xl border border-red-500/25 bg-red-950/20 px-4 py-3 text-sm text-red-200/90">
           Não foi possível carregar o mercado. Tenta actualizar dentro de um minuto.
         </div>
       )}
 
-      {isLoading && (
+      {marketLoading && (
         <div className="space-y-8">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 min-[420px]:gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: Math.min(MAX_MARKET_HIGHLIGHTS, Math.max(4, highlightIds.length)) }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
             ))}
@@ -771,13 +782,13 @@ export function DashbuddyCryptoMarket() {
         </div>
       )}
 
-      {!isLoading && data && (
+      {data && (
         <>
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Moedas em destaque
             </h3>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 min-[420px]:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {highlightCoins.map((coin, i) => {
                 const id = data.highlightIds[i] ?? ''
                 const displayCoin = coinForHighlightDisplay(coin, id, displayPrefs)

@@ -1,11 +1,14 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BtcChartsSuite } from '@/components/btc-dashboard/btc-charts-suite'
+import { IndicatorPairSelector } from '@/components/btc-dashboard/indicator-pair-selector'
 import { MarketCard } from '@/components/btc-dashboard/market-card'
-import { SettingsPanel } from '@/components/btc-dashboard/settings-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
+import { evaluateCycleBottomSignals } from '@/lib/btc/cycle-bottom'
+import { fetchIndicatorKlines, fetchPairKlinesByInterval } from '@/lib/btc/klines-client'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -14,7 +17,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { fetchBtcKlines } from '@/lib/btc/binance'
 import {
   INDICATOR_TOOLBAR_LABEL_PT,
   INDICATOR_TOOLBAR_TIMEFRAMES,
@@ -24,14 +26,41 @@ import {
 } from '@/lib/btc/types'
 import { runSignalEngine } from '@/lib/btc/signal-engine'
 import { cn } from '@/lib/utils'
-import { LayoutGrid, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { LayoutGrid, Loader2, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
+
+const SettingsPanelLazy = dynamic(
+  () =>
+    import('@/components/btc-dashboard/settings-panel').then((m) => ({
+      default: m.SettingsPanel,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center gap-2 py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[#d4af37]/80" aria-hidden />
+        <p className="text-xs text-zinc-500">A carregar configurações…</p>
+      </div>
+    ),
+  },
+)
 
 const TF_PRESETS: TimeframePreset[] = INDICATOR_TOOLBAR_TIMEFRAMES.map((id) =>
   TIMEFRAME_PRESETS.find((t) => t.id === id),
 ).filter((x): x is TimeframePreset => x != null)
 
 export function BtcDashboard() {
-  const { timeframe, setTimeframe, rsi, bollinger, resetDefaults, bullMarketBand } = useBtcSettings()
+  const {
+    pair,
+    setPair,
+    timeframe,
+    setTimeframe,
+    rsi,
+    bollinger,
+    resetDefaults,
+    bullMarketBand,
+    sma200Daily,
+    cycleBottomAlerts,
+  } = useBtcSettings()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [chartResetKey, setChartResetKey] = useState(0)
 
@@ -45,18 +74,48 @@ export function BtcDashboard() {
   }, [])
 
   const { data: bars = [], isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['btc-klines', timeframe.id],
-    queryFn: () => fetchBtcKlines(timeframe.interval, timeframe.limit),
+    queryKey: ['indicator-klines', pair.id, timeframe.id],
+    queryFn: () => fetchIndicatorKlines(pair, timeframe),
     staleTime: 30_000,
     refetchInterval: 60_000,
   })
 
-  const { data: weeklyBarsForBand = [] } = useQuery({
-    queryKey: ['btc-klines', '1w', 'bull-market-band'],
-    queryFn: () => fetchBtcKlines('1w', 280),
-    enabled: bullMarketBand.enabled,
+  const needWeekly = bullMarketBand.enabled || cycleBottomAlerts.enabled
+  const needDaily = sma200Daily.enabled || cycleBottomAlerts.enabled
+  const needMonthly = cycleBottomAlerts.enabled
+
+  const { data: dailyBars = [] } = useQuery({
+    queryKey: ['indicator-daily', pair.id, 'sma200'],
+    queryFn: () => fetchPairKlinesByInterval(pair, '1d', 260),
+    enabled: needDaily,
     staleTime: 60_000,
   })
+
+  const { data: weeklyBarsForBand = [] } = useQuery({
+    queryKey: ['indicator-weekly', pair.id, 'bull-market-band'],
+    queryFn: () => fetchPairKlinesByInterval(pair, '1w', 280),
+    enabled: needWeekly,
+    staleTime: 60_000,
+  })
+
+  /** Médias da banda: sempre em 1w; no gráfico semanal reutiliza as velas já carregadas. */
+  const weeklyBarsForBandResolved = useMemo(() => {
+    if (!bullMarketBand.enabled) return []
+    if (timeframe.interval === '1w' && bars.length >= 22) return bars
+    return weeklyBarsForBand
+  }, [bullMarketBand.enabled, timeframe.interval, bars, weeklyBarsForBand])
+
+  const { data: monthlyBars = [] } = useQuery({
+    queryKey: ['indicator-monthly', pair.id, 'cycle-signals'],
+    queryFn: () => fetchPairKlinesByInterval(pair, '1M', 60),
+    enabled: needMonthly,
+    staleTime: 60_000,
+  })
+
+  const cycleSignals = useMemo(
+    () => evaluateCycleBottomSignals(dailyBars, weeklyBarsForBand, monthlyBars),
+    [dailyBars, weeklyBarsForBand, monthlyBars],
+  )
 
   const signalResult = useMemo(() => {
     if (bars.length < 30) return null
@@ -79,10 +138,7 @@ export function BtcDashboard() {
       <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-2 gap-y-1.5 border-b border-white/[0.06] px-2 py-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2 sm:px-3 sm:py-2">
         <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1">
           <LayoutGrid className="h-4 w-4 shrink-0 text-[#d4af37]/90" aria-hidden />
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-white">BTC / USDT</p>
-            <p className="text-[10px] text-zinc-500">Binance · CoinGecko</p>
-          </div>
+          <IndicatorPairSelector pair={pair} onSelect={setPair} />
         </div>
 
         <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:col-start-3 sm:row-start-1 sm:gap-1">
@@ -153,7 +209,7 @@ export function BtcDashboard() {
       </header>
 
       <div className="shrink-0 border-b border-white/[0.04] px-2 py-1.5 sm:px-3 sm:py-2">
-        <MarketCard bars={bars} signal={signalResult} variant="strip" />
+        <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" />
       </div>
 
       <div className="flex min-h-0 min-h-[240px] flex-1 flex-col overflow-hidden p-1.5 sm:p-2 md:p-3">
@@ -168,7 +224,7 @@ export function BtcDashboard() {
 
         {isLoading && (
           <div className="flex min-h-[40vh] flex-1 items-center justify-center rounded-lg border border-white/[0.06] bg-[#050505] text-sm text-zinc-500">
-            A carregar BTC/USDT…
+            A carregar {pair.label}…
           </div>
         )}
 
@@ -176,7 +232,13 @@ export function BtcDashboard() {
           <div className="flex min-h-0 flex-1 flex-col">
             <BtcChartsSuite
               bars={bars}
-              weeklyBarsForBand={bullMarketBand.enabled ? weeklyBarsForBand : []}
+              dailyBarsForSma200={sma200Daily.enabled ? dailyBars : []}
+              weeklyBarsForBand={bullMarketBand.enabled ? weeklyBarsForBandResolved : []}
+              bullBandLoading={
+                bullMarketBand.enabled &&
+                weeklyBarsForBandResolved.length < 22 &&
+                (timeframe.interval !== '1w' || bars.length < 22)
+              }
               resetKey={chartResetKey}
             />
           </div>
@@ -191,12 +253,18 @@ export function BtcDashboard() {
           <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
             <SheetTitle className="text-base text-white">Indicadores &amp; aparência</SheetTitle>
             <SheetDescription className="text-[11px] leading-relaxed text-zinc-500">
-              Liga só o que precisares. Velas, médias, osciladores e proxies on-chain. Preferências ficam gravadas neste
-              dispositivo (SQLite + localStorage).
+              No topo: fundos de ciclo e sinais de bull market (Pompx). Depois: velas, médias, osciladores e proxies.
+              Preferências gravadas neste dispositivo (SQLite + localStorage).
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">
-            <SettingsPanel embedded />
+            {drawerOpen ? (
+              <SettingsPanelLazy
+                embedded
+                cycleSignals={cycleSignals}
+                onChartViewApplied={() => setDrawerOpen(false)}
+              />
+            ) : null}
           </div>
         </SheetContent>
       </Sheet>

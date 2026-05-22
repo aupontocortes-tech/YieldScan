@@ -131,15 +131,20 @@ export async function flushYieldscanSqlitePersist(): Promise<void> {
   await persistToIdb()
 }
 
+const SQLITE_INIT_MS = 12_000
+
+function wasmUrl(file: string): string {
+  if (file.endsWith('.wasm')) return `${window.location.origin}/sql-wasm.wasm`
+  return `${window.location.origin}/${file}`
+}
+
 export async function openYieldscanSqlite(): Promise<void> {
   if (typeof window === 'undefined') return
   if (db) return
   if (!initPromise) {
-    initPromise = (async () => {
+    const work = (async () => {
       const initSqlJs = (await import('sql.js')).default
-      const SQL = await initSqlJs({
-        locateFile: (file) => `${window.location.origin}/${file}`,
-      })
+      const SQL = await initSqlJs({ locateFile: wasmUrl })
 
       const buf = await idbLoad()
       db = buf?.byteLength ? new SQL.Database(buf) : new SQL.Database()
@@ -149,6 +154,13 @@ export async function openYieldscanSqlite(): Promise<void> {
       migrateFromLocalStorage()
       flushPending()
     })()
+
+    initPromise = Promise.race([
+      work,
+      new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error('SQLite init timeout')), SQLITE_INIT_MS)
+      }),
+    ])
   }
   try {
     await initPromise

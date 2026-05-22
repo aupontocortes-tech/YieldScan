@@ -19,7 +19,9 @@ import {
 import type {
   BollingerSettings,
   BullMarketSupportBandSettings,
+  CycleBottomAlertsSettings,
   CandlestickSettings,
+  Sma200DailySettings,
   MaConfig,
   MacdSettings,
   OnChainBundle,
@@ -28,6 +30,11 @@ import type {
   TimeframePreset,
   ZonesSettings,
 } from '@/lib/btc/types'
+import {
+  getDefaultIndicatorPair,
+  getIndicatorPair,
+  type IndicatorPair,
+} from '@/lib/btc/indicator-pairs'
 import { TIMEFRAME_PRESETS } from '@/lib/btc/types'
 
 /** Intervalo inicial do gráfico de indicadores (antes da hidratação e após “Repor tudo”). */
@@ -135,12 +142,24 @@ const DEFAULT_BULL_MARKET_BAND: BullMarketSupportBandSettings = {
   colorFill: '#a16207',
 }
 
+const DEFAULT_SMA_200_DAILY: Sma200DailySettings = {
+  enabled: false,
+  lineWidth: 2,
+  color: '#fbbf24',
+}
+
+const DEFAULT_CYCLE_BOTTOM_ALERTS: CycleBottomAlertsSettings = {
+  enabled: false,
+}
+
 const BTC_KV = 'btc_dashboard_v2' as const
 const LS_MIRROR = 'yieldscan_btc_layout_v2' as const
 
 type BtcPersistV2 = {
   v: 2
   timeframeId: string
+  /** Par do gráfico (ex. binance-btcusdt, coingecko-tesla-xstock). */
+  pairId?: string
   mas: MaConfig[]
   rsi: RsiSettings
   macd: MacdSettings
@@ -150,6 +169,8 @@ type BtcPersistV2 = {
   candles: CandlestickSettings
   onChain: OnChainBundle
   bullMarketBand?: BullMarketSupportBandSettings
+  sma200Daily?: Sma200DailySettings
+  cycleBottomAlerts?: CycleBottomAlertsSettings
 }
 
 /** Migração de estado antigo (v1 em btc_dashboard_v1). */
@@ -246,6 +267,8 @@ function mergeBullMarketBand(b: Partial<BullMarketSupportBandSettings> | undefin
 }
 
 type Ctx = {
+  pair: IndicatorPair
+  setPair: (p: IndicatorPair) => void
   timeframe: TimeframePreset
   setTimeframe: (t: TimeframePreset) => void
   mas: MaConfig[]
@@ -269,6 +292,10 @@ type Ctx = {
   setOnChain: (o: OnChainBundle | ((prev: OnChainBundle) => OnChainBundle)) => void
   bullMarketBand: BullMarketSupportBandSettings
   setBullMarketBand: (b: BullMarketSupportBandSettings) => void
+  sma200Daily: Sma200DailySettings
+  setSma200Daily: (s: Sma200DailySettings) => void
+  cycleBottomAlerts: CycleBottomAlertsSettings
+  setCycleBottomAlerts: (c: CycleBottomAlertsSettings) => void
   resetDefaults: () => void
 }
 
@@ -281,6 +308,7 @@ function newMaId() {
 }
 
 export function BtcSettingsProvider({ children }: { children: ReactNode }) {
+  const [pair, setPair] = useState<IndicatorPair>(() => getDefaultIndicatorPair())
   const [timeframe, setTimeframe] = useState<TimeframePreset>(
     () => TIMEFRAME_PRESETS.find((t) => t.id === DEFAULT_TIMEFRAME_ID) ?? TIMEFRAME_PRESETS[3],
   )
@@ -295,6 +323,10 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [bullMarketBand, setBullMarketBand] = useState<BullMarketSupportBandSettings>(() => ({
     ...DEFAULT_BULL_MARKET_BAND,
   }))
+  const [sma200Daily, setSma200Daily] = useState<Sma200DailySettings>(() => ({ ...DEFAULT_SMA_200_DAILY }))
+  const [cycleBottomAlerts, setCycleBottomAlerts] = useState<CycleBottomAlertsSettings>(() => ({
+    ...DEFAULT_CYCLE_BOTTOM_ALERTS,
+  }))
   const [hydrated, setHydrated] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistRef = useRef<BtcPersistV2 | null>(null)
@@ -306,6 +338,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   persistRef.current = {
     v: 2,
     timeframeId: timeframe.id,
+    pairId: pair.id,
     mas,
     rsi,
     macd,
@@ -315,60 +348,100 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     candles,
     onChain,
     bullMarketBand,
+    sma200Daily,
+    cycleBottomAlerts,
   }
 
   useEffect(() => {
     let cancel = false
-    void openYieldscanSqlite().then(() => {
-      if (cancel) return
 
-      const v2 = kvGetJson<BtcPersistV2>(BTC_KV)
-      if (v2?.v === 2) {
-        const tf = TIMEFRAME_PRESETS.find((t) => t.id === v2.timeframeId)
-        if (tf) setTimeframe(tf)
-        if (validMasList(v2.mas)) setMas(v2.mas.map((m) => normalizeMa({ ...m })))
-        setRsi(mergeRsi(v2.rsi))
-        setMacd(mergeMacd(v2.macd))
-        setStoch(mergeStoch(v2.stoch))
-        setBollinger(mergeBollinger(v2.bollinger))
-        if (v2.zones && typeof v2.zones === 'object') setZones({ ...DEFAULT_ZONES, ...v2.zones })
-        if (v2.candles && typeof v2.candles === 'object') {
-          const c = v2.candles
-          setCandles({
-            ...DEFAULT_CANDLES,
-            ...c,
-            colors: { ...DEFAULT_CANDLES.colors, ...c.colors },
-          })
-        }
-        setOnChainState(mergeOnChain(v2.onChain))
-        if (v2.bullMarketBand && typeof v2.bullMarketBand === 'object') {
-          setBullMarketBand(mergeBullMarketBand(v2.bullMarketBand))
-        }
-      } else {
-        const legacyKey = 'btc_dashboard_v1' as const
-        const s = kvGetJson<BtcPersistV1>(legacyKey)
-        if (s?.v === 1) {
-          const tf = TIMEFRAME_PRESETS.find((t) => t.id === s.timeframeId)
-          if (tf) setTimeframe(tf)
-          if (validMasList(s.mas)) setMas(s.mas.map((m) => normalizeMa({ ...m, lineWidth: 2 })))
-          setRsi(mergeRsi(s.rsi as RsiSettings))
-          setMacd(mergeMacd(s.macd as MacdSettings))
-          setStoch(mergeStoch(s.stoch as StochSettings))
-          setBollinger(mergeBollinger(s.bollinger as BollingerSettings))
-          if (s.zones && typeof s.zones === 'object') setZones({ ...DEFAULT_ZONES, ...s.zones })
-          if (s.candles && typeof s.candles === 'object') {
-            const c = s.candles as CandlestickSettings
-            setCandles({
-              ...DEFAULT_CANDLES,
-              ...c,
-              colors: { ...DEFAULT_CANDLES.colors, ...c.colors },
-            })
-          }
-        }
+    const applyV2 = (v2: BtcPersistV2) => {
+      const tf = TIMEFRAME_PRESETS.find((t) => t.id === v2.timeframeId)
+      if (tf) setTimeframe(tf)
+      if (v2.pairId) {
+        const p = getIndicatorPair(v2.pairId)
+        if (p) setPair(p)
       }
+      if (validMasList(v2.mas)) setMas(v2.mas.map((m) => normalizeMa({ ...m })))
+      setRsi(mergeRsi(v2.rsi))
+      setMacd(mergeMacd(v2.macd))
+      setStoch(mergeStoch(v2.stoch))
+      setBollinger(mergeBollinger(v2.bollinger))
+      if (v2.zones && typeof v2.zones === 'object') setZones({ ...DEFAULT_ZONES, ...v2.zones })
+      if (v2.candles && typeof v2.candles === 'object') {
+        const c = v2.candles
+        setCandles({
+          ...DEFAULT_CANDLES,
+          ...c,
+          colors: { ...DEFAULT_CANDLES.colors, ...c.colors },
+        })
+      }
+      setOnChainState(mergeOnChain(v2.onChain))
+      if (v2.bullMarketBand && typeof v2.bullMarketBand === 'object') {
+        setBullMarketBand(mergeBullMarketBand(v2.bullMarketBand))
+      }
+      if (v2.sma200Daily && typeof v2.sma200Daily === 'object') {
+        const s = v2.sma200Daily
+        setSma200Daily({
+          ...DEFAULT_SMA_200_DAILY,
+          ...s,
+          lineWidth: s.lineWidth === 1 || s.lineWidth === 3 ? s.lineWidth : 2,
+        })
+      }
+      if (v2.cycleBottomAlerts && typeof v2.cycleBottomAlerts === 'object') {
+        setCycleBottomAlerts({ ...DEFAULT_CYCLE_BOTTOM_ALERTS, ...v2.cycleBottomAlerts })
+      }
+    }
 
-      setHydrated(true)
-    })
+    const applyV1 = (s: BtcPersistV1) => {
+      const tf = TIMEFRAME_PRESETS.find((t) => t.id === s.timeframeId)
+      if (tf) setTimeframe(tf)
+      if (validMasList(s.mas)) setMas(s.mas.map((m) => normalizeMa({ ...m, lineWidth: 2 })))
+      setRsi(mergeRsi(s.rsi as RsiSettings))
+      setMacd(mergeMacd(s.macd as MacdSettings))
+      setStoch(mergeStoch(s.stoch as StochSettings))
+      setBollinger(mergeBollinger(s.bollinger as BollingerSettings))
+      if (s.zones && typeof s.zones === 'object') setZones({ ...DEFAULT_ZONES, ...s.zones })
+      if (s.candles && typeof s.candles === 'object') {
+        const c = s.candles as CandlestickSettings
+        setCandles({
+          ...DEFAULT_CANDLES,
+          ...c,
+          colors: { ...DEFAULT_CANDLES.colors, ...c.colors },
+        })
+      }
+    }
+
+    const loadFromMirror = () => {
+      try {
+        if (typeof localStorage === 'undefined') return
+        const raw = localStorage.getItem(LS_MIRROR)
+        if (!raw?.trim()) return
+        const parsed = JSON.parse(raw) as BtcPersistV2
+        if (parsed?.v === 2) applyV2(parsed)
+      } catch {
+        /* ignore */
+      }
+    }
+
+    loadFromMirror()
+    if (!cancel) setHydrated(true)
+
+    void openYieldscanSqlite()
+      .then(() => {
+        if (cancel) return
+        const v2 = kvGetJson<BtcPersistV2>(BTC_KV)
+        if (v2?.v === 2) {
+          applyV2(v2)
+          return
+        }
+        const s = kvGetJson<BtcPersistV1>('btc_dashboard_v1')
+        if (s?.v === 1) applyV1(s)
+      })
+      .catch(() => {
+        /* WASM/IDB indisponível — prefs já vindas do mirror ou defaults */
+      })
+
     return () => {
       cancel = true
     }
@@ -392,7 +465,22 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
-  }, [hydrated, timeframe.id, mas, rsi, macd, stoch, bollinger, zones, candles, onChain, bullMarketBand])
+  }, [
+    hydrated,
+    pair.id,
+    timeframe.id,
+    mas,
+    rsi,
+    macd,
+    stoch,
+    bollinger,
+    zones,
+    candles,
+    onChain,
+    bullMarketBand,
+    sma200Daily,
+    cycleBottomAlerts,
+  ])
 
   useEffect(() => {
     if (!hydrated) return
@@ -432,6 +520,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetDefaults = useCallback(() => {
+    setPair(getDefaultIndicatorPair())
     setTimeframe(TIMEFRAME_PRESETS.find((t) => t.id === DEFAULT_TIMEFRAME_ID) ?? TIMEFRAME_PRESETS[3])
     setMas(DEFAULT_MAS.map((m) => ({ ...m })))
     setRsi({ ...DEFAULT_RSI })
@@ -442,6 +531,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setCandles({ ...DEFAULT_CANDLES })
     setOnChainState(mergeOnChain(undefined))
     setBullMarketBand({ ...DEFAULT_BULL_MARKET_BAND })
+    setSma200Daily({ ...DEFAULT_SMA_200_DAILY })
+    setCycleBottomAlerts({ ...DEFAULT_CYCLE_BOTTOM_ALERTS })
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(LS_MIRROR)
     } catch {
@@ -451,6 +542,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      pair,
+      setPair,
       timeframe,
       setTimeframe,
       mas,
@@ -474,9 +567,14 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setOnChain,
       bullMarketBand,
       setBullMarketBand,
+      sma200Daily,
+      setSma200Daily,
+      cycleBottomAlerts,
+      setCycleBottomAlerts,
       resetDefaults,
     }),
     [
+      pair,
       timeframe,
       mas,
       rsi,
@@ -487,6 +585,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       candles,
       onChain,
       bullMarketBand,
+      sma200Daily,
+      cycleBottomAlerts,
       addMa,
       updateMa,
       removeMa,

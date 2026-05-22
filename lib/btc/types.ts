@@ -123,6 +123,18 @@ export type BullMarketSupportBandSettings = {
   colorFill: string
 }
 
+/** SMA 200 em fechos diários (fundo de ciclo / Pompx). */
+export type Sma200DailySettings = {
+  enabled: boolean
+  lineWidth: 1 | 2 | 3
+  color: string
+}
+
+/** Liga o painel de alertas dos sinais de fundo de ciclo. */
+export type CycleBottomAlertsSettings = {
+  enabled: boolean
+}
+
 /** Períodos fixos (velas 1w) — iguais ao script popular zkdev / TradingView. */
 export const BULL_MARKET_BAND_SMA_WEEKS = 20
 export const BULL_MARKET_BAND_EMA_WEEKS = 21

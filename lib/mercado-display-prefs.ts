@@ -4,7 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
-import type { MercadoCoin, MercadoFiat } from '@/lib/coingecko-market'
+import { withDisplayQuotes, type MercadoCoin, MercadoFiat } from '@/lib/coingecko-market'
 
 export type MercadoDisplayFiat = MercadoFiat
 
@@ -75,20 +75,22 @@ export function readMercadoDisplayPrefs(): MercadoDisplayPrefs {
   if (typeof window === 'undefined') {
     return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
   }
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const j = JSON.parse(raw) as Record<string, unknown>
+      return parseMercadoPrefsRecord(j)
+    }
+  } catch {
+    /* ignore */
+  }
   if (isYieldscanSqliteOpen()) {
     const j = kvGetJson<Record<string, unknown>>(KV_KEY)
     if (j && typeof j === 'object' && !Array.isArray(j)) {
       return parseMercadoPrefsRecord(j)
     }
   }
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
-    const j = JSON.parse(raw) as Record<string, unknown>
-    return parseMercadoPrefsRecord(j)
-  } catch {
-    return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
-  }
+  return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
 }
 
 export function writeMercadoDisplayPrefs(prefs: MercadoDisplayPrefs): void {
@@ -156,14 +158,15 @@ export function resolveMercadoDisplay(
   fiat: MercadoDisplayFiat,
   overrides: MercadoPriceOverrides
 ): ResolvedMercadoQuote {
-  const slug = coin.id.trim().toLowerCase()
+  const enriched = withDisplayQuotes(coin)
+  const slug = enriched.id.trim().toLowerCase()
   const overrideVal = slug ? overrides[slug]?.[fiat] : undefined
-  const base = quoteSlice(coin, fiat)
+  const base = quoteSlice(enriched, fiat)
 
   if (overrideVal != null && Number.isFinite(overrideVal)) {
     return {
       price: overrideVal,
-      change_24h: base?.change_24h ?? null,
+      change_24h: base?.change_24h ?? quoteSlice(enriched, 'usd')?.change_24h ?? null,
       market_cap: base?.market_cap ?? null,
       priceSource: 'override',
     }

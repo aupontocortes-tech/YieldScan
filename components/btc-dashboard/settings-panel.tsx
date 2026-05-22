@@ -4,7 +4,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
+import { CycleBottomAlerts } from '@/components/btc-dashboard/cycle-bottom-alerts'
+import { CycleBottomPanel } from '@/components/btc-dashboard/cycle-bottom-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
+import type { CycleBottomSignalState } from '@/lib/btc/cycle-bottom'
 import type { MaType } from '@/lib/btc/types'
 import { BULL_MARKET_BAND_EMA_WEEKS, BULL_MARKET_BAND_SMA_WEEKS } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
@@ -173,7 +176,16 @@ function ColorDot({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
+export function SettingsPanel({
+  embedded = false,
+  cycleSignals,
+  onChartViewApplied,
+}: {
+  embedded?: boolean
+  cycleSignals?: CycleBottomSignalState
+  /** Ao mudar o intervalo via fundos de ciclo, fecha o painel para ver o gráfico. */
+  onChartViewApplied?: () => void
+}) {
   const {
     mas,
     addMa,
@@ -195,6 +207,9 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
     setOnChain,
     bullMarketBand,
     setBullMarketBand,
+    sma200Daily,
+    setSma200Daily,
+    cycleBottomAlerts,
     resetDefaults,
   } = useBtcSettings()
 
@@ -211,6 +226,45 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
             Repor
           </Button>
         </div>
+      )}
+
+      <CycleBottomPanel variant="settings" onChartViewApplied={onChartViewApplied} />
+      {cycleBottomAlerts.enabled && cycleSignals ? (
+        <CycleBottomAlerts signals={cycleSignals} />
+      ) : null}
+
+      {sma200Daily.enabled && (
+        <Section
+          title="SMA 200 (Diário)"
+          subtitle="Gráfico diário · aparência da linha"
+          helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Diário. Rompimento acima da SMA 200 = Sinal 1 (fim do fundo / início de bull)."
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-[10px] text-zinc-500">Espessura</Label>
+              <select
+                value={sma200Daily.lineWidth}
+                onChange={(e) =>
+                  setSma200Daily({
+                    ...sma200Daily,
+                    lineWidth: Number(e.target.value) as 1 | 2 | 3,
+                  })
+                }
+                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </div>
+          </div>
+          <Rule />
+          <ColorDot
+            label="Linha SMA 200"
+            color={sma200Daily.color}
+            onChange={(c) => setSma200Daily({ ...sma200Daily, color: c })}
+          />
+        </Section>
       )}
 
       {/* ── Velas BTC ───────────────────────────────────────────── */}
@@ -360,13 +414,11 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
         </Button>
       </Section>
 
-      {/* ── Bull Market Support Bands ────────────────────────────── */}
+      {bullMarketBand.enabled && (
       <Section
-        title="Bull Market Support Bands"
-        subtitle={`SMA ${BULL_MARKET_BAND_SMA_WEEKS} semanas e EMA ${BULL_MARKET_BAND_EMA_WEEKS} semanas em dados semanais (1w) — no gráfico de preço`}
-        helpText="Indicador popular (ex. zkdev no TradingView): duas linhas calculadas em fechos semanais. Funciona em qualquer intervalo do gráfico: as linhas seguem o último valor semanal disponível. Liga para ver a banda sobre as velas."
-        enabled={bullMarketBand.enabled}
-        onToggle={(v) => setBullMarketBand({ ...bullMarketBand, enabled: v })}
+        title="Bull Market Band — aparência"
+        subtitle={`Gráfico mensal (Heikin Ashi) · SMA ${BULL_MARKET_BAND_SMA_WEEKS}w + EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`}
+        helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Mensal com velas HA e duas linhas da banda (calculadas em fechos semanais)."
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <div className="flex flex-col gap-1">
@@ -407,6 +459,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean }) {
           />
         </div>
       </Section>
+      )}
 
       {/* ── RSI + MACD side by side ──────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2">
