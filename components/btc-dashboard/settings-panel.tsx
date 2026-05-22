@@ -9,7 +9,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { CycleBottomPanel } from '@/components/btc-dashboard/cycle-bottom-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import type { MaType } from '@/lib/btc/types'
-import { BULL_MARKET_BAND_EMA_WEEKS, BULL_MARKET_BAND_SMA_WEEKS } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -19,13 +18,17 @@ function HelpTip({ text }: { text: string }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-[#d4af37] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#d4af37]/50"
+        <span
+          role="button"
+          tabIndex={0}
+          className="inline-flex shrink-0 cursor-pointer rounded p-0.5 text-zinc-500 transition-colors hover:text-[#d4af37] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#d4af37]/50"
           aria-label="Explicação do indicador"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') e.preventDefault()
+          }}
         >
           <CircleHelp className="h-3.5 w-3.5" />
-        </button>
+        </span>
       </PopoverTrigger>
       <PopoverContent
         side="left"
@@ -223,16 +226,12 @@ export function SettingsPanel({
     setMacd,
     stoch,
     setStoch,
-    bollinger,
-    setBollinger,
     zones,
     setZones,
     candles,
     setCandles,
     onChain,
     setOnChain,
-    bullMarketBand,
-    setBullMarketBand,
     resetDefaults,
   } = useBtcSettings()
 
@@ -410,51 +409,6 @@ export function SettingsPanel({
       </IndicatorSection>
 
       <IndicatorSection
-        title="Bull Market Band — aparência"
-        subtitle={`Gráfico mensal (Heikin Ashi) · SMA ${BULL_MARKET_BAND_SMA_WEEKS}w + EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`}
-        helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Mensal com velas HA e duas linhas da banda (calculadas em fechos semanais)."
-      >
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <div className="flex flex-col gap-1">
-            <Label className="text-[10px] text-zinc-500">Espessura</Label>
-            <select
-              value={bullMarketBand.lineWidth}
-              onChange={(e) =>
-                setBullMarketBand({
-                  ...bullMarketBand,
-                  lineWidth: Number(e.target.value) as 1 | 2 | 3,
-                })
-              }
-              className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
-            >
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-            </select>
-          </div>
-        </div>
-        <Rule />
-        <p className="mb-2 text-[10px] text-zinc-600">Cores da banda</p>
-        <div className="flex flex-wrap gap-3">
-          <ColorDot
-            label={`SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`}
-            color={bullMarketBand.colorSma}
-            onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorSma: c })}
-          />
-          <ColorDot
-            label={`EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`}
-            color={bullMarketBand.colorEma}
-            onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorEma: c })}
-          />
-          <ColorDot
-            label="Faixa (cloud)"
-            color={bullMarketBand.colorFill}
-            onChange={(c) => setBullMarketBand({ ...bullMarketBand, colorFill: c })}
-          />
-        </div>
-      </IndicatorSection>
-
-      <IndicatorSection
           title="RSI"
           subtitle="Relative Strength Index · força do momento"
           helpText="Oscilador 0–100 que mede a força dos últimos ganhos vs perdas. Zonas de sobrevenda/sobrecompra são referências comuns; aparece num painel separado abaixo do gráfico de preço quando ativo."
@@ -586,51 +540,6 @@ export function SettingsPanel({
               color={stoch.colors.d}
               onChange={(c) => setStoch({ ...stoch, colors: { ...stoch.colors, d: c } })}
             />
-          </div>
-      </IndicatorSection>
-
-      <IndicatorSection
-          title="Bollinger Bands"
-          subtitle="Bandas de volatilidade ± desvio padrão"
-          helpText="Bandas superior e inferior à volta de uma SMA, à distância de N desvios padrão. Bandas largas = mais volatilidade; o preço a roçar nas bandas indica movimento forte no curto prazo."
-          enabled={bollinger.enabled}
-          onToggle={(v) => setBollinger({ ...bollinger, enabled: v })}
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <Num label="Período (SMA)" value={bollinger.period} min={5} max={200} onChange={(n) => setBollinger({ ...bollinger, period: n })} />
-            <Num label="Desvio (σ)" value={bollinger.stdDev} min={0.5} max={4} step={0.1} onChange={(n) => setBollinger({ ...bollinger, stdDev: n })} />
-          </div>
-          <div className="mt-2">
-            <Label className="text-[10px] text-zinc-500">Espessura bandas</Label>
-            <select
-              value={bollinger.lineWidth}
-              onChange={(e) => setBollinger({ ...bollinger, lineWidth: Number(e.target.value) as 1 | 2 | 3 })}
-              className="mt-1 h-9 w-full rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
-            >
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-            </select>
-          </div>
-          <Rule />
-          <div className="space-y-2">
-            {([
-              ['showUpper', 'upper', 'Superior'] as const,
-              ['showMiddle', 'middle', 'Média'] as const,
-              ['showLower', 'lower', 'Inferior'] as const,
-            ]).map(([toggleKey, colorKey, label]) => (
-              <div key={toggleKey} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
-                <ColorDot
-                  label={label}
-                  color={bollinger.colors[colorKey]}
-                  onChange={(c) => setBollinger({ ...bollinger, colors: { ...bollinger.colors, [colorKey]: c } })}
-                />
-                <Switch
-                  checked={bollinger[toggleKey]}
-                  onCheckedChange={(c) => setBollinger({ ...bollinger, [toggleKey]: c })}
-                />
-              </div>
-            ))}
           </div>
       </IndicatorSection>
 

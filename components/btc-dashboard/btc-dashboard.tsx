@@ -26,8 +26,18 @@ import {
 } from '@/lib/btc/types'
 import { runSignalEngine } from '@/lib/btc/signal-engine'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, LayoutGrid, Loader2, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
-import { GoldenCrossStatus } from '@/components/btc-dashboard/golden-cross-status'
+import {
+  ArrowLeft,
+  LayoutGrid,
+  Loader2,
+  PenLine,
+  RefreshCw,
+  RotateCcw,
+  SlidersHorizontal,
+} from 'lucide-react'
+import { ChartDrawingActiveBanner } from '@/components/btc-dashboard/chart-drawing-active-banner'
+import type { ChartLegendSettingsFocus } from '@/components/btc-dashboard/chart-indicator-legend'
+import { DrawingsPanel } from '@/components/btc-dashboard/drawings-panel'
 
 const SettingsPanelLazy = dynamic(
   () =>
@@ -40,6 +50,22 @@ const SettingsPanelLazy = dynamic(
       <div className="flex flex-col items-center justify-center gap-2 py-16">
         <Loader2 className="h-6 w-6 animate-spin text-[#d4af37]/80" aria-hidden />
         <p className="text-xs text-zinc-500">A carregar configurações…</p>
+      </div>
+    ),
+  },
+)
+
+const DrawingsPanelLazy = dynamic(
+  () =>
+    import('@/components/btc-dashboard/drawings-panel').then((m) => ({
+      default: m.DrawingsPanel,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center gap-2 py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[#d4af37]/80" aria-hidden />
+        <p className="text-xs text-zinc-500">A carregar desenhos…</p>
       </div>
     ),
   },
@@ -65,6 +91,7 @@ export function BtcDashboard() {
     setGoldenCrossDaily,
   } = useBtcSettings()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawingsOpen, setDrawingsOpen] = useState(false)
   const [chartFocus, setChartFocus] = useState<'none' | 'goldenCross'>('none')
   const [chartResetKey, setChartResetKey] = useState(0)
 
@@ -172,6 +199,10 @@ export function BtcDashboard() {
     setChartResetKey((k) => k + 1)
   }
 
+  const openIndicatorSettings = (_focus: ChartLegendSettingsFocus) => {
+    setDrawerOpen(true)
+  }
+
   const chartSuite = (
     <BtcChartsSuite
       bars={bars}
@@ -199,6 +230,8 @@ export function BtcDashboard() {
         weeklyBarsForSma50Resolved.length < 50 &&
         (timeframe.interval !== '1w' || bars.length < 50)
       }
+      goldenCrossState={goldenCrossState}
+      onOpenIndicatorSettings={openIndicatorSettings}
       priceOnlyFocus={chartFocus === 'goldenCross'}
       resetKey={chartResetKey}
     />
@@ -235,9 +268,6 @@ export function BtcDashboard() {
             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
           </Button>
         </header>
-        <div className="shrink-0 border-b border-white/[0.04] px-3 py-2">
-          <GoldenCrossStatus state={goldenCrossState} />
-        </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
           {isError && (
             <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
@@ -291,11 +321,37 @@ export function BtcDashboard() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 px-2 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-[#d4af37] sm:px-3"
-            onClick={() => setDrawerOpen(true)}
+            className={cn(
+              'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+              drawerOpen
+                ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+            )}
+            onClick={() => {
+              setDrawingsOpen(false)
+              setDrawerOpen(true)
+            }}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Indicadores</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+              drawingsOpen
+                ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+            )}
+            onClick={() => {
+              setDrawerOpen(false)
+              setDrawingsOpen(true)
+            }}
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Desenhos</span>
           </Button>
           <Button
             type="button"
@@ -373,7 +429,12 @@ export function BtcDashboard() {
           </div>
         )}
 
-        {!isLoading && !isError && <div className="flex min-h-0 flex-1 flex-col">{chartSuite}</div>}
+        {!isLoading && !isError && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ChartDrawingActiveBanner />
+            {chartSuite}
+          </div>
+        )}
       </div>
 
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen} modal>
@@ -396,6 +457,26 @@ export function BtcDashboard() {
                 onGoldenCrossFullscreen={openGoldenCrossFullscreen}
               />
             ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={drawingsOpen} onOpenChange={setDrawingsOpen} modal>
+        <SheetContent
+          side="right"
+          className="z-[100] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg"
+        >
+          <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
+            <SheetTitle className="flex items-center gap-2 text-base text-white">
+              <PenLine className="h-4 w-4 text-[#d4af37]" aria-hidden />
+              Desenhos
+            </SheetTitle>
+            <SheetDescription className="text-[11px] leading-relaxed text-zinc-500">
+              Favoritos, linhas, Fibonacci, padrões, formas e anotações no gráfico — como no TradingView.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">
+            {drawingsOpen ? <DrawingsPanel /> : null}
           </div>
         </SheetContent>
       </Sheet>

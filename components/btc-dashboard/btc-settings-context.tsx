@@ -397,7 +397,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setRsi(mergeRsi(v2.rsi))
       setMacd(mergeMacd(v2.macd))
       setStoch(mergeStoch(v2.stoch))
-      setBollinger(mergeBollinger(v2.bollinger))
+      // Bollinger UI removed from panel — keep stored prefs but do not draw ghost line on chart
+      setBollinger({ ...mergeBollinger(v2.bollinger), enabled: false })
       if (v2.zones && typeof v2.zones === 'object') setZones({ ...DEFAULT_ZONES, ...v2.zones })
       if (v2.candles && typeof v2.candles === 'object') {
         const c = v2.candles
@@ -446,7 +447,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setRsi(mergeRsi(s.rsi as RsiSettings))
       setMacd(mergeMacd(s.macd as MacdSettings))
       setStoch(mergeStoch(s.stoch as StochSettings))
-      setBollinger(mergeBollinger(s.bollinger as BollingerSettings))
+      setBollinger({ ...mergeBollinger(s.bollinger as BollingerSettings), enabled: false })
       if (s.zones && typeof s.zones === 'object') setZones({ ...DEFAULT_ZONES, ...s.zones })
       if (s.candles && typeof s.candles === 'object') {
         const c = s.candles as CandlestickSettings

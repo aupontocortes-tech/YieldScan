@@ -24,6 +24,11 @@ import {
 } from '@/lib/btc/indicators'
 import { buildOnChainChartOverlays, overlayAxisTitle } from '@/lib/btc/on-chain-overlays'
 import {
+  ChartIndicatorLegend,
+  type ChartLegendSettingsFocus,
+} from '@/components/btc-dashboard/chart-indicator-legend'
+import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
+import {
   computeBullMarketBandOnChart,
   computeSma200OnDailyAligned,
   computeSma50OnDailyAligned,
@@ -94,6 +99,8 @@ type BtcChartsSuiteProps = {
   /** Velas 1d para Golden Cross (SMA 50 + 200 diárias). */
   dailyBarsForGoldenCross?: OhlcvBar[]
   goldenCrossLoading?: boolean
+  goldenCrossState?: GoldenCrossState
+  onOpenIndicatorSettings?: (focus: ChartLegendSettingsFocus) => void
   /** Só preço + indicadores de ciclo (modo ecrã inteiro). */
   priceOnlyFocus?: boolean
   resetKey?: number
@@ -109,6 +116,8 @@ export function BtcChartsSuite({
   sma50Loading = false,
   dailyBarsForGoldenCross = [],
   goldenCrossLoading = false,
+  goldenCrossState,
+  onOpenIndicatorSettings,
   priceOnlyFocus = false,
   resetKey = 0,
 }: BtcChartsSuiteProps) {
@@ -132,6 +141,7 @@ export function BtcChartsSuite({
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
+  const mainChartRef = useRef<IChartApi | null>(null)
   const rsiRef = useRef<HTMLDivElement>(null)
   const macdRef = useRef<HTMLDivElement>(null)
   const stochRef = useRef<HTMLDivElement>(null)
@@ -247,6 +257,7 @@ export function BtcChartsSuite({
       autoSize: true,
     })
     charts.push(cMain)
+    mainChartRef.current = cMain
 
     const { up, down, wickDown } = candles.colors
     const candle = cMain.addSeries(CandlestickSeries, {
@@ -296,6 +307,7 @@ export function BtcChartsSuite({
       if (!lineData.length) return
       cMain.addSeries(LineSeries, {
         color: ma.color,
+        title: `${ma.type} ${ma.period}`,
         lineWidth: ma.lineWidth,
         priceLineVisible: false,
         lastValueVisible: true,
@@ -428,7 +440,11 @@ export function BtcChartsSuite({
           )
       if (bbCfg.showMiddle)
         cMain
-          .addSeries(LineSeries, { color: bbCfg.colors.middle, ...bOpts })
+          .addSeries(LineSeries, {
+            color: bbCfg.colors.middle,
+            title: `Bollinger ${bbCfg.period}`,
+            ...bOpts,
+          })
           .setData(
             bars
               .map((b, i) => ({ time: b.time as Time, value: bbSeries.middle[i] }))
@@ -636,6 +652,7 @@ export function BtcChartsSuite({
     return () => {
       ro.disconnect()
       charts.forEach((c) => c.remove())
+      mainChartRef.current = null
     }
   }, [
     bars,
@@ -671,6 +688,25 @@ export function BtcChartsSuite({
     timeframe.id,
   ])
 
+  useEffect(() => {
+    const onZoom = (ev: Event) => {
+      const chart = mainChartRef.current
+      if (!chart) return
+      const direction = (ev as CustomEvent<{ direction: 'in' | 'out' }>).detail?.direction
+      if (direction !== 'in' && direction !== 'out') return
+      const ts = chart.timeScale()
+      const range = ts.getVisibleLogicalRange()
+      if (!range) return
+      const span = range.to - range.from
+      const center = (range.from + range.to) / 2
+      const factor = direction === 'in' ? 0.72 : 1.28
+      const newSpan = Math.max(12, span * factor)
+      ts.setVisibleLogicalRange({ from: center - newSpan / 2, to: center + newSpan / 2 })
+    }
+    window.addEventListener('yieldscan:chart-zoom', onZoom)
+    return () => window.removeEventListener('yieldscan:chart-zoom', onZoom)
+  }, [])
+
   if (bars.length < 10) {
     return (
       <div className="flex min-h-[200px] flex-1 items-center justify-center rounded-lg border border-white/5 bg-[#050505] text-sm text-zinc-500">
@@ -687,23 +723,27 @@ export function BtcChartsSuite({
     >
       <div className="relative min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]">
         <div ref={mainRef} className="absolute inset-0" />
+        <ChartIndicatorLegend
+          goldenCrossState={goldenCrossState}
+          onOpenSettings={onOpenIndicatorSettings}
+        />
         {bullMarketBand.enabled && bullBandLoading && (
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-[10px] text-[#d4af37]">
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-[10px] text-[#d4af37]">
             A carregar Bull Market Band (dados semanais)…
           </div>
         )}
         {bullMarketBand.enabled && !bullBandLoading && !bullBandOnChart && (
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
             Sem dados semanais suficientes para a banda. Tenta BTC/USDT ou atualiza.
           </div>
         )}
         {sma200Daily.enabled && sma200Loading && (
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
             A carregar SMA 200 (dados diários)…
           </div>
         )}
         {sma200Daily.enabled && !sma200Loading && !sma200OnChart && (
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
             Sem dados diários suficientes para SMA 200. Usa intervalo Diário ou atualiza.
           </div>
         )}
@@ -718,14 +758,14 @@ export function BtcChartsSuite({
           </div>
         )}
         {goldenCrossDaily.enabled && goldenCrossLoading && (
-          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-cyan-500/30 bg-black/80 px-2 py-1 text-[10px] text-cyan-300">
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-cyan-500/30 bg-black/80 px-2 py-1 text-[10px] text-cyan-300">
             A carregar Golden / Death Cross (dados diários)…
           </div>
         )}
         {goldenCrossDaily.enabled &&
           !goldenCrossLoading &&
           (!goldenSma50OnChart || !goldenSma200OnChart) && (
-            <div className="pointer-events-none absolute left-2 top-9 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+            <div className="pointer-events-none absolute left-2 top-32 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
               Sem dados diários suficientes para SMA 50 e 200. Usa Diário ou atualiza.
             </div>
           )}
