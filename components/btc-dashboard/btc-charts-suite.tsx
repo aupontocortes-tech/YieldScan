@@ -94,6 +94,7 @@ type BtcChartsSuiteProps = {
   /** Velas 1w para SMA 50 semanal. */
   weeklyBarsForSma50?: OhlcvBar[]
   bullBandLoading?: boolean
+  sma200Loading?: boolean
   sma50Loading?: boolean
   resetKey?: number
 }
@@ -104,6 +105,7 @@ export function BtcChartsSuite({
   weeklyBarsForBand = [],
   weeklyBarsForSma50 = [],
   bullBandLoading = false,
+  sma200Loading = false,
   sma50Loading = false,
   resetKey = 0,
 }: BtcChartsSuiteProps) {
@@ -721,6 +723,16 @@ export function BtcChartsSuite({
         {bullMarketBand.enabled && !bullBandLoading && !bullBandOnChart && (
           <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
             Sem dados semanais suficientes para a banda. Tenta BTC/USDT ou atualiza.
+          </div>
+        )}
+        {sma200Daily.enabled && sma200Loading && (
+          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+            A carregar SMA 200 (dados diários)…
+          </div>
+        )}
+        {sma200Daily.enabled && !sma200Loading && !sma200OnChart && (
+          <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+            Sem dados diários suficientes para SMA 200. Usa intervalo Diário ou atualiza.
           </div>
         )}
         {sma50Weekly.enabled && sma50Loading && (

@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 
-const ALLOWED_DAYS = new Set([1, 7, 14, 30, 90, 180, 365])
+const ALLOWED_DAYS = new Set([1, 7, 14, 30, 90, 180, 365, 'max'])
 
 /**
  * Proxy CoinGecko coins/{id}/ohlc — velas em USD para RWAs e ativos sem par Binance.
  */
 export async function GET(req: NextRequest) {
   const id = (req.nextUrl.searchParams.get('id') ?? '').replace(/[^a-z0-9_-]/gi, '')
-  const daysNum = Number(req.nextUrl.searchParams.get('days') ?? '30')
-  const days = ALLOWED_DAYS.has(daysNum) ? daysNum : 30
+  const daysRaw = (req.nextUrl.searchParams.get('days') ?? '30').toLowerCase()
+  const daysNum = Number(daysRaw)
+  const days: number | 'max' =
+    daysRaw === 'max'
+      ? 'max'
+      : ALLOWED_DAYS.has(daysNum)
+        ? daysNum
+        : 30
 
   if (!id) {
     return NextResponse.json({ error: 'id obrigatório (slug CoinGecko)' }, { status: 400 })
@@ -32,9 +38,14 @@ export async function GET(req: NextRequest) {
     }
     const data = (await res.json()) as unknown
     const ohlc = Array.isArray(data) ? data : []
+    const cacheSec = days === 'max' ? 600 : 60
     return NextResponse.json(
       { ohlc, id, days },
-      { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } },
+      {
+        headers: {
+          'Cache-Control': `public, s-maxage=${cacheSec}, stale-while-revalidate=${cacheSec * 2}`,
+        },
+      },
     )
   } catch {
     return NextResponse.json({ error: 'Falha ao contactar CoinGecko' }, { status: 502 })

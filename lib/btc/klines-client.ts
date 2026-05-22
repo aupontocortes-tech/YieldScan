@@ -30,6 +30,12 @@ function errorMessageFromResponse(body: unknown, status: number, path: string): 
   return msg
 }
 
+/** 0 = pedir histórico completo (paginação Binance até ao primeiro dia listado). */
+export function resolveIndicatorKlinesLimit(timeframe: TimeframePreset): number {
+  if (timeframe.id === '1d' || timeframe.id === '1w' || timeframe.id === '1M') return 0
+  return Math.min(timeframe.limit, 1000)
+}
+
 export async function fetchBinancePairKlines(
   symbol: string,
   interval: BinanceInterval,
@@ -38,12 +44,13 @@ export async function fetchBinancePairKlines(
   const sym = symbol.toUpperCase()
   const bases = ['/api/btc-klines', '/api/candles/btc']
   let lastErr = 'Sem resposta do servidor'
+  const limitParam = limit <= 0 ? '0' : String(Math.min(1000, limit))
 
   for (const path of bases) {
     const { ok, body, status } = await fetchKlinesFromApi(path, {
       symbol: sym,
       interval,
-      limit: String(limit),
+      limit: limitParam,
     })
     if (ok && Array.isArray(body)) {
       return parseBinanceKlines(body)
@@ -54,14 +61,14 @@ export async function fetchBinancePairKlines(
   throw new Error(lastErr)
 }
 
-/** Dias aceites pela API OHLC CoinGecko. */
-export type CoingeckoOhlcDays = 1 | 7 | 14 | 30 | 90 | 180 | 365
+/** Dias aceites pela API OHLC CoinGecko (`max` = desde o início do ativo). */
+export type CoingeckoOhlcDays = 1 | 7 | 14 | 30 | 90 | 180 | 365 | 'max'
 
 export function coingeckoOhlcDaysForTimeframe(tf: TimeframePreset): CoingeckoOhlcDays {
   if (tf.group === 'intra') return 1
-  if (tf.id === '1d' || tf.id === '2mo' || tf.id === '3mo') return 30
+  if (tf.id === '1d' || tf.id === '1w' || tf.id === '1M') return 'max'
+  if (tf.id === '2mo' || tf.id === '3mo') return 30
   if (tf.id === '6mo') return 90
-  if (tf.id === '1w' || tf.id === '1M') return 90
   if (tf.id === '1y' || tf.id === '3y') return 365
   return 30
 }
@@ -110,34 +117,41 @@ export async function fetchIndicatorKlines(
   pair: IndicatorPair,
   timeframe: TimeframePreset,
 ): Promise<OhlcvBar[]> {
+  const limit = resolveIndicatorKlinesLimit(timeframe)
   if (pair.source === 'binance' && pair.binanceSymbol) {
-    return fetchBinancePairKlines(pair.binanceSymbol, timeframe.interval, timeframe.limit)
+    return fetchBinancePairKlines(pair.binanceSymbol, timeframe.interval, limit)
   }
   if (pair.source === 'coingecko' && pair.coingeckoId) {
     const days = coingeckoOhlcDaysForTimeframe(timeframe)
     const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
-    if (bars.length > timeframe.limit) {
-      return bars.slice(-timeframe.limit)
+    if (limit > 0 && bars.length > limit) {
+      return bars.slice(-limit)
     }
     return bars
   }
   throw new Error('Par sem fonte de dados configurada.')
 }
 
-/** Velas para um par (Binance ou CoinGecko conforme o par). */
+/** Velas auxiliares (SMA 200 diária, banda semanal, etc.). limit ≤ 0 = histórico completo. */
 export async function fetchPairKlinesByInterval(
   pair: IndicatorPair,
   interval: BinanceInterval,
   limit: number,
 ): Promise<OhlcvBar[]> {
+  const fullHistory = limit <= 0
   if (pair.source === 'binance' && pair.binanceSymbol) {
-    return fetchBinancePairKlines(pair.binanceSymbol, interval, limit)
+    return fetchBinancePairKlines(pair.binanceSymbol, interval, fullHistory ? 0 : limit)
   }
   if (pair.coingeckoId) {
-    const days: CoingeckoOhlcDays =
-      interval === '1w' || interval === '1M' ? 365 : interval === '1d' ? 90 : 30
+    const days: CoingeckoOhlcDays = fullHistory
+      ? 'max'
+      : interval === '1w' || interval === '1M'
+        ? 365
+        : interval === '1d'
+          ? 90
+          : 30
     const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
-    return bars.length > limit ? bars.slice(-limit) : bars
+    return !fullHistory && bars.length > limit ? bars.slice(-limit) : bars
   }
   return []
 }

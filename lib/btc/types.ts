@@ -167,9 +167,10 @@ export const TIMEFRAME_PRESETS: TimeframePreset[] = [
   { id: '1h',  label: '1h',   interval: '1h',  limit: 500, group: 'intra' },
   { id: '4h',  label: '4h',   interval: '4h',  limit: 500, group: 'intra' },
   // Multi-day candles
-  { id: '1d',  label: '1d',   interval: '1d',  limit: 500, group: 'swing' },
-  { id: '1w',  label: '1w',   interval: '1w',  limit: 200, group: 'swing' },
-  { id: '1M',  label: '1mo',  interval: '1M',  limit: 60,  group: 'swing' },
+  /** limit 0 = histórico completo na Binance (paginação no servidor). */
+  { id: '1d',  label: '1d',   interval: '1d',  limit: 0, group: 'swing' },
+  { id: '1w',  label: '1w',   interval: '1w',  limit: 0, group: 'swing' },
+  { id: '1M',  label: '1mo',  interval: '1M',  limit: 0, group: 'swing' },
   // Period presets (fixed time window using daily/weekly candles)
   { id: '2mo', label: '2mo',  interval: '1d',  limit: 60,  group: 'periodo' },
   { id: '3mo', label: '3mo',  interval: '1d',  limit: 90,  group: 'periodo' },

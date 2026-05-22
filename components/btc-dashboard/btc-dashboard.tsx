@@ -72,28 +72,38 @@ export function BtcDashboard() {
     }
   }, [])
 
+  const fullHistoryChart =
+    timeframe.id === '1d' || timeframe.id === '1w' || timeframe.id === '1M'
+
   const { data: bars = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['indicator-klines', pair.id, timeframe.id],
     queryFn: () => fetchIndicatorKlines(pair, timeframe),
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: fullHistoryChart ? 300_000 : 30_000,
+    refetchInterval: fullHistoryChart ? 300_000 : 60_000,
   })
 
   const needWeekly = bullMarketBand.enabled || sma50Weekly.enabled
-  const needDaily = sma200Daily.enabled
+  const needDailySupplement = sma200Daily.enabled && timeframe.interval !== '1d'
 
-  const { data: dailyBars = [] } = useQuery({
-    queryKey: ['indicator-daily', pair.id, 'sma200'],
-    queryFn: () => fetchPairKlinesByInterval(pair, '1d', 260),
-    enabled: needDaily,
-    staleTime: 60_000,
+  const { data: dailyBarsSupplement = [] } = useQuery({
+    queryKey: ['indicator-daily', pair.id, 'sma200-full'],
+    queryFn: () => fetchPairKlinesByInterval(pair, '1d', 0),
+    enabled: needDailySupplement,
+    staleTime: 300_000,
   })
 
+  /** SMA 200: mesmas velas do gráfico em 1d; senão série diária completa alinhada. */
+  const dailyBarsForSma200 = useMemo(() => {
+    if (!sma200Daily.enabled) return []
+    if (timeframe.interval === '1d' && bars.length >= 200) return bars
+    return dailyBarsSupplement
+  }, [sma200Daily.enabled, timeframe.interval, bars, dailyBarsSupplement])
+
   const { data: weeklyBarsSupplement = [] } = useQuery({
-    queryKey: ['indicator-weekly', pair.id],
-    queryFn: () => fetchPairKlinesByInterval(pair, '1w', 280),
+    queryKey: ['indicator-weekly', pair.id, 'full'],
+    queryFn: () => fetchPairKlinesByInterval(pair, '1w', 0),
     enabled: needWeekly && timeframe.interval !== '1w',
-    staleTime: 60_000,
+    staleTime: 300_000,
   })
 
   /** Séries semanais: no gráfico 1w reutiliza as velas já carregadas. */
@@ -228,7 +238,12 @@ export function BtcDashboard() {
           <div className="flex min-h-0 flex-1 flex-col">
             <BtcChartsSuite
               bars={bars}
-              dailyBarsForSma200={sma200Daily.enabled ? dailyBars : []}
+              dailyBarsForSma200={dailyBarsForSma200}
+              sma200Loading={
+                sma200Daily.enabled &&
+                dailyBarsForSma200.length < 200 &&
+                (timeframe.interval !== '1d' || bars.length < 200)
+              }
               weeklyBarsForBand={weeklyBarsForBandResolved}
               weeklyBarsForSma50={weeklyBarsForSma50Resolved}
               bullBandLoading={
