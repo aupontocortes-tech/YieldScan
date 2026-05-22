@@ -130,9 +130,11 @@ export type Sma200DailySettings = {
   color: string
 }
 
-/** Liga o painel de alertas dos sinais de fundo de ciclo. */
-export type CycleBottomAlertsSettings = {
+/** SMA 50 em fechos semanais (fundo de ciclo / Pompx). */
+export type Sma50WeeklySettings = {
   enabled: boolean
+  lineWidth: 1 | 2 | 3
+  color: string
 }
 
 /** Períodos fixos (velas 1w) — iguais ao script popular zkdev / TradingView. */

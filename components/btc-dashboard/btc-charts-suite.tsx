@@ -29,7 +29,11 @@ import {
   syntheticNupl,
   syntheticSopr,
 } from '@/lib/btc/on-chain-synthetic'
-import { computeBullMarketBandOnChart, computeSma200OnDailyAligned } from '@/lib/btc/cycle-bottom'
+import {
+  computeBullMarketBandOnChart,
+  computeSma200OnDailyAligned,
+  computeSma50OnWeeklyAligned,
+} from '@/lib/btc/cycle-bottom'
 import { toHeikinAshi } from '@/lib/btc/heikin-ashi'
 import {
   BULL_MARKET_BAND_EMA_WEEKS,
@@ -87,7 +91,10 @@ type BtcChartsSuiteProps = {
   dailyBarsForSma200?: OhlcvBar[]
   /** Velas 1w para Bull Market Support Band (só preenchido quando o indicador está ligado). */
   weeklyBarsForBand?: OhlcvBar[]
+  /** Velas 1w para SMA 50 semanal. */
+  weeklyBarsForSma50?: OhlcvBar[]
   bullBandLoading?: boolean
+  sma50Loading?: boolean
   resetKey?: number
 }
 
@@ -95,7 +102,9 @@ export function BtcChartsSuite({
   bars,
   dailyBarsForSma200 = [],
   weeklyBarsForBand = [],
+  weeklyBarsForSma50 = [],
   bullBandLoading = false,
+  sma50Loading = false,
   resetKey = 0,
 }: BtcChartsSuiteProps) {
   const {
@@ -109,6 +118,7 @@ export function BtcChartsSuite({
     onChain,
     bullMarketBand,
     sma200Daily,
+    sma50Weekly,
     timeframe,
   } = useBtcSettings()
 
@@ -153,6 +163,11 @@ export function BtcChartsSuite({
     if (!bullMarketBand.enabled) return null
     return computeBullMarketBandOnChart(bars, weeklyBarsForBand)
   }, [bullMarketBand.enabled, weeklyBarsForBand, bars])
+
+  const sma50OnChart = useMemo(() => {
+    if (!sma50Weekly.enabled || weeklyBarsForSma50.length < 50) return null
+    return computeSma50OnWeeklyAligned(bars, weeklyBarsForSma50)
+  }, [sma50Weekly.enabled, weeklyBarsForSma50, bars])
 
   /** Pompx: gráfico mensal com velas Heikin Ashi quando a banda está ligada. */
   const candleBars = useMemo(() => {
@@ -289,6 +304,22 @@ export function BtcChartsSuite({
           color: s200.color,
           title: 'SMA 200 (Diário)',
           lineWidth: s200.lineWidth,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        }).setData(smaLine)
+      }
+    }
+
+    if (sma50OnChart && sma50Weekly.enabled) {
+      const s50 = sma50Weekly
+      const smaLine = bars
+        .map((b, i) => ({ time: b.time as Time, value: sma50OnChart[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (smaLine.length) {
+        cMain.addSeries(LineSeries, {
+          color: s50.color,
+          title: 'SMA 50 (Semanal)',
+          lineWidth: s50.lineWidth,
           priceLineVisible: false,
           lastValueVisible: true,
         }).setData(smaLine)
@@ -660,6 +691,8 @@ export function BtcChartsSuite({
     bullBandOnChart,
     sma200Daily,
     sma200OnChart,
+    sma50Weekly,
+    sma50OnChart,
     candleBars,
     timeframe.id,
   ])
@@ -688,6 +721,16 @@ export function BtcChartsSuite({
         {bullMarketBand.enabled && !bullBandLoading && !bullBandOnChart && (
           <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
             Sem dados semanais suficientes para a banda. Tenta BTC/USDT ou atualiza.
+          </div>
+        )}
+        {sma50Weekly.enabled && sma50Loading && (
+          <div className="pointer-events-none absolute left-2 top-9 z-10 rounded-md border border-sky-500/30 bg-black/80 px-2 py-1 text-[10px] text-sky-300">
+            A carregar SMA 50 (dados semanais)…
+          </div>
+        )}
+        {sma50Weekly.enabled && !sma50Loading && !sma50OnChart && (
+          <div className="pointer-events-none absolute left-2 top-9 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+            Sem dados semanais suficientes para SMA 50. Tenta outro par ou atualiza.
           </div>
         )}
       </div>

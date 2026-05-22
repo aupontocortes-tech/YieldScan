@@ -4,10 +4,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import { CycleBottomAlerts } from '@/components/btc-dashboard/cycle-bottom-alerts'
 import { CycleBottomPanel } from '@/components/btc-dashboard/cycle-bottom-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
-import type { CycleBottomSignalState } from '@/lib/btc/cycle-bottom'
 import type { MaType } from '@/lib/btc/types'
 import { BULL_MARKET_BAND_EMA_WEEKS, BULL_MARKET_BAND_SMA_WEEKS } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
@@ -178,11 +176,9 @@ function ColorDot({
 // ─────────────────────────────────────────────────────────────────────────────
 export function SettingsPanel({
   embedded = false,
-  cycleSignals,
   onChartViewApplied,
 }: {
   embedded?: boolean
-  cycleSignals?: CycleBottomSignalState
   /** Ao mudar o intervalo via fundos de ciclo, fecha o painel para ver o gráfico. */
   onChartViewApplied?: () => void
 }) {
@@ -209,7 +205,8 @@ export function SettingsPanel({
     setBullMarketBand,
     sma200Daily,
     setSma200Daily,
-    cycleBottomAlerts,
+    sma50Weekly,
+    setSma50Weekly,
     resetDefaults,
   } = useBtcSettings()
 
@@ -229,9 +226,6 @@ export function SettingsPanel({
       )}
 
       <CycleBottomPanel variant="settings" onChartViewApplied={onChartViewApplied} />
-      {cycleBottomAlerts.enabled && cycleSignals ? (
-        <CycleBottomAlerts signals={cycleSignals} />
-      ) : null}
 
       {sma200Daily.enabled && (
         <Section
@@ -263,6 +257,40 @@ export function SettingsPanel({
             label="Linha SMA 200"
             color={sma200Daily.color}
             onChange={(c) => setSma200Daily({ ...sma200Daily, color: c })}
+          />
+        </Section>
+      )}
+
+      {sma50Weekly.enabled && (
+        <Section
+          title="SMA 50 (Semanal)"
+          subtitle="Gráfico semanal · aparência da linha"
+          helpText="Liga no bloco «Fundos de ciclo» — o gráfico passa a Semanal. Média dos últimos 50 fechos semanais."
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-[10px] text-zinc-500">Espessura</Label>
+              <select
+                value={sma50Weekly.lineWidth}
+                onChange={(e) =>
+                  setSma50Weekly({
+                    ...sma50Weekly,
+                    lineWidth: Number(e.target.value) as 1 | 2 | 3,
+                  })
+                }
+                className="h-9 rounded-md border border-zinc-700 bg-black px-2 font-mono text-xs text-zinc-300"
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </div>
+          </div>
+          <Rule />
+          <ColorDot
+            label="Linha SMA 50"
+            color={sma50Weekly.color}
+            onChange={(c) => setSma50Weekly({ ...sma50Weekly, color: c })}
           />
         </Section>
       )}

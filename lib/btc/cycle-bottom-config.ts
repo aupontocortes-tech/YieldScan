@@ -1,7 +1,7 @@
 import { TIMEFRAME_PRESETS, type TimeframePreset } from '@/lib/btc/types'
 
 /** Intervalo do gráfico ao activar cada indicador de fundo de ciclo (Pompx). */
-export type CycleBottomIndicatorId = 'sma200' | 'bmsb' | 'alerts'
+export type CycleBottomIndicatorId = 'sma200' | 'bmsb' | 'sma50w'
 
 export type CycleBottomIndicatorMeta = {
   id: CycleBottomIndicatorId
@@ -31,12 +31,12 @@ export const CYCLE_BOTTOM_INDICATORS: CycleBottomIndicatorMeta[] = [
     bullMarketHint: 'Duas linhas (médias semanais) no gráfico mensal',
   },
   {
-    id: 'alerts',
-    label: 'Sinais bull market',
-    timeframeLabel: 'Mensal',
-    timeframeId: '1M',
-    hint: 'Vela Heikin Ashi mensal vs topo da banda',
-    bullMarketHint: 'Corpo verde acima da banda → início de bull (Sinal 2)',
+    id: 'sma50w',
+    label: 'SMA 50',
+    timeframeLabel: 'Semanal',
+    timeframeId: '1w',
+    hint: 'Média dos últimos 50 fechos semanais',
+    bullMarketHint: 'Tendência de médio prazo no gráfico semanal',
   },
 ]
 

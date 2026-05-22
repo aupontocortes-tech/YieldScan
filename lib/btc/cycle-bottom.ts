@@ -7,6 +7,7 @@ import {
 } from '@/lib/btc/types'
 
 export const SMA_200_DAILY_PERIOD = 200
+export const SMA_50_WEEKLY_PERIOD = 50
 
 export type CycleBottomSignalState = {
   signal1: boolean
@@ -40,6 +41,16 @@ export function computeSma200OnDailyAligned(
   const closes = dailyBars.map((b) => b.close)
   const sma200 = sma(closes, SMA_200_DAILY_PERIOD)
   return alignDailySeriesToBars(displayBars, dailyBars, sma200)
+}
+
+export function computeSma50OnWeeklyAligned(
+  displayBars: OhlcvBar[],
+  weeklyBars: OhlcvBar[],
+): (number | null)[] {
+  if (weeklyBars.length < SMA_50_WEEKLY_PERIOD) return Array(displayBars.length).fill(null)
+  const closes = weeklyBars.map((b) => b.close)
+  const sma50 = sma(closes, SMA_50_WEEKLY_PERIOD)
+  return alignWeeklySeriesToBars(displayBars, weeklyBars, sma50)
 }
 
 export function computeBullMarketBandOnChart(

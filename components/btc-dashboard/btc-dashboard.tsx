@@ -7,7 +7,6 @@ import { BtcChartsSuite } from '@/components/btc-dashboard/btc-charts-suite'
 import { IndicatorPairSelector } from '@/components/btc-dashboard/indicator-pair-selector'
 import { MarketCard } from '@/components/btc-dashboard/market-card'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
-import { evaluateCycleBottomSignals } from '@/lib/btc/cycle-bottom'
 import { fetchIndicatorKlines, fetchPairKlinesByInterval } from '@/lib/btc/klines-client'
 import { Button } from '@/components/ui/button'
 import {
@@ -59,7 +58,7 @@ export function BtcDashboard() {
     resetDefaults,
     bullMarketBand,
     sma200Daily,
-    cycleBottomAlerts,
+    sma50Weekly,
   } = useBtcSettings()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [chartResetKey, setChartResetKey] = useState(0)
@@ -80,9 +79,8 @@ export function BtcDashboard() {
     refetchInterval: 60_000,
   })
 
-  const needWeekly = bullMarketBand.enabled || cycleBottomAlerts.enabled
-  const needDaily = sma200Daily.enabled || cycleBottomAlerts.enabled
-  const needMonthly = cycleBottomAlerts.enabled
+  const needWeekly = bullMarketBand.enabled || sma50Weekly.enabled
+  const needDaily = sma200Daily.enabled
 
   const { data: dailyBars = [] } = useQuery({
     queryKey: ['indicator-daily', pair.id, 'sma200'],
@@ -91,31 +89,29 @@ export function BtcDashboard() {
     staleTime: 60_000,
   })
 
-  const { data: weeklyBarsForBand = [] } = useQuery({
-    queryKey: ['indicator-weekly', pair.id, 'bull-market-band'],
+  const { data: weeklyBarsSupplement = [] } = useQuery({
+    queryKey: ['indicator-weekly', pair.id],
     queryFn: () => fetchPairKlinesByInterval(pair, '1w', 280),
-    enabled: needWeekly,
+    enabled: needWeekly && timeframe.interval !== '1w',
     staleTime: 60_000,
   })
 
-  /** Médias da banda: sempre em 1w; no gráfico semanal reutiliza as velas já carregadas. */
+  /** Séries semanais: no gráfico 1w reutiliza as velas já carregadas. */
+  const weeklyBarsResolved = useMemo(() => {
+    if (!needWeekly) return []
+    if (timeframe.interval === '1w' && bars.length > 0) return bars
+    return weeklyBarsSupplement
+  }, [needWeekly, timeframe.interval, bars, weeklyBarsSupplement])
+
   const weeklyBarsForBandResolved = useMemo(() => {
     if (!bullMarketBand.enabled) return []
-    if (timeframe.interval === '1w' && bars.length >= 22) return bars
-    return weeklyBarsForBand
-  }, [bullMarketBand.enabled, timeframe.interval, bars, weeklyBarsForBand])
+    return weeklyBarsResolved
+  }, [bullMarketBand.enabled, weeklyBarsResolved])
 
-  const { data: monthlyBars = [] } = useQuery({
-    queryKey: ['indicator-monthly', pair.id, 'cycle-signals'],
-    queryFn: () => fetchPairKlinesByInterval(pair, '1M', 60),
-    enabled: needMonthly,
-    staleTime: 60_000,
-  })
-
-  const cycleSignals = useMemo(
-    () => evaluateCycleBottomSignals(dailyBars, weeklyBarsForBand, monthlyBars),
-    [dailyBars, weeklyBarsForBand, monthlyBars],
-  )
+  const weeklyBarsForSma50Resolved = useMemo(() => {
+    if (!sma50Weekly.enabled) return []
+    return weeklyBarsResolved
+  }, [sma50Weekly.enabled, weeklyBarsResolved])
 
   const signalResult = useMemo(() => {
     if (bars.length < 30) return null
@@ -233,11 +229,17 @@ export function BtcDashboard() {
             <BtcChartsSuite
               bars={bars}
               dailyBarsForSma200={sma200Daily.enabled ? dailyBars : []}
-              weeklyBarsForBand={bullMarketBand.enabled ? weeklyBarsForBandResolved : []}
+              weeklyBarsForBand={weeklyBarsForBandResolved}
+              weeklyBarsForSma50={weeklyBarsForSma50Resolved}
               bullBandLoading={
                 bullMarketBand.enabled &&
                 weeklyBarsForBandResolved.length < 22 &&
                 (timeframe.interval !== '1w' || bars.length < 22)
+              }
+              sma50Loading={
+                sma50Weekly.enabled &&
+                weeklyBarsForSma50Resolved.length < 50 &&
+                (timeframe.interval !== '1w' || bars.length < 50)
               }
               resetKey={chartResetKey}
             />
@@ -253,17 +255,13 @@ export function BtcDashboard() {
           <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
             <SheetTitle className="text-base text-white">Indicadores &amp; aparência</SheetTitle>
             <SheetDescription className="text-[11px] leading-relaxed text-zinc-500">
-              No topo: fundos de ciclo e sinais de bull market (Pompx). Depois: velas, médias, osciladores e proxies.
+              No topo: fundos de ciclo (Pompx). Depois: velas, médias, osciladores e proxies.
               Preferências gravadas neste dispositivo (SQLite + localStorage).
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">
             {drawerOpen ? (
-              <SettingsPanelLazy
-                embedded
-                cycleSignals={cycleSignals}
-                onChartViewApplied={() => setDrawerOpen(false)}
-              />
+              <SettingsPanelLazy embedded onChartViewApplied={() => setDrawerOpen(false)} />
             ) : null}
           </div>
         </SheetContent>

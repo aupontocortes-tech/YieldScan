@@ -167,19 +167,19 @@ function HighlightCard({ coin, mercadoPrefs }: { coin: MercadoCoin; mercadoPrefs
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative flex min-w-0 flex-col rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-card/90 to-background p-3.5 sm:p-5 transition-all hover:border-cyan-500/45 hover:shadow-lg"
+      className="group relative flex min-w-0 flex-col rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-card/90 to-background p-3 sm:p-5 transition-all hover:border-cyan-500/45 hover:shadow-lg"
     >
-      <div className="flex items-start gap-2 sm:gap-3">
+      <div className="flex items-start gap-1.5 sm:gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-cyan-400/90 sm:text-[11px]">
+          <p className="text-[9px] font-medium uppercase tracking-wide text-cyan-400/90 sm:text-[11px]">
             Em destaque
           </p>
-          <h3 className="mt-0.5 line-clamp-2 text-sm font-bold leading-snug text-foreground sm:mt-1 sm:text-lg">
+          <h3 className="mt-0.5 truncate text-xs font-bold text-foreground sm:mt-1 sm:text-lg">
             {coin.name}
           </h3>
-          <p className="text-[10px] text-muted-foreground sm:text-xs">{coin.symbol}</p>
+          <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{coin.symbol}</p>
         </div>
-        <CoinThumb coin={coin} size={40} />
+        <CoinThumb coin={coin} size={32} />
       </div>
       {q.priceSource === 'override' && (
         <Badge
@@ -189,10 +189,7 @@ function HighlightCard({ coin, mercadoPrefs }: { coin: MercadoCoin; mercadoPrefs
           Valor manual
         </Badge>
       )}
-      <p
-        className="mt-3 w-full min-w-0 text-lg font-bold leading-tight tabular-nums tracking-tight text-foreground sm:mt-4 sm:text-2xl lg:text-3xl"
-        style={{ fontSize: priceLabel.length > 14 ? 'clamp(0.95rem, 3.8vw, 1.75rem)' : undefined }}
-      >
+      <p className="mt-2 w-full min-w-0 break-words text-[clamp(0.75rem,4.2vw,1.875rem)] font-bold leading-tight tabular-nums tracking-tight text-foreground sm:mt-4">
         {priceLabel}
       </p>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:mt-2">
@@ -773,7 +770,7 @@ export function DashbuddyCryptoMarket() {
 
       {marketLoading && (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 min-[420px]:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
             {Array.from({ length: Math.min(MAX_MARKET_HIGHLIGHTS, Math.max(4, highlightIds.length)) }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
             ))}
@@ -788,7 +785,7 @@ export function DashbuddyCryptoMarket() {
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Moedas em destaque
             </h3>
-            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 min-[420px]:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
               {highlightCoins.map((coin, i) => {
                 const id = data.highlightIds[i] ?? ''
                 const displayCoin = coinForHighlightDisplay(coin, id, displayPrefs)

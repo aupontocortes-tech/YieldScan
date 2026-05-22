@@ -28,8 +28,8 @@ export function CycleBottomPanel({ variant = 'settings', onChartViewApplied }: C
     setSma200Daily,
     bullMarketBand,
     setBullMarketBand,
-    cycleBottomAlerts,
-    setCycleBottomAlerts,
+    sma50Weekly,
+    setSma50Weekly,
   } = useBtcSettings()
 
   const stateById: Record<
@@ -44,9 +44,9 @@ export function CycleBottomPanel({ variant = 'settings', onChartViewApplied }: C
       checked: bullMarketBand.enabled,
       setEnabled: (v) => setBullMarketBand({ ...bullMarketBand, enabled: v }),
     },
-    alerts: {
-      checked: cycleBottomAlerts.enabled,
-      setEnabled: (v) => setCycleBottomAlerts({ ...cycleBottomAlerts, enabled: v }),
+    sma50w: {
+      checked: sma50Weekly.enabled,
+      setEnabled: (v) => setSma50Weekly({ ...sma50Weekly, enabled: v }),
     },
   }
 

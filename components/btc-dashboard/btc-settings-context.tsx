@@ -19,9 +19,9 @@ import {
 import type {
   BollingerSettings,
   BullMarketSupportBandSettings,
-  CycleBottomAlertsSettings,
   CandlestickSettings,
   Sma200DailySettings,
+  Sma50WeeklySettings,
   MaConfig,
   MacdSettings,
   OnChainBundle,
@@ -148,8 +148,10 @@ const DEFAULT_SMA_200_DAILY: Sma200DailySettings = {
   color: '#fbbf24',
 }
 
-const DEFAULT_CYCLE_BOTTOM_ALERTS: CycleBottomAlertsSettings = {
+const DEFAULT_SMA_50_WEEKLY: Sma50WeeklySettings = {
   enabled: false,
+  lineWidth: 2,
+  color: '#38bdf8',
 }
 
 const BTC_KV = 'btc_dashboard_v2' as const
@@ -170,7 +172,9 @@ type BtcPersistV2 = {
   onChain: OnChainBundle
   bullMarketBand?: BullMarketSupportBandSettings
   sma200Daily?: Sma200DailySettings
-  cycleBottomAlerts?: CycleBottomAlertsSettings
+  sma50Weekly?: Sma50WeeklySettings
+  /** Legado: migrado para sma50Weekly se estiver ligado. */
+  cycleBottomAlerts?: { enabled?: boolean }
 }
 
 /** Migração de estado antigo (v1 em btc_dashboard_v1). */
@@ -294,8 +298,8 @@ type Ctx = {
   setBullMarketBand: (b: BullMarketSupportBandSettings) => void
   sma200Daily: Sma200DailySettings
   setSma200Daily: (s: Sma200DailySettings) => void
-  cycleBottomAlerts: CycleBottomAlertsSettings
-  setCycleBottomAlerts: (c: CycleBottomAlertsSettings) => void
+  sma50Weekly: Sma50WeeklySettings
+  setSma50Weekly: (s: Sma50WeeklySettings) => void
   resetDefaults: () => void
 }
 
@@ -324,9 +328,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     ...DEFAULT_BULL_MARKET_BAND,
   }))
   const [sma200Daily, setSma200Daily] = useState<Sma200DailySettings>(() => ({ ...DEFAULT_SMA_200_DAILY }))
-  const [cycleBottomAlerts, setCycleBottomAlerts] = useState<CycleBottomAlertsSettings>(() => ({
-    ...DEFAULT_CYCLE_BOTTOM_ALERTS,
-  }))
+  const [sma50Weekly, setSma50Weekly] = useState<Sma50WeeklySettings>(() => ({ ...DEFAULT_SMA_50_WEEKLY }))
   const [hydrated, setHydrated] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistRef = useRef<BtcPersistV2 | null>(null)
@@ -349,7 +351,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     onChain,
     bullMarketBand,
     sma200Daily,
-    cycleBottomAlerts,
+    sma50Weekly,
   }
 
   useEffect(() => {
@@ -388,8 +390,15 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
           lineWidth: s.lineWidth === 1 || s.lineWidth === 3 ? s.lineWidth : 2,
         })
       }
-      if (v2.cycleBottomAlerts && typeof v2.cycleBottomAlerts === 'object') {
-        setCycleBottomAlerts({ ...DEFAULT_CYCLE_BOTTOM_ALERTS, ...v2.cycleBottomAlerts })
+      if (v2.sma50Weekly && typeof v2.sma50Weekly === 'object') {
+        const s = v2.sma50Weekly
+        setSma50Weekly({
+          ...DEFAULT_SMA_50_WEEKLY,
+          ...s,
+          lineWidth: s.lineWidth === 1 || s.lineWidth === 3 ? s.lineWidth : 2,
+        })
+      } else if (v2.cycleBottomAlerts?.enabled) {
+        setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY, enabled: true })
       }
     }
 
@@ -479,7 +488,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     onChain,
     bullMarketBand,
     sma200Daily,
-    cycleBottomAlerts,
+    sma50Weekly,
   ])
 
   useEffect(() => {
@@ -532,7 +541,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setOnChainState(mergeOnChain(undefined))
     setBullMarketBand({ ...DEFAULT_BULL_MARKET_BAND })
     setSma200Daily({ ...DEFAULT_SMA_200_DAILY })
-    setCycleBottomAlerts({ ...DEFAULT_CYCLE_BOTTOM_ALERTS })
+    setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY })
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(LS_MIRROR)
     } catch {
@@ -569,8 +578,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setBullMarketBand,
       sma200Daily,
       setSma200Daily,
-      cycleBottomAlerts,
-      setCycleBottomAlerts,
+      sma50Weekly,
+      setSma50Weekly,
       resetDefaults,
     }),
     [
@@ -586,7 +595,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       onChain,
       bullMarketBand,
       sma200Daily,
-      cycleBottomAlerts,
+      sma50Weekly,
       addMa,
       updateMa,
       removeMa,
