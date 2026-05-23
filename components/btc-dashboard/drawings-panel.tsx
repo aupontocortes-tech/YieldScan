@@ -1,90 +1,99 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
-import { resolveDrawingIcon } from '@/components/btc-dashboard/drawing-tool-icons'
+import { DrawingTvIcon } from '@/components/btc-dashboard/drawing-tv-icon'
 import {
-  DRAWING_CATEGORIES,
-  getDrawingTool,
+  DRAWING_PANEL_TAB_IDS,
+  getCategoryMeta,
   getToolsForCategory,
   searchDrawingTools,
   type DrawingCategoryId,
   type DrawingToolMeta,
 } from '@/lib/btc/chart-drawings-config'
 import { cn } from '@/lib/utils'
-import { MoreVertical, Search, Star } from 'lucide-react'
+import { MoreVertical, Search } from 'lucide-react'
 
-const ACTION_WITH_MENU = new Set(['hide-drawings', 'weak-magnet', 'remove-all'])
+const SPLIT_ACTIONS = new Set(['hide-drawings', 'weak-magnet', 'remove-all'])
 
 function ToolTile({
   tool,
   active,
-  fav,
   actionOn,
   onSelect,
-  onToggleFavorite,
+  onLongPressFavorite,
+  isFavorite,
 }: {
   tool: DrawingToolMeta
   active: boolean
-  fav: boolean
   actionOn?: boolean
   onSelect: () => void
-  onToggleFavorite: () => void
+  onLongPressFavorite: () => void
+  isFavorite: boolean
 }) {
-  const Icon = resolveDrawingIcon(tool.icon)
-  const hasMenu = tool.kind === 'action' && ACTION_WITH_MENU.has(tool.id)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasSplit = tool.kind === 'action' && SPLIT_ACTIONS.has(tool.id)
 
-  return (
-    <div
-      className={cn(
-        'relative flex min-h-[72px] flex-col rounded-lg border transition-colors',
-        active || actionOn
-          ? 'border-[#d4af37]/45 bg-[#d4af37]/10'
-          : 'border-zinc-800/90 bg-zinc-900/50 hover:border-zinc-700',
-      )}
-    >
-      {tool.kind === 'draw' && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleFavorite()
-          }}
-          className="absolute right-1 top-1 z-10 rounded p-0.5 text-zinc-600 hover:text-[#d4af37]"
-          aria-label={fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-        >
-          <Star className={cn('h-3 w-3', fav && 'fill-[#d4af37] text-[#d4af37]')} />
-        </button>
-      )}
-      <button
-        type="button"
-        title={tool.hint}
-        onClick={onSelect}
+  const startLong = () => {
+    if (tool.kind !== 'draw') return
+    timerRef.current = setTimeout(() => {
+      onLongPressFavorite()
+    }, 500)
+  }
+  const cancelLong = () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }
+
+  if (hasSplit) {
+    return (
+      <div
         className={cn(
-          'flex flex-1 flex-col items-center justify-center gap-1.5 px-1.5 py-2.5 text-center',
-          hasMenu && 'pr-7',
+          'flex min-h-[100px] overflow-hidden rounded-xl bg-[#2c2c2e]',
+          (active || actionOn) && 'ring-1 ring-white/30',
         )}
       >
-        <Icon
-          className={cn('h-5 w-5 shrink-0', active || actionOn ? 'text-[#d4af37]' : 'text-zinc-300')}
-          aria-hidden
-        />
-        <span className="line-clamp-2 text-[10px] leading-tight text-zinc-300">{tool.label}</span>
-      </button>
-      {hasMenu && (
         <button
           type="button"
-          className="absolute bottom-0 right-0 flex h-full w-7 items-center justify-center border-l border-zinc-800/80 text-zinc-500 hover:text-zinc-300"
-          aria-label={`Opções: ${tool.label}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onSelect()
-          }}
+          title={tool.hint}
+          onClick={onSelect}
+          className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 px-1 py-3"
         >
-          <MoreVertical className="h-3.5 w-3.5" aria-hidden />
+          <DrawingTvIcon toolId={tool.id} />
+          <span className="line-clamp-2 px-1 text-center text-[11px] leading-tight text-[#e5e5e7]">
+            {tool.label}
+          </span>
         </button>
+        <button
+          type="button"
+          className="flex w-9 shrink-0 items-center justify-center border-l border-[#3a3a3c] text-[#8e8e93] hover:text-white"
+          aria-label={`Opções: ${tool.label}`}
+          onClick={onSelect}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      title={tool.hint + (tool.kind === 'draw' ? ' · mantém premido para favorito' : '')}
+      onClick={onSelect}
+      onPointerDown={startLong}
+      onPointerUp={cancelLong}
+      onPointerLeave={cancelLong}
+      className={cn(
+        'relative flex min-h-[104px] w-full flex-col items-center justify-center gap-2 rounded-xl bg-[#252528] px-1.5 py-3.5 transition-colors hover:bg-[#2c2c2e]',
+        (active || actionOn) && 'ring-1 ring-white/30',
+        isFavorite && tool.kind === 'draw' && 'ring-1 ring-[#d4af37]/50',
       )}
-    </div>
+    >
+      <DrawingTvIcon toolId={tool.id} />
+      <span className="line-clamp-2 px-1 text-center text-[11px] leading-tight text-[#e5e5e7]">
+        {tool.label}
+      </span>
+    </button>
   )
 }
 
@@ -104,7 +113,15 @@ export function DrawingsPanel() {
   const [tab, setTab] = useState<DrawingCategoryId>('tools')
   const [query, setQuery] = useState('')
 
-  const activeTool = activeToolId ? getDrawingTool(activeToolId) : null
+  const panelTabs = useMemo(
+    () =>
+      DRAWING_PANEL_TAB_IDS.map((id) => getCategoryMeta(id)).filter(
+        (c): c is NonNullable<typeof c> => c != null,
+      ),
+    [],
+  )
+
+  const activeCategory = getCategoryMeta(tab)
 
   const tools = useMemo(() => {
     const q = query.trim()
@@ -130,74 +147,73 @@ export function DrawingsPanel() {
   }
 
   return (
-    <div className="flex min-h-0 flex-col gap-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+    <div className="flex min-h-0 flex-col">
+      <div className="relative mb-3">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#636366]" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Pesquisar"
-          className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 focus:border-[#d4af37]/40 focus:outline-none focus:ring-1 focus:ring-[#d4af37]/30"
+          className="h-11 w-full rounded-xl bg-[#1c1c1e] pl-10 pr-3 text-[15px] text-white placeholder:text-[#636366] focus:outline-none focus:ring-1 focus:ring-white/20"
         />
       </div>
 
       {!query.trim() && (
-        <div
-          className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 scrollbar-thin"
-          role="tablist"
-          aria-label="Categorias de desenhos"
-        >
-          {DRAWING_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === cat.id}
-              onClick={() => setTab(cat.id)}
-              className={cn(
-                'shrink-0 rounded-md px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors',
-                tab === cat.id
-                  ? 'bg-zinc-700 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200',
-              )}
-            >
-              {cat.tabLabel}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {activeTool && activeTool.kind === 'draw' && (
-        <div className="rounded-lg border border-[#d4af37]/25 bg-[#d4af37]/8 px-3 py-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-[#d4af37]/90">
-            Ferramenta activa
-          </p>
-          <p className="text-sm text-white">{activeTool.label}</p>
-        </div>
+        <>
+          {/* Abas em grelha (todas visíveis — sem scroll escondido) */}
+          <div className="mb-2 grid grid-cols-4 gap-1.5 sm:grid-cols-4" role="tablist">
+            {panelTabs.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === cat.id}
+                onClick={() => setTab(cat.id)}
+                className={cn(
+                  'rounded-lg px-2 py-2 text-center text-[11px] font-medium leading-tight transition-colors',
+                  tab === cat.id
+                    ? 'bg-[#3a3a3c] text-white ring-1 ring-white/20'
+                    : 'bg-[#1c1c1e] text-[#8e8e93] hover:bg-[#2c2c2e] hover:text-[#c7c7cc]',
+                  cat.id === 'patterns' && tab !== cat.id && 'ring-1 ring-[#2962ff]/25',
+                  cat.id === 'forecasts' && tab !== cat.id && 'ring-1 ring-[#26a69a]/25',
+                )}
+              >
+                {cat.tabLabel}
+              </button>
+            ))}
+          </div>
+          {activeCategory && (
+            <p className="mb-3 text-[13px] font-semibold text-[#e5e5e7]">{activeCategory.title}</p>
+          )}
+        </>
       )}
 
       {!drawingsVisible && (
-        <p className="rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 text-[11px] text-zinc-400">
-          Desenhos ocultos no gráfico. Toca em «Ocultar desenhos» para mostrar.
+        <p className="mb-2 rounded-lg bg-[#2c2c2e] px-3 py-2 text-[12px] text-[#8e8e93]">
+          Desenhos ocultos — toca em «Ocultar desenhos» para mostrar.
         </p>
       )}
 
       {tab === 'favorites' && !query.trim() && tools.length === 0 ? (
-        <p className="py-6 text-center text-[11px] leading-relaxed text-zinc-500">
-          Marca ferramentas com a estrela nas outras categorias para as veres em Favoritos.
+        <p className="py-10 text-center text-[13px] leading-relaxed text-[#8e8e93]">
+          Mantém premida uma ferramenta para a adicionares aos favoritos.
+        </p>
+      ) : tools.length === 0 && !query.trim() ? (
+        <p className="py-10 text-center text-[13px] text-[#8e8e93]">
+          Nenhuma ferramenta nesta categoria.
         </p>
       ) : (
-        <ul className="grid grid-cols-3 gap-2">
+        <ul className="grid grid-cols-3 gap-2.5 pb-2">
           {tools.map((tool) => (
             <li key={tool.id}>
               <ToolTile
                 tool={tool}
                 active={activeToolId === tool.id}
-                fav={isFavorite(tool.id)}
                 actionOn={actionActive(tool)}
                 onSelect={() => selectTool(tool)}
-                onToggleFavorite={() => toggleFavorite(tool.id)}
+                onLongPressFavorite={() => toggleFavorite(tool.id)}
+                isFavorite={isFavorite(tool.id)}
               />
             </li>
           ))}
@@ -205,13 +221,8 @@ export function DrawingsPanel() {
       )}
 
       {query.trim() && tools.length === 0 && (
-        <p className="py-8 text-center text-xs text-zinc-500">Nenhuma ferramenta encontrada.</p>
+        <p className="py-10 text-center text-[13px] text-[#8e8e93]">Nenhuma ferramenta encontrada.</p>
       )}
-
-      <p className="text-[10px] leading-relaxed text-zinc-600">
-        Catálogo estilo TradingView. A colocação de desenhos no gráfico será ligada em seguida; favoritos,
-        ferramentas de acção e seleção já ficam guardados.
-      </p>
     </div>
   )
 }

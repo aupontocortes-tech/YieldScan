@@ -6,6 +6,7 @@ export type DrawingCategoryId =
   | 'patterns'
   | 'forecasts'
   | 'shapes'
+  | 'annotations'
 
 export type DrawingToolId = string
 
@@ -39,14 +40,28 @@ export type DrawingToolMeta = {
   keywords?: string[]
 }
 
+/** Ordem igual TradingView mobile: após Gann/Fib vêm Padrões e Previsão. */
 export const DRAWING_CATEGORIES: DrawingCategoryMeta[] = [
   { id: 'favorites', tabLabel: 'Favoritos', title: 'Favoritos' },
   { id: 'tools', tabLabel: 'Ferramentas', title: 'Ferramentas' },
-  { id: 'trendLines', tabLabel: 'Linhas de tendência', title: 'Linhas de tendência' },
-  { id: 'fibonacci', tabLabel: 'Gann e Fibonacci', title: 'Gann e Fibonacci' },
+  { id: 'trendLines', tabLabel: 'Linhas', title: 'Linhas de tendência' },
+  { id: 'fibonacci', tabLabel: 'Gann/Fib', title: 'Gann e Fibonacci' },
   { id: 'patterns', tabLabel: 'Padrões', title: 'Padrões' },
-  { id: 'forecasts', tabLabel: 'Previsão e medição', title: 'Previsão e medição' },
-  { id: 'shapes', tabLabel: 'Formas geométricas', title: 'Formas geométricas' },
+  { id: 'forecasts', tabLabel: 'Previsão', title: 'Previsão e medição' },
+  { id: 'shapes', tabLabel: 'Formas', title: 'Formas geométricas' },
+  { id: 'annotations', tabLabel: 'Anotações', title: 'Anotações e marcadores visuais' },
+]
+
+/** Abas visíveis no painel (sem favoritos na grelha — favoritos é primeira aba). */
+export const DRAWING_PANEL_TAB_IDS: DrawingCategoryId[] = [
+  'favorites',
+  'tools',
+  'trendLines',
+  'fibonacci',
+  'patterns',
+  'forecasts',
+  'shapes',
+  'annotations',
 ]
 
 function draw(
@@ -82,8 +97,6 @@ export const DRAWING_TOOLS: DrawingToolMeta[] = [
   action('tools', 'remove-all', 'Remover todos', 'Trash2', 'Apagar todos os desenhos do gráfico', 'remove-all'),
   action('tools', 'zoom-in', 'Zoom mais', 'ZoomIn', 'Aumentar zoom do gráfico', 'zoom-in'),
   action('tools', 'zoom-out', 'Zoom menos', 'ZoomOut', 'Reduzir zoom do gráfico', 'zoom-out'),
-  draw('tools', 'cursor', 'Cursor', 'MousePointer2', 'Seleccionar e mover desenhos'),
-  draw('tools', 'crosshair', 'Mira', 'Crosshair', 'Medir no gráfico'),
 
   // —— Linhas de tendência ——
   draw('trendLines', 'trend-line', 'Linha de tendência', 'TrendingUp', 'Dois pontos', ['tendencia']),
@@ -122,57 +135,59 @@ export const DRAWING_TOOLS: DrawingToolMeta[] = [
   draw('fibonacci', 'gann-fan', 'Leque de Gann', 'Fan', 'Leque de Gann'),
 
   // —— Padrões ——
-  draw('patterns', 'xabcd', 'Padrão XABCD', 'Pentagon', 'Harmónico XABCD'),
-  draw('patterns', 'cypher', 'Padrão Cypher', 'Hexagon', 'Harmónico Cypher'),
-  draw('patterns', 'head-shoulders', 'Cabeça e ombros', 'Mountain', 'Reversão clássica'),
-  draw('patterns', 'abcd', 'Padrão ABCD', 'Square', 'Harmónico ABCD'),
-  draw('patterns', 'triangle-pattern', 'Padrão triangular', 'Triangle', 'Triângulo harmónico'),
-  draw('patterns', 'three-drives', 'Padrão dos três avanços', 'TrendingUp', 'Three drives'),
-  draw('patterns', 'elliott-impulse', 'Onda de impulso Elliott (12345)', 'Activity', 'Impulso 1-2-3-4-5'),
-  draw('patterns', 'elliott-corrective', 'Onda corretiva Elliott (ABC)', 'Waves', 'Correcção ABC'),
-  draw('patterns', 'elliott-triangle', 'Onda triangular Elliott (ABCDE)', 'Triangle', 'Triângulo ABCDE'),
-  draw('patterns', 'elliott-double-combo', 'Onda combo dupla Elliott (WXY)', 'GitBranch', 'Combo W-X-Y'),
-  draw('patterns', 'elliott-triple-combo', 'Onda combo tripla Elliott (WXYZ)', 'GitMerge', 'Combo W-X-Y-Z'),
-  draw('patterns', 'cyclic-lines', 'Linhas cíclicas', 'Columns3', 'Linhas verticais cíclicas'),
-  draw('patterns', 'time-cycles', 'Ciclos temporais', 'RefreshCw', 'Ciclos de tempo'),
-  draw('patterns', 'sine-line', 'Senóide', 'Activity', 'Onda senoidal'),
+  draw('patterns', 'xabcd', 'Padrão XABCD', 'Pentagon', '5 cliques (X, A, B, C, D)'),
+  draw('patterns', 'cypher', 'Padrão Cypher', 'Hexagon', '5 cliques nos vértices'),
+  draw('patterns', 'head-shoulders', 'Cabeça e ombros', 'Mountain', '5 cliques no padrão'),
+  draw('patterns', 'abcd', 'Padrão ABCD', 'Square', '4 cliques (A, B, C, D)'),
+  draw('patterns', 'triangle-pattern', 'Padrão triangular', 'Triangle', '4 cliques nos vértices'),
+  draw('patterns', 'three-drives', 'Padrão dos três avanços', 'TrendingUp', '6 cliques no padrão'),
+  draw('patterns', 'elliott-impulse', 'Onda de impulso Elliott (12345)', 'Activity', '5 cliques (1-2-3-4-5)'),
+  draw('patterns', 'elliott-corrective', 'Onda corretiva Elliott (ABC)', 'Waves', '3 cliques (A, B, C)'),
+  draw('patterns', 'elliott-triangle', 'Onda triangular Elliott (ABCDE)', 'Triangle', '5 cliques (A-E)'),
+  draw('patterns', 'elliott-double-combo', 'Onda combo dupla Elliott (WXY)', 'GitBranch', '3 cliques (W, X, Y)'),
+  draw('patterns', 'elliott-triple-combo', 'Onda combo tripla Elliott (WXYZ)', 'GitMerge', '4 cliques (W-Z)'),
+  draw('patterns', 'cyclic-lines', 'Linhas cíclicas', 'Columns3', 'Arrasta a zona temporal'),
+  draw('patterns', 'time-cycles', 'Ciclos temporais', 'RefreshCw', '4 cliques no ciclo'),
+  draw('patterns', 'sine-line', 'Senóide', 'Activity', 'Arrasta a amplitude da onda'),
 
   // —— Previsão e medição ——
-  draw('forecasts', 'long-position', 'Posição compradora', 'ArrowUpFromLine', 'Long com alvo e stop'),
-  draw('forecasts', 'short-position', 'Posição vendedora', 'ArrowDownFromLine', 'Short com alvo e stop'),
-  draw('forecasts', 'forecast', 'Previsão', 'BarChart3', 'Projeção de preço'),
-  draw('forecasts', 'bar-pattern', 'Padrão de barras', 'BarChart2', 'Padrão em barras'),
-  draw('forecasts', 'ghost-feed', 'Informações fantasma', 'Ghost', 'Projeção fantasma'),
-  draw('forecasts', 'projection', 'Projeção', 'MoveUpRight', 'Projeção de movimento'),
-  draw('forecasts', 'anchored-vwap', 'VWAP ancorado', 'Anchor', 'VWAP desde um ponto'),
-  draw('forecasts', 'fixed-range-volume', 'Perfil de volume — intervalo fixo', 'BarChartHorizontal', 'Volume profile fixo'),
-  draw('forecasts', 'anchored-volume', 'Perfil de volume ancorado', 'BarChartHorizontal', 'Volume profile ancorado'),
-  draw('forecasts', 'price-range', 'Intervalo de preço', 'ArrowUpDown', 'Amplitude vertical'),
-  draw('forecasts', 'date-range', 'Intervalo de data', 'ArrowLeftRight', 'Duração horizontal'),
-  draw('forecasts', 'date-price-range', 'Variação de data e preço', 'Move', 'Caixa tempo + preço'),
+  draw('forecasts', 'long-position', 'Posição compradora', 'ArrowUpFromLine', 'Arrasta entrada → alvo/stop'),
+  draw('forecasts', 'short-position', 'Posição vendedora', 'ArrowDownFromLine', 'Arrasta entrada → alvo/stop'),
+  draw('forecasts', 'forecast', 'Previsão', 'BarChart3', 'Arrasta projeção de preço'),
+  draw('forecasts', 'bar-pattern', 'Padrão de barras', 'BarChart2', 'Arrasta zona de barras'),
+  draw('forecasts', 'ghost-feed', 'Informações fantasma', 'Ghost', 'Arrasta projeção fantasma'),
+  draw('forecasts', 'projection', 'Projeção', 'MoveUpRight', 'Arrasta vetor de projeção'),
+  draw('forecasts', 'anchored-vwap', 'VWAP ancorado', 'Anchor', 'Clica no ponto âncora'),
+  draw('forecasts', 'fixed-range-volume', 'Perfil de volume — intervalo fixo', 'BarChartHorizontal', 'Arrasta intervalo de volume'),
+  draw('forecasts', 'anchored-volume', 'Perfil de volume ancorado', 'BarChartHorizontal', 'Arrasta perfil ancorado'),
+  draw('forecasts', 'price-range', 'Intervalo de preço', 'ArrowUpDown', 'Arrasta amplitude de preço'),
+  draw('forecasts', 'date-range', 'Intervalo de data', 'ArrowLeftRight', 'Arrasta intervalo temporal'),
+  draw('forecasts', 'date-price-range', 'Variação de data e preço', 'Move', 'Arrasta caixa tempo + preço'),
 
-  // —— Formas geométricas e anotações ——
+  // —— Formas geométricas ——
   draw('shapes', 'brush', 'Pincel', 'Brush', 'Desenho à mão livre'),
   draw('shapes', 'highlighter', 'Destaques', 'Highlighter', 'Realçar zona no gráfico'),
-  draw('shapes', 'arrow-marker', 'Marcador de seta', 'ArrowBigUp', 'Seta grossa'),
-  draw('shapes', 'arrow', 'Seta', 'ArrowRight', 'Seta simples'),
-  draw('shapes', 'arrow-up', 'Seta para cima', 'ArrowUp', 'Seta para cima'),
-  draw('shapes', 'arrow-down', 'Seta para baixo', 'ArrowDown', 'Seta para baixo'),
   draw('shapes', 'rectangle', 'Retângulo', 'Square', 'Zona rectangular'),
   draw('shapes', 'rotated-rectangle', 'Retângulo giratório', 'Square', 'Retângulo com rotação'),
-  draw('shapes', 'path', 'Sequência', 'Waypoints', 'Vários segmentos'),
+  draw('shapes', 'path', 'Sequência', 'Waypoints', 'Cliques sucessivos · Enter para concluir'),
   draw('shapes', 'circle', 'Círculo', 'Circle', 'Círculo'),
   draw('shapes', 'ellipse', 'Elipse', 'Circle', 'Elipse'),
-  draw('shapes', 'polyline', 'Linha segmentada', 'Spline', 'Polilinha'),
-  draw('shapes', 'triangle-shape', 'Triângulo', 'Triangle', 'Três vértices'),
-  draw('shapes', 'arc-shape', 'Arco', 'Spline', 'Arco'),
-  draw('shapes', 'curve', 'Curva', 'Spline', 'Curva suave'),
-  draw('shapes', 'double-curve', 'Curva dupla', 'Spline', 'Curva em S'),
-  draw('shapes', 'text', 'Texto', 'Type', 'Etiqueta de texto'),
-  draw('shapes', 'note', 'Nota fixa', 'StickyNote', 'Post-it'),
-  draw('shapes', 'callout', 'Callout', 'MessageSquare', 'Balão com texto'),
-  draw('shapes', 'flag', 'Bandeira', 'Flag', 'Marcador de evento'),
-  draw('shapes', 'marker', 'Marcador', 'MapPin', 'Ponto de referência'),
+  draw('shapes', 'polyline', 'Linha segmentada', 'Spline', 'Cliques sucessivos · Enter para concluir'),
+  draw('shapes', 'triangle-shape', 'Triângulo', 'Triangle', 'Três cliques (A, B, C)'),
+  draw('shapes', 'arc-shape', 'Arco', 'Spline', 'Arco entre dois pontos'),
+  draw('shapes', 'curve', 'Curva', 'Spline', 'Curva suave · Enter para concluir'),
+  draw('shapes', 'double-curve', 'Curva dupla', 'Spline', 'Curva em S · Enter para concluir'),
+
+  // —— Anotações e visuais ——
+  draw('annotations', 'arrow-marker', 'Marcador de seta', 'ArrowBigUp', 'Seta grossa'),
+  draw('annotations', 'arrow', 'Seta', 'ArrowRight', 'Seta simples'),
+  draw('annotations', 'arrow-up', 'Seta para cima', 'ArrowUp', 'Seta para cima'),
+  draw('annotations', 'arrow-down', 'Seta para baixo', 'ArrowDown', 'Seta para baixo'),
+  draw('annotations', 'text', 'Texto', 'Type', 'Etiqueta de texto'),
+  draw('annotations', 'note', 'Nota fixa', 'StickyNote', 'Post-it no gráfico'),
+  draw('annotations', 'callout', 'Callout', 'MessageSquare', 'Balão com texto'),
+  draw('annotations', 'flag', 'Bandeira', 'Flag', 'Marcador de evento'),
+  draw('annotations', 'marker', 'Marcador', 'MapPin', 'Ponto de referência'),
 ]
 
 const toolById = new Map(DRAWING_TOOLS.map((t) => [t.id, t]))

@@ -472,7 +472,7 @@ export function BtcDashboard() {
               Desenhos
             </SheetTitle>
             <SheetDescription className="text-[11px] leading-relaxed text-zinc-500">
-              Favoritos, linhas, Fibonacci, padrões, formas e anotações no gráfico — como no TradingView.
+              Favoritos, ferramentas, linhas, Fibonacci, padrões e formas — estilo TradingView.
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">

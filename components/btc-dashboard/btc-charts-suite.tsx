@@ -27,6 +27,9 @@ import {
   ChartIndicatorLegend,
   type ChartLegendSettingsFocus,
 } from '@/components/btc-dashboard/chart-indicator-legend'
+import { ChartDrawingsLegend } from '@/components/btc-dashboard/chart-drawings-legend'
+import { DrawingSystemOverlay } from '@/components/btc-dashboard/drawing-system-overlay'
+import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
 import {
   computeBullMarketBandOnChart,
@@ -138,6 +141,7 @@ export function BtcChartsSuite({
   } = useBtcSettings()
 
   const focusPrice = priceOnlyFocus
+  const { registerMainChart } = useChartDrawings()
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
@@ -268,6 +272,7 @@ export function BtcChartsSuite({
       wickUpColor: up,
       wickDownColor: wickDown,
     })
+    registerMainChart({ chart: cMain, series: candle, container: elM })
     candle.setData(
       candleBars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })),
     )
@@ -653,6 +658,7 @@ export function BtcChartsSuite({
       ro.disconnect()
       charts.forEach((c) => c.remove())
       mainChartRef.current = null
+      registerMainChart(null)
     }
   }, [
     bars,
@@ -686,6 +692,7 @@ export function BtcChartsSuite({
     focusPrice,
     candleBars,
     timeframe.id,
+    registerMainChart,
   ])
 
   useEffect(() => {
@@ -723,6 +730,8 @@ export function BtcChartsSuite({
     >
       <div className="relative min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]">
         <div ref={mainRef} className="absolute inset-0" />
+        <DrawingSystemOverlay bars={bars} />
+        <ChartDrawingsLegend />
         <ChartIndicatorLegend
           goldenCrossState={goldenCrossState}
           onOpenSettings={onOpenIndicatorSettings}
