@@ -35,20 +35,39 @@ import {
 } from '@/components/ui/sidebar'
 import { MobileSidebarEdgeOpenStrip } from '@/components/mobile-sidebar-edge-strip'
 import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
 import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
 
-const MAIN_NAV = [
-  { name: 'Painel', href: '/dashboard', icon: Activity },
-  { name: 'Notícias', href: '/news', icon: Newspaper },
-  { name: 'Carteira', href: '/portfolio', icon: Wallet },
-  { name: 'Pools', href: '/pools', icon: BarChart3 },
-  { name: 'A minha liquidez', href: '/my-liquidity', icon: Droplets },
-  { name: 'Rebalance Pro', href: '/rebalance-pro', icon: SlidersHorizontal },
-  { name: 'Indicadores', href: '/indicator', icon: LineChart },
-  { name: 'Calculadora', href: '/calculator', icon: Calculator },
-  { name: 'DEX', href: '/dex', icon: LayoutGrid },
-  { name: 'Trocas', href: '/swap', icon: ArrowLeftRight },
-] as const
+type NavItem = {
+  name: string
+  href: string
+  icon: typeof Activity
+  /** Cor do ícone (sempre visível, inclusive no item activo). */
+  iconClassName: string
+}
+
+const MAIN_NAV: NavItem[] = [
+  { name: 'Painel', href: '/dashboard', icon: Activity, iconClassName: 'text-emerald-400' },
+  { name: 'Notícias', href: '/news', icon: Newspaper, iconClassName: 'text-blue-400' },
+  { name: 'Carteira', href: '/portfolio', icon: Wallet, iconClassName: 'text-amber-400' },
+  { name: 'Pools', href: '/pools', icon: BarChart3, iconClassName: 'text-cyan-400' },
+  { name: 'A minha liquidez', href: '/my-liquidity', icon: Droplets, iconClassName: 'text-sky-400' },
+  {
+    name: 'Rebalance Pro',
+    href: '/rebalance-pro',
+    icon: SlidersHorizontal,
+    iconClassName: 'text-orange-400',
+  },
+  { name: 'Indicadores', href: '/indicator', icon: LineChart, iconClassName: 'text-yellow-400' },
+  { name: 'Calculadora', href: '/calculator', icon: Calculator, iconClassName: 'text-violet-400' },
+  { name: 'DEX', href: '/dex', icon: LayoutGrid, iconClassName: 'text-fuchsia-400' },
+  { name: 'Trocas', href: '/swap', icon: ArrowLeftRight, iconClassName: 'text-rose-400' },
+]
+
+const RESOURCE_NAV: NavItem[] = [
+  { name: 'Aprender', href: 'https://www.yldlab.xyz/', icon: BookOpen, iconClassName: 'text-indigo-400' },
+  { name: 'PRO', href: '/dex', icon: Sparkles, iconClassName: 'text-[#d4af37]' },
+]
 
 function pageTitle(pathname: string): string {
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Painel'
@@ -168,7 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       tooltip={item.name}
                     >
                       <Link href={item.href}>
-                        <item.icon />
+                        <item.icon className={cn('size-4 shrink-0', item.iconClassName)} />
                         <span>{item.name}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -184,8 +203,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild tooltip="Aprender (site externo)">
-                    <a href="https://www.yldlab.xyz/" target="_blank" rel="noopener noreferrer">
-                      <BookOpen />
+                    <a href={RESOURCE_NAV[0].href} target="_blank" rel="noopener noreferrer">
+                      <BookOpen className={cn('size-4 shrink-0', RESOURCE_NAV[0].iconClassName)} />
                       <span>Aprender</span>
                     </a>
                   </SidebarMenuButton>
@@ -196,8 +215,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     isActive={pathname === '/dex' || pathname.startsWith('/dex/')}
                     tooltip="Destaques PRO"
                   >
-                    <Link href="/dex">
-                      <Sparkles />
+                    <Link href={RESOURCE_NAV[1].href}>
+                      <Sparkles className={cn('size-4 shrink-0', RESOURCE_NAV[1].iconClassName)} />
                       <span>PRO</span>
                     </Link>
                   </SidebarMenuButton>
