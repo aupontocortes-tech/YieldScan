@@ -707,7 +707,17 @@ export function PortfolioClient() {
 
         <Card className={cn(CARD, 'min-h-0 flex-1')}>
           <CardHeader className="px-4 pb-2 pt-5 sm:px-6 sm:pt-6">
-            <CardTitle className="text-base font-semibold">Ativos</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-base font-semibold">Ativos</CardTitle>
+              {data.holdings.length > 0 && (
+                <Link
+                  href="/unlocks?view=wallet"
+                  className="text-xs font-medium text-[#d4af37] hover:underline"
+                >
+                  Ver unlocks da carteira
+                </Link>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground md:hidden">
               Cada posição num cartão; toca em (⋯) para editar, acrescentar, vender ou remover.
             </p>

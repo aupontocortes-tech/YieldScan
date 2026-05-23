@@ -9,6 +9,7 @@ import {
   BookOpen,
   Calculator,
   Coins,
+  LockKeyhole,
   Droplets,
   LayoutGrid,
   LineChart,
@@ -60,6 +61,7 @@ const MAIN_NAV: NavItem[] = [
   },
   { name: 'Indicadores', href: '/indicator', icon: LineChart, iconClassName: 'text-yellow-400' },
   { name: 'Calculadora', href: '/calculator', icon: Calculator, iconClassName: 'text-violet-400' },
+  { name: 'Unlocks', href: '/unlocks', icon: LockKeyhole, iconClassName: 'text-teal-400' },
   { name: 'DEX', href: '/dex', icon: LayoutGrid, iconClassName: 'text-fuchsia-400' },
   { name: 'Trocas', href: '/swap', icon: ArrowLeftRight, iconClassName: 'text-rose-400' },
 ]
@@ -78,6 +80,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/rebalance-pro')) return 'Rebalance Pro'
   if (pathname.startsWith('/indicator')) return 'Indicadores'
   if (pathname.startsWith('/calculator')) return 'Calculadora'
+  if (pathname.startsWith('/unlocks')) return 'Unlocks'
   if (pathname.startsWith('/dex')) return 'DEX'
   if (pathname.startsWith('/swap')) return 'Trocas'
   if (pathname.startsWith('/token/')) {
@@ -182,7 +185,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                     ? pathname.startsWith('/indicator')
                                     : item.href === '/calculator'
                                       ? pathname.startsWith('/calculator')
-                                      : pathname === item.href
+                                      : item.href === '/unlocks'
+                                        ? pathname.startsWith('/unlocks')
+                                        : pathname === item.href
                       }
                       tooltip={item.name}
                     >
