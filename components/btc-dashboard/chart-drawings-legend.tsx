@@ -2,6 +2,7 @@
 
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import { getDrawingTool } from '@/lib/btc/chart-drawings-config'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { Settings2, X } from 'lucide-react'
 
@@ -15,11 +16,19 @@ export function ChartDrawingsLegend() {
     drawingsVisible,
     setActiveToolId,
   } = useChartDrawings()
+  const isMobile = useIsMobile()
 
   if (!drawingsVisible || instances.length === 0) return null
 
   return (
-    <div className="pointer-events-auto absolute right-2 top-2 z-20 flex max-w-[min(100%,280px)] flex-col gap-1">
+    <div
+      className={cn(
+        'pointer-events-auto absolute z-20 flex max-w-[min(100%,280px)] flex-col gap-1',
+        isMobile
+          ? 'bottom-10 right-1 max-h-[28%] overflow-y-auto [scrollbar-width:thin]'
+          : 'right-2 top-2',
+      )}
+    >
       {instances.map((d) => {
         const meta = getDrawingTool(d.toolId)
         const label = meta?.label ?? d.label

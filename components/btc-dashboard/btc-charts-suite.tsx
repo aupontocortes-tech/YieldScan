@@ -22,7 +22,12 @@ import {
   sma,
   stochastic,
 } from '@/lib/btc/indicators'
-import { buildOnChainChartOverlays, overlayAxisTitle } from '@/lib/btc/on-chain-overlays'
+import {
+  buildOnChainChartOverlays,
+  overlayAxisTitle,
+  overlayAxisTitleShort,
+} from '@/lib/btc/on-chain-overlays'
+import { useIsMobile } from '@/hooks/use-mobile'
 import {
   ChartIndicatorLegend,
   type ChartLegendSettingsFocus,
@@ -151,10 +156,15 @@ export function BtcChartsSuite({
   const stochRef = useRef<HTMLDivElement>(null)
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
 
+  const isMobile = useIsMobile()
+
   const onChainOverlays = useMemo(
     () => (!focusPrice ? buildOnChainChartOverlays(closes, onChain) : []),
     [closes, onChain, focusPrice],
   )
+
+  /** No telemóvel, rótulos no eixo direito tapam o preço — valores ficam na faixa abaixo do gráfico. */
+  const showOnChainAxisLabels = !isMobile || onChainOverlays.length <= 1
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
   const lows = useMemo(() => bars.map((b) => b.low), [bars])
 
@@ -290,7 +300,10 @@ export function BtcChartsSuite({
     )
 
     cMain.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } })
-    cMain.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.18 } })
+    cMain.priceScale('right').applyOptions({
+      scaleMargins: { top: 0.08, bottom: 0.18 },
+      minimumWidth: isMobile ? 48 : 64,
+    })
 
     for (const ov of onChainOverlays) {
       candle.createPriceLine({
@@ -298,8 +311,8 @@ export function BtcChartsSuite({
         color: ov.color,
         lineWidth: ov.lineWidth,
         lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: overlayAxisTitle(ov),
+        axisLabelVisible: showOnChainAxisLabels,
+        title: showOnChainAxisLabels ? overlayAxisTitle(ov) : overlayAxisTitleShort(ov),
       })
     }
 
@@ -475,8 +488,8 @@ export function BtcChartsSuite({
           color: st.colorSth,
           lineWidth: st.lineWidth,
           /** Linha horizontal no gráfico ao nível do último valor (nível “até onde vai” o STH proxy) */
-          priceLineVisible: true,
-          lastValueVisible: true,
+          priceLineVisible: !isMobile,
+          lastValueVisible: !isMobile,
         })
         .setData(
           bars
@@ -487,8 +500,8 @@ export function BtcChartsSuite({
         .addSeries(LineSeries, {
           color: st.colorLth,
           lineWidth: st.lineWidth,
-          priceLineVisible: true,
-          lastValueVisible: true,
+          priceLineVisible: !isMobile,
+          lastValueVisible: !isMobile,
         })
         .setData(
           bars
@@ -679,6 +692,8 @@ export function BtcChartsSuite({
     candles,
     onChain,
     onChainOverlays,
+    isMobile,
+    showOnChainAxisLabels,
     resetKey,
     bullMarketBand,
     bullBandOnChart,
@@ -728,16 +743,27 @@ export function BtcChartsSuite({
       data-no-swipe-nav
       className="flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden rounded-lg bg-[#050505]"
     >
-      <div className="relative min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]">
-        <div ref={mainRef} className="absolute inset-0" />
-        <DrawingSystemOverlay bars={bars} />
-        <ChartDrawingsLegend />
+      {isMobile && (
         <ChartIndicatorLegend
+          variant="strip"
           goldenCrossState={goldenCrossState}
           onOpenSettings={onOpenIndicatorSettings}
         />
+      )}
+
+      <div className="relative min-h-[min(52vh,420px)] w-full min-w-0 flex-1 sm:min-h-[240px]">
+        <div ref={mainRef} className="absolute inset-0" />
+        <DrawingSystemOverlay bars={bars} />
+        <ChartDrawingsLegend />
+        {!isMobile && (
+          <ChartIndicatorLegend
+            variant="overlay"
+            goldenCrossState={goldenCrossState}
+            onOpenSettings={onOpenIndicatorSettings}
+          />
+        )}
         {bullMarketBand.enabled && bullBandLoading && (
-          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-[10px] text-[#d4af37]">
+          <div className="pointer-events-none absolute left-1/2 top-2 z-10 max-w-[92%] -translate-x-1/2 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-center text-[10px] text-[#d4af37] md:left-2 md:translate-x-0 md:text-left">
             A carregar Bull Market Band (dados semanais)…
           </div>
         )}

@@ -224,6 +224,20 @@ export function overlayAxisTitle(o: OnChainChartOverlay): string {
   return parts.join(' · ')
 }
 
+/** Rótulo curto na escala (mobile) — evita empilhar texto no eixo direito. */
+export function overlayAxisTitleShort(o: OnChainChartOverlay): string {
+  const short: Record<string, string> = {
+    mayer: 'Mayer',
+    aviv: 'AVIV',
+    mvrv: 'MVRV',
+    mvrvZ: 'Z',
+    sopr: 'SOPR',
+    nupl: 'NUPL',
+  }
+  const name = short[o.id] ?? o.label.split(' ')[0] ?? o.label
+  return o.tag ? `${name} ${o.metricDisplay}` : `${name} ${o.metricDisplay}`
+}
+
 export function nuplZoneForDisplay(closes: number[], period: number): string {
   const i = lastIndex(closes)
   const v = syntheticNupl(closes, period)[i]
