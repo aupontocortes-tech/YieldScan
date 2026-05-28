@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useMemo } from 'react'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
@@ -33,8 +33,6 @@ type ChartIndicatorLegendProps = {
   goldenCrossState?: GoldenCrossState
   onOpenSettings?: (focus: ChartLegendSettingsFocus) => void
   className?: string
-  /** strip = barra horizontal acima do gráfico (mobile); overlay = canto do gráfico (desktop). */
-  variant?: 'overlay' | 'strip'
 }
 
 function statusToneClass(tone?: LegendRow['statusTone']) {
@@ -43,31 +41,17 @@ function statusToneClass(tone?: LegendRow['statusTone']) {
   return 'text-zinc-500'
 }
 
-function shortLabel(label: string): string {
-  return label
-    .replace(' (proxy)', '')
-    .replace('Multiple', 'Mult.')
-    .replace('Golden / Death Cross', 'G/D Cross')
-    .replace('Bull Market Band', 'BMSB')
-    .replace('Bollinger Bands', 'BB')
-}
-
 function LegendPill({
   row,
   onOpenSettings,
-  compact,
 }: {
   row: LegendRow
   onOpenSettings?: (focus: ChartLegendSettingsFocus) => void
-  compact?: boolean
 }) {
-  const display = compact ? shortLabel(row.label) : row.label
-
   return (
     <div
       className={cn(
-        'flex max-w-full items-center gap-1.5 rounded-md border border-white/[0.12] bg-black/90 shadow-md backdrop-blur-sm',
-        compact ? 'shrink-0 rounded-full py-0.5 pl-1.5 pr-0.5' : 'py-1 pl-1.5 pr-1',
+        'flex max-w-full items-center gap-1.5 rounded-md border border-white/[0.12] bg-black/90 py-1 pl-1.5 pr-1 shadow-md backdrop-blur-sm',
         row.statusTone === 'bear' && 'border-red-500/25',
         row.statusTone === 'bull' && 'border-emerald-500/25',
       )}
@@ -76,31 +60,21 @@ function LegendPill({
         {row.colors.map((c, i) => (
           <span
             key={`${row.id}-${i}`}
-            className={cn(
-              'rounded-[2px] border border-white/10',
-              compact ? 'h-2 w-2' : 'h-2.5 w-2.5',
-            )}
+            className="h-2.5 w-2.5 rounded-[2px] border border-white/10"
             style={{ backgroundColor: c }}
             aria-hidden
           />
         ))}
       </div>
-      <div className={cn('min-w-0', compact ? 'max-w-[5.5rem]' : 'flex-1')}>
-        <p
-          className={cn(
-            'truncate font-medium leading-tight text-zinc-100',
-            compact ? 'text-[10px]' : 'text-[11px]',
-          )}
-        >
-          {display}
-        </p>
-        {!compact && row.status ? (
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-medium leading-tight text-zinc-100">{row.label}</p>
+        {row.status ? (
           <p className={cn('truncate text-[9px] leading-snug', statusToneClass(row.statusTone))}>
             {row.status}
           </p>
         ) : null}
       </div>
-      {onOpenSettings && !compact ? (
+      {onOpenSettings ? (
         <button
           type="button"
           className="shrink-0 rounded p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-[#d4af37]"
@@ -116,13 +90,17 @@ function LegendPill({
         aria-label={`Remover ${row.label}`}
         onClick={row.onRemove}
       >
-        <X className={cn(compact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+        <X className="h-3.5 w-3.5" />
       </button>
     </div>
   )
 }
 
-function useLegendRows(goldenCrossState?: GoldenCrossState): LegendRow[] {
+export function ChartIndicatorLegend({
+  goldenCrossState,
+  onOpenSettings,
+  className,
+}: ChartIndicatorLegendProps) {
   const {
     mas,
     removeMa,
@@ -146,7 +124,7 @@ function useLegendRows(goldenCrossState?: GoldenCrossState): LegendRow[] {
     setStoch,
   } = useBtcSettings()
 
-  return useMemo(() => {
+  const rows = useMemo(() => {
     const list: LegendRow[] = []
 
     if (goldenCrossDaily.enabled) {
@@ -169,7 +147,7 @@ function useLegendRows(goldenCrossState?: GoldenCrossState): LegendRow[] {
       const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'sma200')
       list.push({
         id: 'sma200',
-        label: `SMA 200 (${meta?.timeframeLabel ?? 'Diário'})`,
+        label: `SMA 200 (${meta?.timeframeLabel ?? 'Di├írio'})`,
         colors: [sma200Daily.color],
         onRemove: () => setSma200Daily({ ...sma200Daily, enabled: false }),
         settingsFocus: 'cycle',
@@ -193,7 +171,7 @@ function useLegendRows(goldenCrossState?: GoldenCrossState): LegendRow[] {
         id: 'bmsb',
         label: meta?.label ?? 'Bull Market Band',
         colors: [bullMarketBand.colorSma, bullMarketBand.colorEma],
-        status: `SMA ${BULL_MARKET_BAND_SMA_WEEKS}w · EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
+        status: `SMA ${BULL_MARKET_BAND_SMA_WEEKS}w ┬À EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
         onRemove: () => setBullMarketBand({ ...bullMarketBand, enabled: false }),
         settingsFocus: 'cycle',
       })
@@ -338,62 +316,16 @@ function useLegendRows(goldenCrossState?: GoldenCrossState): LegendRow[] {
     stoch,
     setStoch,
   ])
-}
-
-export function ChartIndicatorLegend({
-  goldenCrossState,
-  onOpenSettings,
-  className,
-  variant = 'overlay',
-}: ChartIndicatorLegendProps) {
-  const rows = useLegendRows(goldenCrossState)
 
   if (rows.length === 0) return null
-
-  if (variant === 'strip') {
-    return (
-      <div
-        className={cn(
-          'shrink-0 border-b border-white/[0.06] bg-[#0a0a0a]/95 px-1 py-1.5',
-          className,
-        )}
-        aria-label="Indicadores activos"
-      >
-        <div className="mb-1 flex items-center justify-between gap-2 px-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-            Indicadores ({rows.length})
-          </p>
-          {onOpenSettings ? (
-            <button
-              type="button"
-              className="shrink-0 text-[10px] font-medium text-[#d4af37] hover:underline"
-              onClick={() => onOpenSettings('on-chain')}
-            >
-              Ajustar
-            </button>
-          ) : null}
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:thin]">
-          {rows.map((row) => (
-            <LegendPill
-              key={row.id}
-              row={row}
-              onOpenSettings={onOpenSettings}
-              compact
-            />
-          ))}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute left-2 top-2 z-20 flex max-w-[min(calc(100%-5rem),16rem)] flex-col gap-1 sm:max-w-[min(calc(100%-1rem),22rem)]',
+        'pointer-events-auto absolute left-2 top-2 z-20 flex max-w-[min(calc(100%-1rem),22rem)] flex-col gap-1',
         className,
       )}
-      aria-label="Indicadores no gráfico"
+      aria-label="Indicadores no grafico"
     >
       {rows.map((row) => (
         <LegendPill key={row.id} row={row} onOpenSettings={onOpenSettings} />

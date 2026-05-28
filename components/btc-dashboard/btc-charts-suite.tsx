@@ -22,11 +22,7 @@ import {
   sma,
   stochastic,
 } from '@/lib/btc/indicators'
-import {
-  buildOnChainChartOverlays,
-  overlayAxisTitle,
-  overlayAxisTitleShort,
-} from '@/lib/btc/on-chain-overlays'
+import { buildOnChainChartOverlays, overlayAxisTitle } from '@/lib/btc/on-chain-overlays'
 import { useIsMobile } from '@/hooks/use-mobile'
 import {
   ChartIndicatorLegend,
@@ -157,14 +153,13 @@ export function BtcChartsSuite({
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
 
   const isMobile = useIsMobile()
+  /** No telemóvel: só o gráfico principal (painéis RSI/MACD/etc. ficam no desktop). */
+  const showSubPanels = !isMobile
 
   const onChainOverlays = useMemo(
     () => (!focusPrice ? buildOnChainChartOverlays(closes, onChain) : []),
     [closes, onChain, focusPrice],
   )
-
-  /** No telemóvel, rótulos no eixo direito tapam o preço — valores ficam na faixa abaixo do gráfico. */
-  const showOnChainAxisLabels = !isMobile || onChainOverlays.length <= 1
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
   const lows = useMemo(() => bars.map((b) => b.low), [bars])
 
@@ -300,10 +295,7 @@ export function BtcChartsSuite({
     )
 
     cMain.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } })
-    cMain.priceScale('right').applyOptions({
-      scaleMargins: { top: 0.08, bottom: 0.18 },
-      minimumWidth: isMobile ? 48 : 64,
-    })
+    cMain.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.18 } })
 
     for (const ov of onChainOverlays) {
       candle.createPriceLine({
@@ -311,8 +303,8 @@ export function BtcChartsSuite({
         color: ov.color,
         lineWidth: ov.lineWidth,
         lineStyle: LineStyle.Dashed,
-        axisLabelVisible: showOnChainAxisLabels,
-        title: showOnChainAxisLabels ? overlayAxisTitle(ov) : overlayAxisTitleShort(ov),
+        axisLabelVisible: true,
+        title: overlayAxisTitle(ov),
       })
     }
 
@@ -488,8 +480,8 @@ export function BtcChartsSuite({
           color: st.colorSth,
           lineWidth: st.lineWidth,
           /** Linha horizontal no gráfico ao nível do último valor (nível “até onde vai” o STH proxy) */
-          priceLineVisible: !isMobile,
-          lastValueVisible: !isMobile,
+          priceLineVisible: true,
+          lastValueVisible: true,
         })
         .setData(
           bars
@@ -500,8 +492,8 @@ export function BtcChartsSuite({
         .addSeries(LineSeries, {
           color: st.colorLth,
           lineWidth: st.lineWidth,
-          priceLineVisible: !isMobile,
-          lastValueVisible: !isMobile,
+          priceLineVisible: true,
+          lastValueVisible: true,
         })
         .setData(
           bars
@@ -597,7 +589,7 @@ export function BtcChartsSuite({
       build(c)
     }
 
-    if (!focusPrice && rsiCfg.enabled && rsiSeries && rsiCfg.view === 'panel') {
+    if (!focusPrice && showSubPanels && rsiCfg.enabled && rsiSeries && rsiCfg.view === 'panel') {
       addOscillator(rsiRef.current, (cRsi) => {
         const line = cRsi.addSeries(LineSeries, {
           color: rsiCfg.colors.line,
@@ -629,7 +621,7 @@ export function BtcChartsSuite({
       })
     }
 
-    if (!focusPrice && macdCfg.enabled && macdOut) {
+    if (!focusPrice && showSubPanels && macdCfg.enabled && macdOut) {
       addOscillator(macdRef.current, (cMacd) => {
         cMacd.addSeries(HistogramSeries, { priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } }).setData(
           bars.map((b, i) => ({
@@ -647,7 +639,7 @@ export function BtcChartsSuite({
       })
     }
 
-    if (!focusPrice && stochCfg.enabled && stochOut) {
+    if (!focusPrice && showSubPanels && stochCfg.enabled && stochOut) {
       addOscillator(stochRef.current, (cStoch) => {
         cStoch
           .addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: stochCfg.lineWidth, priceLineVisible: false })
@@ -692,8 +684,7 @@ export function BtcChartsSuite({
     candles,
     onChain,
     onChainOverlays,
-    isMobile,
-    showOnChainAxisLabels,
+    showSubPanels,
     resetKey,
     bullMarketBand,
     bullBandOnChart,
@@ -743,27 +734,16 @@ export function BtcChartsSuite({
       data-no-swipe-nav
       className="flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden rounded-lg bg-[#050505]"
     >
-      {isMobile && (
-        <ChartIndicatorLegend
-          variant="strip"
-          goldenCrossState={goldenCrossState}
-          onOpenSettings={onOpenIndicatorSettings}
-        />
-      )}
-
-      <div className="relative min-h-[min(52vh,420px)] w-full min-w-0 flex-1 sm:min-h-[240px]">
+      <div className="relative min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]">
         <div ref={mainRef} className="absolute inset-0" />
         <DrawingSystemOverlay bars={bars} />
         <ChartDrawingsLegend />
-        {!isMobile && (
-          <ChartIndicatorLegend
-            variant="overlay"
-            goldenCrossState={goldenCrossState}
-            onOpenSettings={onOpenIndicatorSettings}
-          />
-        )}
+        <ChartIndicatorLegend
+          goldenCrossState={goldenCrossState}
+          onOpenSettings={onOpenIndicatorSettings}
+        />
         {bullMarketBand.enabled && bullBandLoading && (
-          <div className="pointer-events-none absolute left-1/2 top-2 z-10 max-w-[92%] -translate-x-1/2 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-center text-[10px] text-[#d4af37] md:left-2 md:translate-x-0 md:text-left">
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-[10px] text-[#d4af37]">
             A carregar Bull Market Band (dados semanais)…
           </div>
         )}
@@ -805,7 +785,7 @@ export function BtcChartsSuite({
             </div>
           )}
       </div>
-      {!focusPrice && onChain.sthLth.enabled && sthLthLevels && (
+      {!focusPrice && showSubPanels && onChain.sthLth.enabled && sthLthLevels && (
         <div className="border-t border-white/[0.06] px-2 py-2">
           <div className="mb-1.5 flex flex-wrap gap-2">
             <div
@@ -829,7 +809,7 @@ export function BtcChartsSuite({
         </div>
       )}
 
-      {!focusPrice && rsiCfg.enabled && rsiCfg.view === 'panel' && (
+      {!focusPrice && showSubPanels && rsiCfg.enabled && rsiCfg.view === 'panel' && (
         <>
           <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             RSI ({rsiCfg.period})
@@ -838,21 +818,21 @@ export function BtcChartsSuite({
         </>
       )}
 
-      {!focusPrice && macdCfg.enabled && (
+      {!focusPrice && showSubPanels && macdCfg.enabled && (
         <>
           <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">MACD</div>
           <div ref={macdRef} className="w-full shrink-0" />
         </>
       )}
 
-      {!focusPrice && stochCfg.enabled && (
+      {!focusPrice && showSubPanels && stochCfg.enabled && (
         <>
           <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Stochastic</div>
           <div ref={stochRef} className="w-full shrink-0" />
         </>
       )}
 
-      {!focusPrice && onChainOverlays.length > 0 && (
+      {!focusPrice && showSubPanels && onChainOverlays.length > 0 && (
         <div className="border-t border-white/[0.06] px-2 py-2">
           <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             On-chain no gráfico de preço
