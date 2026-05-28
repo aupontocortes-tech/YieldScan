@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { ChartDrawingActiveBanner } from '@/components/btc-dashboard/chart-drawing-active-banner'
 import type { ChartLegendSettingsFocus } from '@/components/btc-dashboard/chart-indicator-legend'
+import { ChartLandscapeToggle } from '@/components/btc-dashboard/chart-landscape-toggle'
 import { DrawingsPanel } from '@/components/btc-dashboard/drawings-panel'
 
 const SettingsPanelLazy = dynamic(
@@ -257,6 +258,7 @@ export function BtcDashboard() {
               {pair.label} · Diário · SMA 50 e SMA 200
             </p>
           </div>
+          <ChartLandscapeToggle />
           <Button
             type="button"
             variant="ghost"
@@ -317,6 +319,7 @@ export function BtcDashboard() {
         </div>
 
         <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:col-start-3 sm:row-start-1 sm:gap-1">
+          <ChartLandscapeToggle />
           <Button
             type="button"
             variant="ghost"
