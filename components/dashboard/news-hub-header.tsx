@@ -3,22 +3,29 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { LineChart, Newspaper } from 'lucide-react'
+import { LineChart, Newspaper, Sparkles } from 'lucide-react'
 
 const LINKS = [
   {
     href: '/news/mercado',
     label: 'Preços e mercado',
     shortLabel: 'Mercado',
-    description: 'BTC, ETH, SOL, Hyperliquid, top 10 e tendências (CoinGecko).',
+    description: 'BTC, ETH, SOL, top 10 e destaques em tempo real.',
     icon: LineChart,
   },
   {
     href: '/news/noticias',
     label: 'Notícias',
     shortLabel: 'Notícias',
-    description: 'Cripto, geopolítica, macroeconomia e IA — em português quando a fonte é noutro idioma.',
+    description: 'Cripto, macro, geopolítica e IA — traduzidas quando possível.',
     icon: Newspaper,
+  },
+  {
+    href: '/news/tendencias',
+    label: 'Tendências',
+    shortLabel: 'Tendências',
+    description: 'Inteligência IA: sentimento, momentum, narrativas e alertas.',
+    icon: Sparkles,
   },
 ] as const
 
@@ -29,10 +36,13 @@ export function NewsHubHeader() {
     <header className="mb-8 border-b border-border/40 pb-8">
       <h1 className="text-3xl font-bold tracking-tight text-foreground">Cripto e mercado</h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Escolhe abaixo: preços em tempo real ou feed de notícias. Menos scroll, mesma informação.
+        Preços, notícias e análise inteligente — escolhe a secção abaixo.
       </p>
 
-      <nav className="mt-6 flex flex-col gap-3 sm:flex-row" aria-label="Secções cripto">
+      <nav
+        className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3"
+        aria-label="Secções cripto"
+      >
         {LINKS.map(({ href, label, shortLabel, description, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`)
           return (
@@ -40,10 +50,10 @@ export function NewsHubHeader() {
               key={href}
               href={href}
               className={cn(
-                'flex flex-1 flex-col gap-1 rounded-xl border px-4 py-3.5 text-left transition-all',
+                'flex min-h-[88px] flex-col justify-center gap-1 rounded-xl border px-4 py-3.5 text-left transition-all',
                 active
                   ? 'border-yellow-500 bg-yellow-500 text-black shadow-md'
-                  : 'border-border/60 bg-card/50 text-foreground hover:border-yellow-500/40 hover:bg-card'
+                  : 'border-border/60 bg-card/50 text-foreground hover:border-yellow-500/40 hover:bg-card',
               )}
             >
               <span className="flex items-center gap-2 font-semibold">
@@ -53,8 +63,8 @@ export function NewsHubHeader() {
               </span>
               <span
                 className={cn(
-                  'text-xs leading-snug',
-                  active ? 'text-black/75' : 'text-muted-foreground'
+                  'line-clamp-2 text-xs leading-snug',
+                  active ? 'text-black/75' : 'text-muted-foreground',
                 )}
               >
                 {description}
