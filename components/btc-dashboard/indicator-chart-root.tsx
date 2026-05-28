@@ -1,6 +1,7 @@
 'use client'
 
 import { BtcDashboard } from '@/components/btc-dashboard/btc-dashboard'
+import { ChartLandscapeShell } from '@/components/btc-dashboard/chart-landscape-shell'
 import { ChartDrawingsProvider } from '@/components/btc-dashboard/chart-drawings-context'
 import { BtcSettingsProvider } from '@/components/btc-dashboard/btc-settings-context'
 
@@ -9,7 +10,9 @@ export function IndicatorChartRoot() {
   return (
     <BtcSettingsProvider>
       <ChartDrawingsProvider>
-        <BtcDashboard />
+        <ChartLandscapeShell>
+          <BtcDashboard />
+        </ChartLandscapeShell>
       </ChartDrawingsProvider>
     </BtcSettingsProvider>
   )
