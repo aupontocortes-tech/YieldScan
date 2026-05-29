@@ -12,6 +12,10 @@ export type RawMarketCoin = {
   price_change_percentage_24h: number | null
   price_change_percentage_7d_in_currency?: number | null
   price_change_percentage_30d_in_currency?: number | null
+  price_change_percentage_200d_in_currency?: number | null
+  ath?: number | null
+  ath_change_percentage?: number | null
+  high_24h?: number | null
 }
 
 export type RawGlobal = {
@@ -47,7 +51,7 @@ async function cgFetch<T>(path: string): Promise<T | null> {
 }
 
 export async function fetchTendenciasMarkets(limit = 100): Promise<RawMarketCoin[]> {
-  const path = `/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${Math.min(limit, 100)}&page=1&sparkline=false&price_change_percentage=24h,7d,30d`
+  const path = `/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${Math.min(limit, 100)}&page=1&sparkline=false&price_change_percentage=24h,7d,30d,200d`
   const rows = await cgFetch<RawMarketCoin[]>(path)
   if (!Array.isArray(rows)) return []
   return rows.map((r) => ({

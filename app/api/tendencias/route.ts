@@ -1,40 +1,44 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
+import {
+  fetchDefiChainsTop,
+  fetchGlobalTvlChange7d,
+  fetchTopYieldPools,
+} from '@/lib/tendencias/fetch-defi'
 import {
   fetchTendenciasGlobal,
   fetchTendenciasMarkets,
   fetchTendenciasTrending,
 } from '@/lib/tendencias/fetch-data'
 import { buildTendenciasPayload } from '@/lib/tendencias/intelligence'
+import { enrichTendenciasWithLlm } from '@/lib/tendencias/llm-enrich'
+import type { AnalysisTone, MomentumPeriod } from '@/lib/tendencias/types'
 import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
 
 export const maxDuration = 60
 
-const buildPayload = unstable_cache(
+const PERIODS = new Set<MomentumPeriod>(['7d', '30d', '90d'])
+const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
+
+const fetchRaw = unstable_cache(
   async () => {
-    let partial = false
-    let error: string | null = null
-
-    const [markets, global, trending, newsRaw, emissions] = await Promise.all([
-      fetchTendenciasMarkets(100),
-      fetchTendenciasGlobal(),
-      fetchTendenciasTrending(),
-      pegarTodasNoticias(process.env.NEWSDATA_API_KEY).catch(() => ({
-        results: [],
-        erro: 'news_fail' as const,
-      })),
-      fetchDefillamaEmissions().catch(() => ({ data: [] as never[], error: 'skip' })),
-    ])
-
-    if (!markets.length) {
-      partial = true
-      error = 'Dados de mercado indisponíveis; tenta actualizar em instantes.'
-    }
-    if (!global) partial = true
+    const [markets, global, trending, newsRaw, emissions, chains, pools, tvlGlobal] =
+      await Promise.all([
+        fetchTendenciasMarkets(100),
+        fetchTendenciasGlobal(),
+        fetchTendenciasTrending(),
+        pegarTodasNoticias(process.env.NEWSDATA_API_KEY).catch(() => ({
+          results: [],
+          erro: 'news_fail' as const,
+        })),
+        fetchDefillamaEmissions().catch(() => ({ data: [] as never[], error: 'skip' })),
+        fetchDefiChainsTop(8),
+        fetchTopYieldPools(6),
+        fetchGlobalTvlChange7d(),
+      ])
 
     const noticias = newsRaw.results?.length ? processarNoticias(newsRaw.results) : []
-    if (!noticias.length) partial = true
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -60,23 +64,57 @@ const buildPayload = unstable_cache(
       .sort((a, b) => (a.unlockAt ?? 0) - (b.unlockAt ?? 0))
       .slice(0, 6)
 
-    return buildTendenciasPayload({
+    let partial = false
+    let error: string | null = null
+    if (!markets.length) {
+      partial = true
+      error = 'Dados de mercado indisponíveis.'
+    }
+    if (!noticias.length) partial = true
+
+    return {
       markets,
       global,
       trending,
       noticias,
       unlocks,
+      defiChains: chains,
+      defiPools: pools,
+      defiTvlGlobal: tvlGlobal,
       partial,
       error,
-    })
+    }
   },
-  ['tendencias-intelligence-v1'],
+  ['tendencias-raw-v2'],
   { revalidate: 120 }
 )
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const periodParam = req.nextUrl.searchParams.get('period') ?? '7d'
+  const toneParam = req.nextUrl.searchParams.get('tone') ?? 'neutro'
+  const customNote = req.nextUrl.searchParams.get('note') ?? ''
+  const useLlm = req.nextUrl.searchParams.get('llm') !== '0'
+
+  const period = PERIODS.has(periodParam as MomentumPeriod)
+    ? (periodParam as MomentumPeriod)
+    : '7d'
+  const tone = TONES.has(toneParam as AnalysisTone) ? (toneParam as AnalysisTone) : 'neutro'
+
   try {
-    const payload = await buildPayload()
+    const raw = await fetchRaw()
+    let payload = buildTendenciasPayload({
+      ...raw,
+      period,
+      tone,
+    })
+
+    if (useLlm && payload.meta.llmEnabled) {
+      payload = await enrichTendenciasWithLlm(payload, {
+        tone,
+        customNote: customNote || undefined,
+      })
+    }
+
     return NextResponse.json(payload, {
       headers: {
         'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
@@ -86,6 +124,13 @@ export async function GET() {
     return NextResponse.json(
       {
         updatedAt: new Date().toISOString(),
+        meta: {
+          momentumPeriod: period,
+          analysisTone: tone,
+          llmEnabled: Boolean(process.env.OPENAI_API_KEY?.trim()),
+          llmUsed: false,
+          fmpConfigured: Boolean(process.env.FMP_API_KEY?.trim()),
+        },
         market: {
           sentiment: 'neutro',
           sentimentScore: 50,
@@ -116,6 +161,13 @@ export async function GET() {
           acelerando: [],
           desacelerando: [],
           proximosUnlocks: [],
+        },
+        defi: {
+          totalTvlUsd: null,
+          tvlChange7dPct: null,
+          topChains: [],
+          topProtocols: [],
+          summary: 'DeFi indisponível.',
         },
         alerts: [],
         partial: true,
