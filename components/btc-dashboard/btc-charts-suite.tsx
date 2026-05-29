@@ -22,7 +22,7 @@ import {
   sma,
   stochastic,
 } from '@/lib/btc/indicators'
-import { buildOnChainChartOverlays, overlayAxisTitle } from '@/lib/btc/on-chain-overlays'
+import { buildOnChainChartOverlays, overlayAxisTitleShort } from '@/lib/btc/on-chain-overlays'
 import { useIsMobile } from '@/hooks/use-mobile'
 import {
   ChartIndicatorLegend,
@@ -304,7 +304,7 @@ export function BtcChartsSuite({
         lineWidth: ov.lineWidth,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: overlayAxisTitle(ov),
+        title: overlayAxisTitleShort(ov),
       })
     }
 
@@ -844,7 +844,7 @@ export function BtcChartsSuite({
                 className="inline-flex max-w-full items-center gap-1 rounded-md border border-white/[0.08] bg-black/50 px-2 py-1 text-[10px] text-zinc-300"
               >
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: ov.color }} />
-                <span className="truncate font-medium">{overlayAxisTitle(ov)}</span>
+                <span className="truncate font-medium">{overlayAxisTitleShort(ov)}</span>
                 <span className="font-mono tabular-nums text-zinc-500">
                   {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(ov.price)}
                 </span>

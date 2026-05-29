@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
@@ -9,7 +9,7 @@ import {
   BULL_MARKET_BAND_SMA_WEEKS,
 } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
-import { Settings2, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Layers, Settings2, X } from 'lucide-react'
 
 export type ChartLegendSettingsFocus =
   | 'cycle'
@@ -51,7 +51,7 @@ function LegendPill({
   return (
     <div
       className={cn(
-        'flex max-w-full items-center gap-1.5 rounded-md border border-white/[0.12] bg-black/90 py-1 pl-1.5 pr-1 shadow-md backdrop-blur-sm',
+        'flex max-w-full items-center gap-1 rounded-md border border-white/[0.12] bg-black/90 py-0.5 pl-1 pr-0.5 shadow-md backdrop-blur-sm',
         row.statusTone === 'bear' && 'border-red-500/25',
         row.statusTone === 'bull' && 'border-emerald-500/25',
       )}
@@ -60,16 +60,16 @@ function LegendPill({
         {row.colors.map((c, i) => (
           <span
             key={`${row.id}-${i}`}
-            className="h-2.5 w-2.5 rounded-[2px] border border-white/10"
+            className="h-2 w-2 rounded-[2px] border border-white/10"
             style={{ backgroundColor: c }}
             aria-hidden
           />
         ))}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium leading-tight text-zinc-100">{row.label}</p>
+        <p className="truncate text-[10px] font-medium leading-tight text-zinc-100">{row.label}</p>
         {row.status ? (
-          <p className={cn('truncate text-[9px] leading-snug', statusToneClass(row.statusTone))}>
+          <p className={cn('truncate text-[8px] leading-snug', statusToneClass(row.statusTone))}>
             {row.status}
           </p>
         ) : null}
@@ -77,20 +77,20 @@ function LegendPill({
       {onOpenSettings ? (
         <button
           type="button"
-          className="shrink-0 rounded p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-[#d4af37]"
+          className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:bg-white/10 hover:text-[#d4af37]"
           aria-label={`Configurar ${row.label}`}
           onClick={() => onOpenSettings(row.settingsFocus)}
         >
-          <Settings2 className="h-3.5 w-3.5" />
+          <Settings2 className="h-3 w-3" />
         </button>
       ) : null}
       <button
         type="button"
-        className="shrink-0 rounded p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-red-400"
+        className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:bg-white/10 hover:text-red-400"
         aria-label={`Remover ${row.label}`}
         onClick={row.onRemove}
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="h-3 w-3" />
       </button>
     </div>
   )
@@ -101,6 +101,7 @@ export function ChartIndicatorLegend({
   onOpenSettings,
   className,
 }: ChartIndicatorLegendProps) {
+  const [expanded, setExpanded] = useState(false)
   const {
     mas,
     removeMa,
@@ -190,7 +191,7 @@ export function ChartIndicatorLegend({
     if (bollinger.enabled) {
       list.push({
         id: 'bollinger',
-        label: `Bollinger Bands (${bollinger.period})`,
+        label: `Bollinger (${bollinger.period})`,
         colors: [bollinger.colors.middle],
         onRemove: () => setBollinger({ ...bollinger, enabled: false }),
         settingsFocus: 'cycle',
@@ -201,7 +202,7 @@ export function ChartIndicatorLegend({
     if (onChain.mayer.enabled) {
       onChainRows.push({
         id: 'mayer',
-        label: 'Mayer Multiple (proxy)',
+        label: 'Mayer',
         color: onChain.mayer.color,
         off: () => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, enabled: false } })),
       })
@@ -209,7 +210,7 @@ export function ChartIndicatorLegend({
     if (onChain.aviv.enabled) {
       onChainRows.push({
         id: 'aviv',
-        label: 'AVIV (proxy)',
+        label: 'AVIV',
         color: onChain.aviv.color,
         off: () => setOnChain((p) => ({ ...p, aviv: { ...p.aviv, enabled: false } })),
       })
@@ -217,7 +218,7 @@ export function ChartIndicatorLegend({
     if (onChain.mvrv.enabled) {
       onChainRows.push({
         id: 'mvrv',
-        label: 'MVRV (proxy)',
+        label: 'MVRV',
         color: onChain.mvrv.color,
         off: () => setOnChain((p) => ({ ...p, mvrv: { ...p.mvrv, enabled: false } })),
       })
@@ -225,7 +226,7 @@ export function ChartIndicatorLegend({
     if (onChain.mvrvZ.enabled) {
       onChainRows.push({
         id: 'mvrvZ',
-        label: 'MVRV Z-Score (proxy)',
+        label: 'MVRV-Z',
         color: onChain.mvrvZ.color,
         off: () => setOnChain((p) => ({ ...p, mvrvZ: { ...p.mvrvZ, enabled: false } })),
       })
@@ -233,7 +234,7 @@ export function ChartIndicatorLegend({
     if (onChain.sopr.enabled) {
       onChainRows.push({
         id: 'sopr',
-        label: 'SOPR (proxy)',
+        label: 'SOPR',
         color: onChain.sopr.color,
         off: () => setOnChain((p) => ({ ...p, sopr: { ...p.sopr, enabled: false } })),
       })
@@ -241,7 +242,7 @@ export function ChartIndicatorLegend({
     if (onChain.nupl.enabled) {
       onChainRows.push({
         id: 'nupl',
-        label: 'NUPL (proxy)',
+        label: 'NUPL',
         color: onChain.nupl.color,
         off: () => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, enabled: false } })),
       })
@@ -249,7 +250,7 @@ export function ChartIndicatorLegend({
     if (onChain.sthLth.enabled) {
       onChainRows.push({
         id: 'sthLth',
-        label: 'STH vs LTH (proxy)',
+        label: 'STH/LTH',
         color: onChain.sthLth.colorLth,
         off: () => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, enabled: false } })),
       })
@@ -322,14 +323,42 @@ export function ChartIndicatorLegend({
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute left-2 top-2 z-20 flex max-w-[min(calc(100%-1rem),22rem)] flex-col gap-1',
+        'pointer-events-auto absolute bottom-2 left-2 z-20 flex max-w-[min(calc(100%-5rem),18rem)] flex-col-reverse items-start gap-1',
         className,
       )}
       aria-label="Indicadores no grafico"
     >
-      {rows.map((row) => (
-        <LegendPill key={row.id} row={row} onOpenSettings={onOpenSettings} />
-      ))}
+      <button
+        type="button"
+        className={cn(
+          'flex items-center gap-1.5 rounded-md border border-white/[0.14] bg-black/90 px-2 py-1 text-[10px] font-medium text-zinc-300 shadow-md backdrop-blur-sm transition-colors hover:border-[#d4af37]/35 hover:text-[#d4af37]',
+          expanded && 'border-[#d4af37]/30 text-[#d4af37]',
+        )}
+        aria-expanded={expanded}
+        aria-controls="chart-indicator-legend-list"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <Layers className="h-3 w-3 shrink-0" aria-hidden />
+        <span>
+          {rows.length} {rows.length === 1 ? 'indicador' : 'indicadores'}
+        </span>
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        ) : (
+          <ChevronUp className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        )}
+      </button>
+
+      {expanded ? (
+        <div
+          id="chart-indicator-legend-list"
+          className="flex max-h-[min(38vh,14rem)] w-full flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-md border border-white/[0.08] bg-black/80 p-1 shadow-lg backdrop-blur-sm [scrollbar-width:thin]"
+        >
+          {rows.map((row) => (
+            <LegendPill key={row.id} row={row} onOpenSettings={onOpenSettings} />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

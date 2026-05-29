@@ -218,6 +218,28 @@ export function buildOnChainChartOverlays(
   return out.filter((o) => o.price > 0 && Number.isFinite(o.price))
 }
 
+const OVERLAY_SHORT_LABEL: Record<string, string> = {
+  mayer: 'Mayer',
+  aviv: 'AVIV',
+  mvrv: 'MVRV',
+  mvrvZ: 'MVRV-Z',
+  sopr: 'SOPR',
+  nupl: 'NUPL',
+}
+
+function tagAbbrev(tag?: string): string | undefined {
+  if (tag === 'WATCH') return 'W'
+  if (tag === 'STRONG') return 'S'
+  return undefined
+}
+
+/** Rótulo compacto no eixo direito do gráfico (menos intrusivo na análise). */
+export function overlayAxisTitleShort(o: OnChainChartOverlay): string {
+  const name = OVERLAY_SHORT_LABEL[o.id] ?? o.label.replace(/\s*\(proxy\)/i, '')
+  const tag = tagAbbrev(o.tag)
+  return tag ? `${name} ${o.metricDisplay} ${tag}` : `${name} ${o.metricDisplay}`
+}
+
 export function overlayAxisTitle(o: OnChainChartOverlay): string {
   const parts = [o.label, o.metricDisplay]
   if (o.tag) parts.push(o.tag)
