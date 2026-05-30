@@ -62,13 +62,14 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
   const token = process.env.GNEWS_API_KEY?.trim()
   if (!token) return []
 
-  const q = 'crypto OR bitcoin OR AI OR inflation OR war OR Trump OR Iran'
+  const q = 'criptomoeda OR bitcoin OR ethereum OR cripto OR inteligencia artificial OR economia OR geopolitica'
   const url = new URL(GNEWS_SEARCH)
   url.searchParams.set('q', q)
   url.searchParams.set('lang', 'pt')
+  url.searchParams.set('country', 'pt')
   /** Mais recentes primeiro (default da API é relevance → artigos velhos populares no topo). */
   url.searchParams.set('sortby', 'publishedAt')
-  url.searchParams.set('max', '20')
+  url.searchParams.set('max', '25')
   url.searchParams.set('token', token)
 
   try {

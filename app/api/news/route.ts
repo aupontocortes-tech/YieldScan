@@ -8,7 +8,7 @@ import {
 } from '@/lib/news-refresh-config'
 import { paraJsonInsights, pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
 import type { NoticiaProcessada } from '@/lib/newsdata'
-import { traduzirNoticiasRapido } from '@/lib/traduzir-noticias'
+import { traduzirNoticiasRapido, parecePortugues } from '@/lib/traduzir-noticias'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,17 +40,13 @@ function permitir(id: string): boolean {
   return true
 }
 
-function parecePortugues(t: string): boolean {
-  const s = t.trim()
-  if (!s) return false
-  if (/[ãõáéíóúâêôçÃÕÁÉÍÓÚÂÊÔÇ]/.test(s)) return true
-  return /\b(o|a|os|as|de|do|da|que|com|para|mercado|economia|governo|empresa|tecnologia|hoje|entre)\b/i.test(
-    s
-  )
+function parecePortuguesFeed(n: NoticiaProcessada): boolean {
+  if (n.linguagem === 'pt') return true
+  return parecePortugues(`${n.titulo} ${n.resumo}`)
 }
 
 const AVISO_IDIOMA_ORIGINAL =
-  'As notícias aparecem no idioma original: a tradução automática não respondeu a tempo ou o filtro de português estava vazio. Recarrega mais tarde ou define MYMEMORY_EMAIL no .env.local para mais quota.'
+  'Algumas notícias ainda estão no idioma original: a tradução automática atingiu o limite diário. Define MYMEMORY_EMAIL na Vercel para mais quota, ou aguarda ~1 min e actualiza.'
 
 function temTituloEResumo(n: NoticiaProcessada): boolean {
   const t = (n.titulo ?? '').trim()
@@ -76,9 +72,9 @@ const montarNoticiasEmCache = unstable_cache(
     }
     const processadas = processarNoticias(results)
     const traduzidas = await Promise.race([
-      traduzirNoticiasRapido(processadas),
+      traduzirNoticiasRapido(processadas, { maxTraduzir: 40 }),
       new Promise<NoticiaProcessada[]>((resolve) =>
-        setTimeout(() => resolve(processadas), 28_000)
+        setTimeout(() => resolve(processadas), 45_000),
       ),
     ])
     const normalizadas = traduzidas.map((n) => ({
@@ -86,10 +82,7 @@ const montarNoticiasEmCache = unstable_cache(
       titulo: (n.titulo ?? '').trim(),
       resumo: (n.resumo ?? '').trim() || (n.titulo ?? '').trim(),
     }))
-    const curadas = normalizadas.filter(
-      (n) => n.titulo && n.resumo && parecePortugues(`${n.titulo} ${n.resumo}`)
-    )
-    /** Evita feed vazio em local/dev quando a tradução falhou e tudo ficou em inglês. */
+    const curadas = normalizadas.filter((n) => n.titulo && n.resumo && parecePortuguesFeed(n))
     const comConteudo = normalizadas.filter(temTituloEResumo)
     if (curadas.length > 0) {
       return { traduzidas: curadas }
@@ -99,7 +92,7 @@ const montarNoticiasEmCache = unstable_cache(
     }
     return { traduzidas: [], aviso: AVISO_SEM_ARTIGOS }
   },
-  ['api-news-montar-v19'],
+  ['api-news-montar-v20'],
   { revalidate: NEWS_SERVER_REVALIDATE_SECONDS, tags: ['news'] }
 )
 

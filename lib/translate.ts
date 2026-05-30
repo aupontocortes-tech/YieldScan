@@ -8,6 +8,13 @@
 const MYMEMORY_URL = 'https://api.mymemory.translated.net/get'
 const AVISO_LIMITE = 'MYMEMORY WARNING'
 
+/** pt-PT por defeito (UI YieldScan); override com NEWS_TARGET_LANG=pt-BR */
+function langAlvo(): string {
+  const v = process.env.NEWS_TARGET_LANG?.trim()
+  if (v) return v
+  return 'pt-PT'
+}
+
 function textoValido(t: unknown): t is string {
   return typeof t === 'string' && t.trim().length > 0 && !t.includes(AVISO_LIMITE)
 }
@@ -20,9 +27,9 @@ export async function traduzirParaPortugues(
   if (!t) return texto
   if (langDe.startsWith('pt')) return texto
 
-  /** Idioma desconhecido: MyMemory autodetecta a origem → pt-BR */
-  const langpair =
-    langDe === 'auto' ? 'auto|pt-BR' : `${langDe}|pt-BR`
+  /** Idioma desconhecido: MyMemory autodetecta a origem → português */
+  const alvo = langAlvo()
+  const langpair = langDe === 'auto' ? `auto|${alvo}` : `${langDe}|${alvo}`
 
   async function pedir(pair: string): Promise<string | null> {
     const p = new URLSearchParams({ q: t.slice(0, 480), langpair: pair })
@@ -49,7 +56,7 @@ export async function traduzirParaPortugues(
   try {
     let out = await pedir(langpair)
     if (out == null && langDe === 'auto') {
-      out = await pedir('en|pt-BR')
+      out = await pedir(`en|${alvo}`)
     }
     return out ?? texto
   } catch {

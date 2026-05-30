@@ -15,6 +15,7 @@ import {
 } from '@/lib/tendencias/fetch-data'
 import { fetchFmpCryptoQuotes, fmpQuotesToRecord } from '@/lib/tendencias/fetch-fmp'
 import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
+import { traduzirArtigosBrutos } from '@/lib/traduzir-artigos-brutos'
 import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
 import type { AnalysisTone, MomentumPeriod } from '@/lib/tendencias/types'
 import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
@@ -46,7 +47,8 @@ const fetchRaw = unstable_cache(
         fetchGlobalTvlChange7d(),
       ])
 
-    const newsArticles = mergeTrimNewsArticles(coindeskNews, cvNews)
+    const newsArticlesRaw = mergeTrimNewsArticles(coindeskNews, cvNews)
+    const newsArticles = await traduzirArtigosBrutos(newsArticlesRaw, 25)
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -95,7 +97,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v2'],
+  ['tendencias-trim-v4'],
   { revalidate: 120 },
 )
 

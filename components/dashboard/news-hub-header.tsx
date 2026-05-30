@@ -17,14 +17,14 @@ const LINKS = [
     href: '/news/noticias',
     label: 'Notícias',
     shortLabel: 'Notícias',
-    description: 'Cripto, macro, geopolítica e IA — traduzidas quando possível.',
+    description: 'Cripto, macro, geopolítica e IA — em português.',
     icon: Newspaper,
   },
   {
     href: '/news/tendencias',
     label: 'Tendências',
     shortLabel: 'Tendências',
-    description: 'Inteligência IA: sentimento, momentum, narrativas e alertas.',
+    description: 'Score de Tendência, sentimento, narrativas e alertas — em português.',
     icon: Sparkles,
   },
 ] as const

@@ -650,8 +650,8 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
     _yieldscanCryptoQuery: true,
   }))
 
-  let merged = mergeArticlesDedupe(coindeskMarcados, cryptoCv)
-  merged = mergeArticlesDedupe(merged, gnews)
+  let merged = mergeArticlesDedupe(gnews, coindeskMarcados)
+  merged = mergeArticlesDedupe(merged, cryptoCv)
   merged = mergeArticlesDedupe(merged, cryptopanicResults)
   merged = mergeArticlesDedupe(merged, ndBundle)
   enrichYieldscanCryptoFlag(merged, [...cryptoCv, ...coindeskMarcados])
