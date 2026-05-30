@@ -1,32 +1,61 @@
 import type { NewsDataArticle } from '@/lib/newsdata'
-import { parecePortugues } from '@/lib/news-lang'
+import { pareceIngles, parecePortugues } from '@/lib/news-lang'
 import { traduzirParaPortugues } from '@/lib/translate'
 
-/** Traduz títulos/resumos de artigos brutos (CoinDesk, CryptoPanic, etc.) para português. */
+const LOTE_PARALELO = 4
+
+async function traduzirCampos(a: NewsDataArticle): Promise<NewsDataArticle> {
+  const rawTitle = String(a.title ?? '').trim()
+  const rawDesc = String(a.description ?? a.content ?? rawTitle).trim()
+  if (!rawTitle) return a
+
+  if (parecePortugues(`${rawTitle} ${rawDesc}`)) {
+    return { ...a, language: 'pt' }
+  }
+
+  let title = await traduzirParaPortugues(rawTitle, 'en')
+  let desc = await traduzirParaPortugues(rawDesc || rawTitle, 'en')
+
+  if (pareceIngles(title)) title = await traduzirParaPortugues(rawTitle, 'auto')
+  if (pareceIngles(desc)) desc = await traduzirParaPortugues(rawDesc || rawTitle, 'auto')
+
+  return {
+    ...a,
+    title,
+    description: desc,
+    content: desc,
+    language: 'pt',
+  }
+}
+
+/** Traduz títulos/resumos (CoinDesk, cryptocurrency.cv, etc.) para português — usado em Tendências. */
 export async function traduzirArtigosBrutos(
   articles: NewsDataArticle[],
-  limit = 20,
+  limit = 50,
 ): Promise<NewsDataArticle[]> {
   if (!articles.length) return articles
+
   const copy = [...articles]
   const n = Math.min(limit, copy.length)
+  const indices: number[] = []
 
-  await Promise.all(
-    Array.from({ length: n }, (_, i) => (async () => {
-      const a = copy[i]
-      const bloco = `${a.title ?? ''} ${a.description ?? ''}`
-      if (parecePortugues(bloco)) {
-        copy[i] = { ...a, language: 'pt' }
-        return
-      }
-      const title = await traduzirParaPortugues(String(a.title ?? ''), 'en')
-      const desc = await traduzirParaPortugues(
-        String(a.description ?? a.content ?? title),
-        'en',
-      )
-      copy[i] = { ...a, title, description: desc, content: desc, language: 'pt' }
-    })()),
-  )
+  for (let i = 0; i < n; i++) {
+    const bloco = `${copy[i].title ?? ''} ${copy[i].description ?? ''}`
+    if (parecePortugues(bloco)) {
+      copy[i] = { ...copy[i], language: 'pt' }
+    } else {
+      indices.push(i)
+    }
+  }
+
+  for (let b = 0; b < indices.length; b += LOTE_PARALELO) {
+    const chunk = indices.slice(b, b + LOTE_PARALELO)
+    if (b > 0) await new Promise((r) => setTimeout(r, 100))
+    const traduzidos = await Promise.all(chunk.map((i) => traduzirCampos(copy[i])))
+    for (let j = 0; j < chunk.length; j++) {
+      copy[chunk[j]] = traduzidos[j]
+    }
+  }
 
   return copy
 }

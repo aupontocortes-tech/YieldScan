@@ -47,8 +47,7 @@ const fetchRaw = unstable_cache(
         fetchGlobalTvlChange7d(),
       ])
 
-    const newsArticlesRaw = mergeTrimNewsArticles(coindeskNews, cvNews)
-    const newsArticles = await traduzirArtigosBrutos(newsArticlesRaw, 25)
+    const newsArticles = mergeTrimNewsArticles(coindeskNews, cvNews)
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -112,8 +111,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const raw = await fetchRaw()
+    const newsArticles = await traduzirArtigosBrutos(raw.newsArticles, 20)
     const payload = buildTrimPayload({
       ...raw,
+      newsArticles,
       period,
       tone,
     })

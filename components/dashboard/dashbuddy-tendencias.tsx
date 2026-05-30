@@ -635,6 +635,7 @@ export function DashbuddyTendencias() {
       {tab === 'noticias' && (
         <Card className="border-border/50 bg-card/40">
           <CardContent className="space-y-3 pt-4">
+            <p className="text-[10px] text-muted-foreground">Manchetes traduzidas para português.</p>
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge className="bg-emerald-500/15 text-emerald-400">
                 <TrendingUp className="mr-1 h-3 w-3" />
