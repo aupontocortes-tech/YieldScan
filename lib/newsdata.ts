@@ -9,6 +9,7 @@
 
 import { fetchAiNewsFromRssFeeds } from '@/lib/ai-news-rss'
 import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
+import { fetchCoindeskAsArticles } from '@/lib/tendencias/fetch-coindesk'
 import { fetchGnewsAsArticles } from '@/lib/gnews'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { textoIndicaFocoInteligenciaArtificial } from '@/lib/news-ia-strict'
@@ -626,7 +627,7 @@ async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
 }
 
 /**
- * GNews + cryptocurrency.cv (primários) + CryptoPanic + NewsData/RSS (fallback), fundidos.
+ * CoinDesk + GNews + cryptocurrency.cv (primários) + CryptoPanic + NewsData/RSS (fallback), fundidos.
  */
 export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
   results: NewsDataArticle[]
@@ -634,24 +635,32 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
 }> {
   const ndKey = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim() || ''
 
-  const [ndBundle, gnews, cryptoCv, cryptopanicResults] = await Promise.all([
+  const [ndBundle, coindesk, gnews, cryptoCv, cryptopanicResults] = await Promise.all([
     ndKey
       ? fetchNewsdataComRss(ndKey)
       : fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
+    fetchCoindeskAsArticles(60),
     fetchGnewsAsArticles(),
     fetchCryptoCvAsArticles(),
     fetchCryptopanicAsNewsDataArticles(),
   ])
 
-  let merged = mergeArticlesDedupe(gnews, cryptoCv)
+  const coindeskMarcados: NewsDataArticle[] = coindesk.map((a) => ({
+    ...a,
+    _yieldscanCryptoQuery: true,
+  }))
+
+  let merged = mergeArticlesDedupe(coindeskMarcados, cryptoCv)
+  merged = mergeArticlesDedupe(merged, gnews)
   merged = mergeArticlesDedupe(merged, cryptopanicResults)
   merged = mergeArticlesDedupe(merged, ndBundle)
-  enrichYieldscanCryptoFlag(merged, cryptoCv)
+  enrichYieldscanCryptoFlag(merged, [...cryptoCv, ...coindeskMarcados])
   merged = dedupeArtigosPorTitulo(merged)
 
   const temChave =
     Boolean(ndKey) ||
     Boolean(process.env.GNEWS_API_KEY?.trim()) ||
+    Boolean(process.env.COINDESK_API_KEY?.trim() || process.env.CRYPTOCOMPARE_API_KEY?.trim()) ||
     Boolean(
       process.env.CRYPTOPANIC_AUTH_TOKEN?.trim() || process.env.CRYPTOPUNK_API_TOKEN?.trim()
     )

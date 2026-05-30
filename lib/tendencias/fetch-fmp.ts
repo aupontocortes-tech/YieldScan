@@ -97,3 +97,18 @@ export function fmpDistFromHighPct(price: number | null, yearHigh: number | null
   if (price == null || yearHigh == null || yearHigh <= 0) return null
   return ((yearHigh - price) / yearHigh) * 100
 }
+
+export type FmpQuotesRecord = Record<string, FmpCryptoQuote>
+
+export function fmpQuotesToRecord(map: Map<string, FmpCryptoQuote>): FmpQuotesRecord {
+  return Object.fromEntries(map)
+}
+
+export function lookupFmpQuote(
+  quotes: FmpQuotesRecord | Map<string, FmpCryptoQuote> | undefined,
+  symbol: string,
+): FmpCryptoQuote | undefined {
+  if (!quotes) return undefined
+  if (quotes instanceof Map) return quotes.get(symbol)
+  return quotes[symbol]
+}

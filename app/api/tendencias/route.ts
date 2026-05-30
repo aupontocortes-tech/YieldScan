@@ -13,7 +13,7 @@ import {
   fetchTendenciasMarkets,
   fetchTendenciasTrending,
 } from '@/lib/tendencias/fetch-data'
-import { fetchFmpCryptoQuotes } from '@/lib/tendencias/fetch-fmp'
+import { fetchFmpCryptoQuotes, fmpQuotesToRecord } from '@/lib/tendencias/fetch-fmp'
 import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
 import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
 import type { AnalysisTone, MomentumPeriod } from '@/lib/tendencias/types'
@@ -85,7 +85,7 @@ const fetchRaw = unstable_cache(
       global,
       trending,
       newsArticles,
-      fmpQuotes,
+      fmpQuotes: fmpQuotesToRecord(fmpQuotes),
       unlocks,
       defiChains: chains,
       defiPools: pools,
@@ -121,7 +121,8 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
       },
     })
-  } catch {
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') console.error('[api/tendencias]', e)
     return NextResponse.json(
       {
         updatedAt: new Date().toISOString(),

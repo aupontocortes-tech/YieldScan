@@ -59,7 +59,7 @@ function temTituloEResumo(n: NoticiaProcessada): boolean {
 }
 
 const AVISO_SEM_FONTES =
-  'Sem notícias: adiciona GNEWS_API_KEY (recomendado), NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
+  'Sem notícias: adiciona COINDESK_API_KEY (recomendado para cripto), GNEWS_API_KEY, NEWSDATA_API_KEY e/ou CRYPTOPANIC_AUTH_TOKEN nas Environment Variables do projeto na Vercel (Settings → Environment Variables), faz redeploy, e espera ~1 min.'
 
 const AVISO_SEM_ARTIGOS =
   'O feed veio vazio neste momento. A fonte pode estar sem artigos recentes/temporariamente limitada; tenta atualizar em 1-2 minutos. Para reforçar volume, usa também CRYPTOPANIC_AUTH_TOKEN.'
@@ -99,7 +99,7 @@ const montarNoticiasEmCache = unstable_cache(
     }
     return { traduzidas: [], aviso: AVISO_SEM_ARTIGOS }
   },
-  ['api-news-montar-v18'],
+  ['api-news-montar-v19'],
   { revalidate: NEWS_SERVER_REVALIDATE_SECONDS, tags: ['news'] }
 )
 

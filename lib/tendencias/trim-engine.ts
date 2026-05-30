@@ -2,7 +2,9 @@ import type { NewsDataArticle } from '@/lib/newsdata'
 import {
   fmpDistFromHighPct,
   fmpMaPosition,
+  lookupFmpQuote,
   type FmpCryptoQuote,
+  type FmpQuotesRecord,
 } from '@/lib/tendencias/fetch-fmp'
 import { TRIM_CLASS_LABEL } from '@/lib/tendencias/trim-config'
 import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fetch-data'
@@ -200,7 +202,7 @@ function buildAlerts(input: {
 }): TendenciasAlert[] {
   const alerts: TendenciasAlert[] = []
 
-  for (const c of markets) {
+  for (const c of input.markets) {
     const vol = scoreVolume(c)
     if (vol.abnormal && vol.ratio > 0.22) {
       alerts.push({
@@ -221,7 +223,7 @@ function buildAlerts(input: {
       id: `mention-${topM.symbol}`,
       type: 'mencoes',
       title: `${topM.symbol} muito citado`,
-      detail: `${topM.count} menções no feed cryptocurrency.cv.`,
+      detail: `${topM.count} menções no feed de notícias.`,
       severity: topM.count >= 4 ? 'watch' : 'info',
       symbol: topM.symbol,
     })
@@ -290,11 +292,11 @@ function buildAlerts(input: {
 }
 
 function buildDataSources(input: {
-  fmpQuotes?: Map<string, FmpCryptoQuote>
+  fmpQuotes?: FmpQuotesRecord
   newsArticles: NewsDataArticle[]
 }): string[] {
   const sources = ['coingecko', 'defillama']
-  if (input.fmpQuotes?.size) sources.push('fmp')
+  if (input.fmpQuotes && Object.keys(input.fmpQuotes).length) sources.push('fmp')
   const hasCoindesk = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('coindesk-'))
   const hasCv = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('cryptocv-'))
   if (hasCoindesk) sources.push('coindesk')
@@ -312,7 +314,7 @@ export function buildTrimPayload(input: {
   defiPools?: RawYieldPool[]
   defiFees?: RawProtocolFees[]
   defiTvlGlobal?: { current: number | null; changePct: number | null }
-  fmpQuotes?: Map<string, FmpCryptoQuote>
+  fmpQuotes?: FmpQuotesRecord
   period?: MomentumPeriod
   tone?: AnalysisTone
   partial?: boolean
@@ -337,7 +339,7 @@ export function buildTrimPayload(input: {
 
   const rows = input.markets.map((c) => {
     const trim = trimById.get(c.id)!
-    const fmp = input.fmpQuotes?.get(c.symbol.toUpperCase())
+    const fmp = lookupFmpQuote(input.fmpQuotes, c.symbol.toUpperCase())
     return toTokenRow(c, trim, newsAnalysis.tokenMentions.get(c.symbol.toUpperCase()) ?? 0, period, fmp)
   })
 
