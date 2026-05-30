@@ -6,7 +6,7 @@ import {
   type FmpCryptoQuote,
   type FmpQuotesRecord,
 } from '@/lib/tendencias/fetch-fmp'
-import { TRIM_CLASS_LABEL } from '@/lib/tendencias/trim-config'
+import { TRIM_CLASS_LABEL, SCORE_TENDENCIA_NOME } from '@/lib/tendencias/trim-config'
 import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fetch-data'
 import {
   indexProtocolFees,
@@ -233,7 +233,7 @@ function buildAlerts(input: {
     alerts.push({
       id: `trim-${r.id}`,
       type: 'momentum',
-      title: `${r.symbol} — Trim ${r.trimScore}`,
+      title: `${r.symbol} — score ${r.trimScore}`,
       detail: r.momentumReason,
       severity: 'info',
       symbol: r.symbol,
@@ -245,7 +245,7 @@ function buildAlerts(input: {
       id: `weak-${r.id}`,
       type: 'momentum',
       title: `${r.symbol} — perda de força`,
-      detail: `Trim Score ${r.trimScore}/100 (${r.trimLabel}).`,
+      detail: `${SCORE_TENDENCIA_NOME} ${r.trimScore}/100 (${r.trimLabel}).`,
       severity: 'watch',
       symbol: r.symbol,
     })
@@ -415,7 +415,7 @@ export function buildTrimPayload(input: {
     meta: {
       momentumPeriod: period,
       analysisTone: tone,
-      engine: 'trim-quant-v2',
+      engine: 'score-tendencia-v2',
       dataSources: buildDataSources(input),
     },
     market,

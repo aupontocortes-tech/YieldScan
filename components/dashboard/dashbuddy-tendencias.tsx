@@ -34,7 +34,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { type TrimClass } from '@/lib/tendencias/trim-config'
+import { type TrimClass, SCORE_MERCADO_NOME, SCORE_TENDENCIA_FORMULA, SCORE_TENDENCIA_NOME } from '@/lib/tendencias/trim-config'
 import { cn } from '@/lib/utils'
 import {
   AlertTriangle,
@@ -74,11 +74,11 @@ const TABS: { id: TabId; label: string; icon: typeof Sparkles }[] = [
 type TokenFilter = 'destaques' | 'gainers' | 'losers' | 'volume' | 'trim' | 'mencoes'
 
 const TOKEN_FILTERS: { id: TokenFilter; label: string }[] = [
-  { id: 'destaques', label: 'Destaques TRIM' },
+  { id: 'destaques', label: 'Melhor score' },
   { id: 'gainers', label: 'Em alta' },
   { id: 'losers', label: 'Em queda' },
   { id: 'volume', label: 'Volume' },
-  { id: 'trim', label: 'TRIM alto' },
+  { id: 'trim', label: 'Score alto' },
   { id: 'mencoes', label: 'Mais citados' },
 ]
 
@@ -255,7 +255,7 @@ function TendenciasSettings({
       </SheetTrigger>
       <SheetContent className="overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Ajustes TRIM</SheetTitle>
+          <SheetTitle>Ajustes da análise</SheetTitle>
           <SheetDescription>Período de momentum e tom dos textos (sem IA externa).</SheetDescription>
         </SheetHeader>
         <div className="space-y-5 px-4 py-2">
@@ -292,7 +292,7 @@ function TendenciasSettings({
             </Select>
           </div>
           <p className="rounded-lg border border-dashed border-border/50 px-3 py-2 text-[11px] text-muted-foreground">
-            Trim Score = 30% momentum + 25% volume + 20% notícias + 15% DeFi + 10% relevância.
+            {SCORE_TENDENCIA_FORMULA}
           </p>
         </div>
         <SheetFooter className="gap-2 sm:gap-0">
@@ -381,8 +381,10 @@ export function DashbuddyTendencias() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Tendências TRIM</h2>
-          <p className="text-xs text-muted-foreground">Análise quantitativa · {sourcesLabel}</p>
+          <h2 className="text-lg font-semibold tracking-tight">Tendências de mercado</h2>
+          <p className="text-xs text-muted-foreground">
+            {SCORE_TENDENCIA_NOME} · análise quantitativa · {sourcesLabel}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <TendenciasSettings prefs={prefs} onSave={savePrefs} />
@@ -416,7 +418,7 @@ export function DashbuddyTendencias() {
             market.sentiment === 'optimista' ? 'up' : market.sentiment === 'pessimista' ? 'down' : undefined
           }
         />
-        <KpiCard label="Trim mercado" value={`${market.trimMarketScore}/100`} accent="gold" />
+        <KpiCard label={SCORE_MERCADO_NOME} value={`${market.trimMarketScore}/100`} accent="gold" />
         <KpiCard
           label="BTC dominance"
           value={market.btcDominance != null ? `${market.btcDominance.toFixed(1)}%` : '—'}
@@ -461,7 +463,7 @@ export function DashbuddyTendencias() {
             <CardContent>
               <p className="text-sm leading-relaxed">{observeToday}</p>
               <p className="mt-2 text-[10px] text-muted-foreground">
-                {PERIOD_LABEL[meta.momentumPeriod]} · Tom {meta.analysisTone} · {meta.engine}
+                {PERIOD_LABEL[meta.momentumPeriod]} · Tom {meta.analysisTone}
               </p>
             </CardContent>
           </Card>
@@ -547,7 +549,7 @@ export function DashbuddyTendencias() {
                   <th className="px-2 py-2 font-medium">Token</th>
                   <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">Preço</th>
                   <th className="px-2 py-2 text-right font-medium">Variação</th>
-                  <th className="px-2 py-2 text-center font-medium">TRIM</th>
+                  <th className="px-2 py-2 text-center font-medium">Score</th>
                   <th className="hidden px-2 py-2 text-right font-medium md:table-cell">Volume</th>
                   <th className="hidden px-2 py-2 font-medium lg:table-cell">MM FMP</th>
                 </tr>

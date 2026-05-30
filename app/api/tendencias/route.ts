@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
         meta: {
           momentumPeriod: period,
           analysisTone: tone,
-          engine: 'trim-quant-v2',
+          engine: 'score-tendencia-v2',
           dataSources: ['coingecko', 'defillama', 'cryptocurrency.cv'],
         },
         market: {

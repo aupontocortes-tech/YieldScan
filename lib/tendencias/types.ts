@@ -42,7 +42,7 @@ export type TendenciasTokenRow = {
   volume24h: number | null
   marketCap: number | null
   sentiment: SentimentLevel
-  /** Trim Score composto 0–100 */
+  /** Score de Tendência composto 0–100 */
   aiScore: number
   trimScore: number
   trimClass: TrimClass
@@ -109,7 +109,7 @@ export type TendenciasMarketPanel = {
   totalMarketCap: number | null
   marketCapChange24h: number | null
   trendIndex: number
-  /** Trim Score médio dos top 20 tokens */
+  /** Score de Tendência médio dos top 20 tokens */
   trimMarketScore: number
   dominantNarrative: string | null
   gainersCount: number

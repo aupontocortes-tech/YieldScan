@@ -1,5 +1,5 @@
 import type { AnalysisTone } from '@/lib/tendencias/types'
-import type { TrimClass } from '@/lib/tendencias/trim-config'
+import { SCORE_TENDENCIA_NOME, type TrimClass } from '@/lib/tendencias/trim-config'
 import type { TrimTokenScores } from '@/lib/tendencias/trim-scores'
 import type { RawMarketCoin } from '@/lib/tendencias/fetch-data'
 
@@ -77,7 +77,7 @@ export function generateObserveToday(input: {
         : 'O mercado mantém-se equilibrado'
 
   parts.push(
-    `${mood} (Trim Score agregado ${input.marketTrimScore}/100, sentimento ${input.marketSentiment}). ${input.gainers} ativos em alta vs ${input.losers} em queda (24h). Janela de momentum: ${input.period}.`,
+    `${mood} (${SCORE_TENDENCIA_NOME} do mercado ${input.marketTrimScore}/100, sentimento ${input.marketSentiment}). ${input.gainers} ativos em alta vs ${input.losers} em queda (24h). Janela de momentum: ${input.period}.`,
   )
 
   if (input.dominantNarrative) {

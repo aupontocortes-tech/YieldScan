@@ -1,4 +1,4 @@
-/** Pesos do Trim Score composto (soma = 1). */
+/** Pesos do score composto (soma = 1). */
 export const TRIM_WEIGHTS = {
   momentum: 0.3,
   volume: 0.25,
@@ -22,6 +22,12 @@ export const TRIM_CLASS_LABEL: Record<TrimClass, string> = {
   forte: 'Forte',
   acelerando: 'Acelerando',
 }
+
+/** Rótulos apresentados na UI (em vez do nome interno «TRIM»). */
+export const SCORE_TENDENCIA_NOME = 'Score de Tendência'
+export const SCORE_MERCADO_NOME = 'Score do mercado'
+export const SCORE_TENDENCIA_FORMULA =
+  'Score de Tendência = 30% momentum + 25% volume + 20% notícias + 15% DeFi + 10% relevância.'
 
 export const POSITIVE_WORDS =
   /\b(bullish|growth|surge|breakout|partnership|expansion|adoption|record|approval|launch|rally|soars|gains|inflow|milestone|upgrade|integrat)\b/i
