@@ -16,8 +16,6 @@ export function readTendenciasPrefs(): TendenciasPrefs {
     return {
       momentumPeriod: isPeriod(p.momentumPeriod) ? p.momentumPeriod : DEFAULT_TENDENCIAS_PREFS.momentumPeriod,
       analysisTone: isTone(p.analysisTone) ? p.analysisTone : DEFAULT_TENDENCIAS_PREFS.analysisTone,
-      customPromptNote: typeof p.customPromptNote === 'string' ? p.customPromptNote : '',
-      useLlm: p.useLlm !== false,
     }
   } catch {
     return DEFAULT_TENDENCIAS_PREFS

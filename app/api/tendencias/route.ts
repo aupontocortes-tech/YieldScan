@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
-import { pegarTodasNoticias, processarNoticias } from '@/lib/newsdata'
+import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
 import {
   fetchDefiChainsTop,
   fetchGlobalTvlChange7d,
+  fetchTopProtocolFees,
   fetchTopYieldPools,
 } from '@/lib/tendencias/fetch-defi'
 import {
@@ -11,8 +12,7 @@ import {
   fetchTendenciasMarkets,
   fetchTendenciasTrending,
 } from '@/lib/tendencias/fetch-data'
-import { buildTendenciasPayload } from '@/lib/tendencias/intelligence'
-import { enrichTendenciasWithLlm } from '@/lib/tendencias/llm-enrich'
+import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
 import type { AnalysisTone, MomentumPeriod } from '@/lib/tendencias/types'
 import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
 
@@ -23,22 +23,18 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, newsRaw, emissions, chains, pools, tvlGlobal] =
+    const [markets, global, trending, newsArticles, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
         fetchTendenciasMarkets(100),
         fetchTendenciasGlobal(),
         fetchTendenciasTrending(),
-        pegarTodasNoticias(process.env.NEWSDATA_API_KEY).catch(() => ({
-          results: [],
-          erro: 'news_fail' as const,
-        })),
+        fetchCryptoCvAsArticles(),
         fetchDefillamaEmissions().catch(() => ({ data: [] as never[], error: 'skip' })),
         fetchDefiChainsTop(8),
         fetchTopYieldPools(6),
+        fetchTopProtocolFees(40),
         fetchGlobalTvlChange7d(),
       ])
-
-    const noticias = newsRaw.results?.length ? processarNoticias(newsRaw.results) : []
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -68,32 +64,31 @@ const fetchRaw = unstable_cache(
     let error: string | null = null
     if (!markets.length) {
       partial = true
-      error = 'Dados de mercado indisponíveis.'
+      error = 'Dados de mercado indisponíveis (CoinGecko).'
     }
-    if (!noticias.length) partial = true
+    if (!newsArticles.length) partial = true
 
     return {
       markets,
       global,
       trending,
-      noticias,
+      newsArticles,
       unlocks,
       defiChains: chains,
       defiPools: pools,
+      defiFees: fees,
       defiTvlGlobal: tvlGlobal,
       partial,
       error,
     }
   },
-  ['tendencias-raw-v2'],
-  { revalidate: 120 }
+  ['tendencias-trim-v1'],
+  { revalidate: 120 },
 )
 
 export async function GET(req: NextRequest) {
   const periodParam = req.nextUrl.searchParams.get('period') ?? '7d'
   const toneParam = req.nextUrl.searchParams.get('tone') ?? 'neutro'
-  const customNote = req.nextUrl.searchParams.get('note') ?? ''
-  const useLlm = req.nextUrl.searchParams.get('llm') !== '0'
 
   const period = PERIODS.has(periodParam as MomentumPeriod)
     ? (periodParam as MomentumPeriod)
@@ -102,18 +97,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const raw = await fetchRaw()
-    let payload = buildTendenciasPayload({
+    const payload = buildTrimPayload({
       ...raw,
       period,
       tone,
     })
-
-    if (useLlm && payload.meta.llmEnabled) {
-      payload = await enrichTendenciasWithLlm(payload, {
-        tone,
-        customNote: customNote || undefined,
-      })
-    }
 
     return NextResponse.json(payload, {
       headers: {
@@ -127,9 +115,8 @@ export async function GET(req: NextRequest) {
         meta: {
           momentumPeriod: period,
           analysisTone: tone,
-          llmEnabled: Boolean(process.env.OPENAI_API_KEY?.trim()),
-          llmUsed: false,
-          fmpConfigured: Boolean(process.env.FMP_API_KEY?.trim()),
+          engine: 'trim-quant-v1',
+          dataSources: ['coingecko', 'defillama', 'cryptocurrency.cv'],
         },
         market: {
           sentiment: 'neutro',
@@ -139,6 +126,7 @@ export async function GET(req: NextRequest) {
           totalMarketCap: null,
           marketCapChange24h: null,
           trendIndex: 50,
+          trimMarketScore: 50,
           dominantNarrative: null,
           gainersCount: 0,
           losersCount: 0,
@@ -161,6 +149,8 @@ export async function GET(req: NextRequest) {
           acelerando: [],
           desacelerando: [],
           proximosUnlocks: [],
+          volumeAnormal: [],
+          fundamentosFortes: [],
         },
         defi: {
           totalTvlUsd: null,
@@ -173,7 +163,7 @@ export async function GET(req: NextRequest) {
         partial: true,
         error: 'Erro ao carregar tendências.',
       },
-      { status: 200 }
+      { status: 200 },
     )
   }
 }

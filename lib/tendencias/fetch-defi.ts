@@ -10,6 +10,71 @@ export type RawYieldPool = {
   apy?: number
 }
 
+export type RawProtocolFees = {
+  name: string
+  slug: string
+  gecko_id: string | null
+  symbol: string | null
+  fees24h: number | null
+  revenue24h: number | null
+  total7d: number | null
+  change_1d: number | null
+}
+
+type FeesOverviewProtocol = {
+  name?: string
+  slug?: string
+  defillamaId?: string
+  gecko_id?: string | null
+  symbol?: string
+  total24h?: number
+  total7d?: number
+  change_1d?: number
+}
+
+export async function fetchTopProtocolFees(limit = 40): Promise<RawProtocolFees[]> {
+  try {
+    const url =
+      'https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue'
+    const res = await fetch(url, {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(18_000),
+    })
+    if (!res.ok) return []
+    const data = (await res.json()) as { protocols?: FeesOverviewProtocol[] }
+    const rows = data.protocols ?? []
+    return rows
+      .filter((p) => p.name)
+      .sort((a, b) => (b.total24h ?? 0) - (a.total24h ?? 0))
+      .slice(0, limit)
+      .map((p) => ({
+        name: p.name!,
+        slug: p.slug ?? p.defillamaId ?? p.name!.toLowerCase().replace(/\s+/g, '-'),
+        gecko_id: p.gecko_id ?? null,
+        symbol: p.symbol?.toUpperCase() ?? null,
+        fees24h: p.total24h ?? null,
+        revenue24h: p.total24h ?? null,
+        total7d: p.total7d ?? null,
+        change_1d: p.change_1d ?? null,
+      }))
+  } catch {
+    return []
+  }
+}
+
+export function indexProtocolFees(rows: RawProtocolFees[]): {
+  byGecko: Map<string, RawProtocolFees>
+  bySymbol: Map<string, RawProtocolFees>
+} {
+  const byGecko = new Map<string, RawProtocolFees>()
+  const bySymbol = new Map<string, RawProtocolFees>()
+  for (const r of rows) {
+    if (r.gecko_id) byGecko.set(r.gecko_id, r)
+    if (r.symbol) bySymbol.set(r.symbol, r)
+  }
+  return { byGecko, bySymbol }
+}
+
 export async function fetchDefiChainsTop(limit = 8): Promise<RawChainTvl[]> {
   try {
     const res = await fetch('https://api.llama.fi/v2/chains', {

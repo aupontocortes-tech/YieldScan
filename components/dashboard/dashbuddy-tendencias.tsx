@@ -34,8 +34,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
+import { type TrimClass } from '@/lib/tendencias/trim-config'
 import { cn } from '@/lib/utils'
 import {
   AlertTriangle,
@@ -61,6 +60,13 @@ const MOMENTUM_CLASS: Record<MomentumClass, string> = {
   estavel: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
   fraco: 'text-red-400 bg-red-500/10 border-red-500/30',
   reversao: 'text-violet-400 bg-violet-500/10 border-violet-500/30',
+}
+
+const TRIM_CLASS: Record<TrimClass, string> = {
+  fraco: 'text-red-400 bg-red-500/10 border-red-500/30',
+  estavel: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+  forte: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+  acelerando: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
 }
 
 const SECTIONS = [
@@ -140,11 +146,11 @@ function TokenFullRow({ row, period }: { row: TendenciasTokenRow; period: Moment
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-semibold">{row.symbol}</span>
+            <Badge variant="outline" className={cn('text-[10px]', TRIM_CLASS[row.trimClass])}>
+              Trim {row.trimScore} · {row.trimLabel}
+            </Badge>
             <Badge variant="outline" className={cn('text-[10px]', sentimentClass(row.sentiment))}>
               {sentimentLabel(row.sentiment)}
-            </Badge>
-            <Badge variant="outline" className={cn('text-[10px]', MOMENTUM_CLASS[row.momentum])}>
-              {row.momentumLabel}
             </Badge>
           </div>
           <p className="truncate text-[11px] text-muted-foreground">{row.name}</p>
@@ -164,7 +170,7 @@ function TokenFullRow({ row, period }: { row: TendenciasTokenRow; period: Moment
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] sm:grid-cols-4">
         <Stat label="Volume 24h" value={fmtUsd(row.volume24h, true)} />
         <Stat label="Market cap" value={fmtUsd(row.marketCap, true)} />
-        <Stat label="Score IA" value={String(row.aiScore)} accent="gold" />
+        <Stat label="Trim Score" value={String(row.trimScore)} accent="gold" />
         <Stat label="Força" value={`${row.strength}/100`} />
       </div>
       {row.momentumReason && (
@@ -233,13 +239,9 @@ function TokenBucket({
 function TendenciasSettings({
   prefs,
   onSave,
-  llmEnabled,
-  fmpConfigured,
 }: {
   prefs: TendenciasPrefs
   onSave: (p: TendenciasPrefs) => void
-  llmEnabled: boolean
-  fmpConfigured: boolean
 }) {
   const [draft, setDraft] = useState(prefs)
   const [open, setOpen] = useState(false)
@@ -258,14 +260,14 @@ function TendenciasSettings({
       <SheetTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="gap-1.5">
           <Settings2 className="h-3.5 w-3.5" />
-          Ajustes IA
+          Ajustes
         </Button>
       </SheetTrigger>
       <SheetContent className="overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Ajustes da análise</SheetTitle>
+          <SheetTitle>Ajustes quantitativos</SheetTitle>
           <SheetDescription>
-            Personalize o período de momentum, tom da escrita e instruções extras para a IA.
+            Período de momentum e tom dos textos gerados por templates (sem IA externa).
           </SheetDescription>
         </SheetHeader>
         <div className="space-y-5 px-4 py-2">
@@ -301,40 +303,10 @@ function TendenciasSettings({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="custom-note">Nota personalizada (prompt)</Label>
-            <Textarea
-              id="custom-note"
-              placeholder="Ex.: focar em Layer 2 e ETFs; ignorar memecoins…"
-              value={draft.customPromptNote}
-              onChange={(e) => setDraft((d) => ({ ...d, customPromptNote: e.target.value }))}
-              rows={4}
-              className="resize-none text-sm"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Enviada à IA no resumo &quot;O que observar hoje&quot; quando OPENAI_API_KEY estiver configurada.
-            </p>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/10 px-3 py-2.5">
-            <div>
-              <Label htmlFor="use-llm" className="text-sm">
-                Enriquecer com IA (OpenAI)
-              </Label>
-              <p className="text-[11px] text-muted-foreground">
-                {llmEnabled ? 'Chave detectada no servidor.' : 'Sem OPENAI_API_KEY — usa heurísticas locais.'}
-              </p>
-            </div>
-            <Switch
-              id="use-llm"
-              checked={draft.useLlm}
-              disabled={!llmEnabled}
-              onCheckedChange={(v) => setDraft((d) => ({ ...d, useLlm: v }))}
-            />
-          </div>
           <div className="rounded-lg border border-dashed border-border/50 px-3 py-2 text-[11px] text-muted-foreground">
             <p>
-              <span className="font-medium text-foreground">FMP (Financial Modeling Prep):</span>{' '}
-              {fmpConfigured ? 'chave configurada — integração futura para MAs e year high/low.' : 'não configurada (FMP_API_KEY).'}
+              Fontes: CoinGecko · DefiLlama · cryptocurrency.cv. Trim Score = 30% momentum + 25% volume +
+              20% notícias + 15% DeFi + 10% relevância.
             </p>
           </div>
         </div>
@@ -414,9 +386,9 @@ export function DashbuddyTendencias() {
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-yellow-500" aria-hidden />
           <div>
-            <h2 className="text-lg font-semibold">Terminal de inteligência</h2>
+            <h2 className="text-lg font-semibold">Terminal quantitativo TRIM</h2>
             <p className="text-xs text-muted-foreground">
-              CoinGecko · Notícias · DefiLlama · análise automática
+              CoinGecko · DefiLlama · cryptocurrency.cv · análise matemática
             </p>
           </div>
         </div>
@@ -424,20 +396,10 @@ export function DashbuddyTendencias() {
           <Badge variant="outline" className="font-mono text-[10px]">
             Momentum: {PERIOD_LABEL[period]}
           </Badge>
-          {meta.llmUsed && (
-            <Badge className="bg-violet-500/15 text-violet-300 text-[10px]">IA activa</Badge>
-          )}
-          {meta.llmEnabled && !meta.llmUsed && prefs.useLlm && (
-            <Badge variant="outline" className="text-[10px]">
-              IA disponível
-            </Badge>
-          )}
-          <TendenciasSettings
-            prefs={prefs}
-            onSave={savePrefs}
-            llmEnabled={meta.llmEnabled}
-            fmpConfigured={meta.fmpConfigured}
-          />
+          <Badge variant="outline" className="font-mono text-[10px] text-yellow-500/90">
+            Trim mercado: {market.trimMarketScore}/100
+          </Badge>
+          <TendenciasSettings prefs={prefs} onSave={savePrefs} />
           <Button
             type="button"
             variant="outline"
@@ -503,6 +465,7 @@ export function DashbuddyTendencias() {
                   value={fmtPct(market.marketCapChange24h)}
                   accent={(market.marketCapChange24h ?? 0) >= 0 ? 'up' : 'down'}
                 />
+                <Metric label="Trim Score mercado" value={`${market.trimMarketScore}/100`} accent="gold" />
                 <Metric label="Índice tendência" value={`${market.trendIndex}/100`} accent="gold" />
                 <Metric label="Ativos em alta" value={String(market.gainersCount)} accent="up" />
                 <Metric label="Ativos em queda" value={String(market.losersCount)} accent="down" />
@@ -522,19 +485,14 @@ export function DashbuddyTendencias() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold">
               <Zap className="h-4 w-4 text-yellow-500" />
-              Resumo automático por IA
-              {meta.llmUsed && (
-                <Badge variant="outline" className="ml-1 text-[10px] text-violet-300">
-                  OpenAI
-                </Badge>
-              )}
+              Resumo quantitativo do dia
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-relaxed text-foreground/90">{observeToday}</p>
             <p className="mt-2 text-[10px] text-muted-foreground">
-              Tom: {meta.analysisTone} · Período momentum: {PERIOD_LABEL[meta.momentumPeriod]}
-              {prefs.customPromptNote.trim() ? ' · Nota personalizada aplicada' : ''}
+              Tom: {meta.analysisTone} · Período momentum: {PERIOD_LABEL[meta.momentumPeriod]} · Motor{' '}
+              {meta.engine}
             </p>
           </CardContent>
         </Card>
@@ -585,6 +543,8 @@ export function DashbuddyTendencias() {
           <TokenBucket title="Maior volume" rows={buckets.maiorVolume} period={period} />
           <TokenBucket title="Tendência acelerando" rows={buckets.acelerando} period={period} />
           <TokenBucket title="Tendência a desacelerar" rows={buckets.desacelerando} period={period} />
+          <TokenBucket title="Volume anormal" rows={buckets.volumeAnormal} period={period} />
+          <TokenBucket title="Fundamentos DeFi fortes" rows={buckets.fundamentosFortes} period={period} />
         </div>
       </section>
 
@@ -620,7 +580,7 @@ export function DashbuddyTendencias() {
       {/* 6. Notícias */}
       <section id="noticias" className="scroll-mt-20 space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          6 · Análise de notícias com IA
+          6 · Análise de notícias (cryptocurrency.cv)
         </h3>
         <Card className="border-border/50 bg-card/40">
           <CardContent className="space-y-3 pt-4">
@@ -756,6 +716,7 @@ export function DashbuddyTendencias() {
                       <span className="font-mono text-[10px] text-muted-foreground">
                         {p.chain}
                         {p.tvlUsd != null ? ` · TVL ${fmtUsd(p.tvlUsd, true)}` : ''}
+                        {p.revenue24h != null ? ` · Rev. ${fmtUsd(p.revenue24h, true)}` : ''}
                         {p.apy != null ? ` · APY ${p.apy.toFixed(1)}%` : ''}
                       </span>
                     </div>

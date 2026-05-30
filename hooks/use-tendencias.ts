@@ -7,11 +7,7 @@ async function fetchTendencias(prefs: TendenciasPrefs): Promise<TendenciasApiRes
   const q = new URLSearchParams({
     period: prefs.momentumPeriod,
     tone: prefs.analysisTone,
-    llm: prefs.useLlm ? '1' : '0',
   })
-  if (prefs.customPromptNote.trim()) {
-    q.set('note', prefs.customPromptNote.trim())
-  }
   const res = await fetch(`/api/tendencias?${q}`)
   if (!res.ok) throw new Error('Falha ao carregar tendências')
   return res.json()

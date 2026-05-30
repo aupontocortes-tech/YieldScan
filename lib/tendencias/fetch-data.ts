@@ -61,7 +61,8 @@ export async function fetchTendenciasMarkets(limit = 100): Promise<RawMarketCoin
 }
 
 export async function fetchTendenciasGlobal(): Promise<RawGlobal | null> {
-  return cgFetch<RawGlobal>('/global')
+  const wrapped = await cgFetch<{ data?: RawGlobal }>('/global')
+  return wrapped?.data ?? null
 }
 
 export async function fetchTendenciasTrending(): Promise<RawTrending[]> {

@@ -1,3 +1,5 @@
+import type { TrimClass } from '@/lib/tendencias/trim-config'
+
 export type SentimentLevel = 'optimista' | 'neutro' | 'pessimista'
 
 export type MomentumClass = 'acelerando' | 'estavel' | 'fraco' | 'reversao'
@@ -16,6 +18,16 @@ export type TendenciasNarrativeId =
   | 'layer2'
   | 'hacks'
   | 'institucionais'
+  | 'rwa'
+  | 'gaming'
+
+export type TrimSubScores = {
+  momentum: number
+  volume: number
+  news: number
+  defi: number
+  relevance: number
+}
 
 export type TendenciasTokenRow = {
   id: string
@@ -30,7 +42,12 @@ export type TendenciasTokenRow = {
   volume24h: number | null
   marketCap: number | null
   sentiment: SentimentLevel
+  /** Trim Score composto 0–100 */
   aiScore: number
+  trimScore: number
+  trimClass: TrimClass
+  trimLabel: string
+  subScores?: TrimSubScores
   momentum: MomentumClass
   momentumLabel: string
   momentumReason: string
@@ -51,7 +68,7 @@ export type TendenciasNarrative = {
 
 export type TendenciasAlert = {
   id: string
-  type: 'volume' | 'sentimento' | 'mencoes' | 'momentum' | 'unlock' | 'tvl' | 'breakout'
+  type: 'volume' | 'sentimento' | 'mencoes' | 'momentum' | 'unlock' | 'tvl' | 'breakout' | 'narrativa'
   title: string
   detail: string
   severity: 'info' | 'watch' | 'urgent'
@@ -86,6 +103,8 @@ export type TendenciasMarketPanel = {
   totalMarketCap: number | null
   marketCapChange24h: number | null
   trendIndex: number
+  /** Trim Score médio dos top 20 tokens */
+  trimMarketScore: number
   dominantNarrative: string | null
   gainersCount: number
   losersCount: number
@@ -97,6 +116,8 @@ export type TendenciasDefiProtocol = {
   tvlUsd: number | null
   apy: number | null
   symbol: string | null
+  fees24h?: number | null
+  revenue24h?: number | null
   interpretation: string
 }
 
@@ -122,14 +143,15 @@ export type TendenciasTokenBuckets = {
     unlockAt: number | null
     usdValue: number | null
   }>
+  volumeAnormal: TendenciasTokenRow[]
+  fundamentosFortes: TendenciasTokenRow[]
 }
 
 export type TendenciasMeta = {
   momentumPeriod: MomentumPeriod
   analysisTone: AnalysisTone
-  llmEnabled: boolean
-  llmUsed: boolean
-  fmpConfigured: boolean
+  engine: string
+  dataSources: string[]
 }
 
 export type TendenciasApiResponse = {
@@ -149,13 +171,9 @@ export type TendenciasApiResponse = {
 export type TendenciasPrefs = {
   momentumPeriod: MomentumPeriod
   analysisTone: AnalysisTone
-  customPromptNote: string
-  useLlm: boolean
 }
 
 export const DEFAULT_TENDENCIAS_PREFS: TendenciasPrefs = {
   momentumPeriod: '7d',
   analysisTone: 'neutro',
-  customPromptNote: '',
-  useLlm: true,
 }
