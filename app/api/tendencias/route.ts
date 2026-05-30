@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
+import { fetchCoindeskAsArticles } from '@/lib/tendencias/fetch-coindesk'
 import {
   fetchDefiChainsTop,
   fetchGlobalTvlChange7d,
@@ -12,6 +13,8 @@ import {
   fetchTendenciasMarkets,
   fetchTendenciasTrending,
 } from '@/lib/tendencias/fetch-data'
+import { fetchFmpCryptoQuotes } from '@/lib/tendencias/fetch-fmp'
+import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
 import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
 import type { AnalysisTone, MomentumPeriod } from '@/lib/tendencias/types'
 import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
@@ -23,18 +26,27 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, newsArticles, emissions, chains, pools, fees, tvlGlobal] =
+    const [markets, global, trending, cvNews, coindeskNews, fmpQuotes, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
         fetchTendenciasMarkets(100),
         fetchTendenciasGlobal(),
         fetchTendenciasTrending(),
         fetchCryptoCvAsArticles(),
-        fetchDefillamaEmissions().catch(() => ({ data: [] as never[], error: 'skip' })),
+        fetchCoindeskAsArticles(80),
+        fetchFmpCryptoQuotes(),
+        Promise.race([
+          fetchDefillamaEmissions(),
+          new Promise<{ data: never[]; error: string }>((r) =>
+            setTimeout(() => r({ data: [], error: 'timeout' }), 12_000),
+          ),
+        ]).catch(() => ({ data: [] as never[], error: 'skip' })),
         fetchDefiChainsTop(8),
         fetchTopYieldPools(6),
         fetchTopProtocolFees(40),
         fetchGlobalTvlChange7d(),
       ])
+
+    const newsArticles = mergeTrimNewsArticles(coindeskNews, cvNews)
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -73,6 +85,7 @@ const fetchRaw = unstable_cache(
       global,
       trending,
       newsArticles,
+      fmpQuotes,
       unlocks,
       defiChains: chains,
       defiPools: pools,
@@ -82,7 +95,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v1'],
+  ['tendencias-trim-v2'],
   { revalidate: 120 },
 )
 
@@ -115,7 +128,7 @@ export async function GET(req: NextRequest) {
         meta: {
           momentumPeriod: period,
           analysisTone: tone,
-          engine: 'trim-quant-v1',
+          engine: 'trim-quant-v2',
           dataSources: ['coingecko', 'defillama', 'cryptocurrency.cv'],
         },
         market: {

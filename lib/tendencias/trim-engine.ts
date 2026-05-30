@@ -1,4 +1,9 @@
 import type { NewsDataArticle } from '@/lib/newsdata'
+import {
+  fmpDistFromHighPct,
+  fmpMaPosition,
+  type FmpCryptoQuote,
+} from '@/lib/tendencias/fetch-fmp'
 import { TRIM_CLASS_LABEL } from '@/lib/tendencias/trim-config'
 import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fetch-data'
 import {
@@ -53,13 +58,15 @@ function toTokenRow(
   trim: TrimTokenScores,
   mentionCount: number,
   period: MomentumPeriod,
+  fmp?: FmpCryptoQuote,
 ): TendenciasTokenRow {
+  const price = c.current_price
   return {
     id: c.id,
     symbol: c.symbol.toUpperCase(),
     name: c.name,
     image: c.image,
-    price: c.current_price,
+    price,
     change24h: c.price_change_percentage_24h,
     change7d: c.price_change_percentage_7d_in_currency ?? null,
     change30d: c.price_change_percentage_30d_in_currency ?? null,
@@ -88,6 +95,13 @@ function toTokenRow(
     momentumReason: generateTokenSummary(c, trim, null, 'neutro'),
     strength: trim.strength,
     mentionCount: mentionCount || undefined,
+    fmp: fmp
+      ? {
+          vsMa50: fmpMaPosition(price, fmp.ma50),
+          vsMa200: fmpMaPosition(price, fmp.ma200),
+          distYearHighPct: fmpDistFromHighPct(price, fmp.yearHigh),
+        }
+      : undefined,
   }
 }
 
@@ -275,6 +289,19 @@ function buildAlerts(input: {
   return alerts.slice(0, 12)
 }
 
+function buildDataSources(input: {
+  fmpQuotes?: Map<string, FmpCryptoQuote>
+  newsArticles: NewsDataArticle[]
+}): string[] {
+  const sources = ['coingecko', 'defillama']
+  if (input.fmpQuotes?.size) sources.push('fmp')
+  const hasCoindesk = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('coindesk-'))
+  const hasCv = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('cryptocv-'))
+  if (hasCoindesk) sources.push('coindesk')
+  if (hasCv || !hasCoindesk) sources.push('cryptocurrency.cv')
+  return sources
+}
+
 export function buildTrimPayload(input: {
   markets: RawMarketCoin[]
   global: RawGlobal | null
@@ -285,6 +312,7 @@ export function buildTrimPayload(input: {
   defiPools?: RawYieldPool[]
   defiFees?: RawProtocolFees[]
   defiTvlGlobal?: { current: number | null; changePct: number | null }
+  fmpQuotes?: Map<string, FmpCryptoQuote>
   period?: MomentumPeriod
   tone?: AnalysisTone
   partial?: boolean
@@ -309,7 +337,8 @@ export function buildTrimPayload(input: {
 
   const rows = input.markets.map((c) => {
     const trim = trimById.get(c.id)!
-    return toTokenRow(c, trim, newsAnalysis.tokenMentions.get(c.symbol.toUpperCase()) ?? 0, period)
+    const fmp = input.fmpQuotes?.get(c.symbol.toUpperCase())
+    return toTokenRow(c, trim, newsAnalysis.tokenMentions.get(c.symbol.toUpperCase()) ?? 0, period, fmp)
   })
 
   const byTrim = [...rows].sort((a, b) => (b.trimScore ?? 0) - (a.trimScore ?? 0))
@@ -384,8 +413,8 @@ export function buildTrimPayload(input: {
     meta: {
       momentumPeriod: period,
       analysisTone: tone,
-      engine: 'trim-quant-v1',
-      dataSources: ['coingecko', 'defillama', 'cryptocurrency.cv'],
+      engine: 'trim-quant-v2',
+      dataSources: buildDataSources(input),
     },
     market,
     observeToday,

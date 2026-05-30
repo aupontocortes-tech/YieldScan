@@ -63,6 +63,13 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
     const summary = stripHtml([a.description, a.content].filter(Boolean).join(' ') || title)
     const text = `${title} ${summary}`.toLowerCase()
     const { sentiment, score } = scoreTextSentiment(text)
+    const preset = (a as NewsDataArticle & { _trimSentiment?: string })._trimSentiment
+    const finalSentiment =
+      preset === 'POSITIVO' || preset === 'NEGATIVO' || preset === 'NEUTRO'
+        ? preset
+        : sentiment
+    const finalScore =
+      preset === 'POSITIVO' ? Math.max(score, 65) : preset === 'NEGATIVO' ? Math.min(score, 35) : score
 
     out.push({
       title,
@@ -71,8 +78,8 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
       source: (a.source_name ?? 'cryptocurrency.cv').trim(),
       pubDate: a.pubDate ?? null,
       text,
-      sentiment,
-      sentimentScore: score,
+      sentiment: finalSentiment,
+      sentimentScore: finalScore,
       symbols: extractSymbols(`${title} ${summary}`),
     })
   }

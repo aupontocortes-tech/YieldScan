@@ -173,6 +173,32 @@ function TokenFullRow({ row, period }: { row: TendenciasTokenRow; period: Moment
         <Stat label="Trim Score" value={String(row.trimScore)} accent="gold" />
         <Stat label="Força" value={`${row.strength}/100`} />
       </div>
+      {row.fmp && (
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+          {row.fmp.vsMa50 && (
+            <span>
+              MM50:{' '}
+              <span className={row.fmp.vsMa50 === 'above' ? 'text-emerald-400' : 'text-red-400'}>
+                {row.fmp.vsMa50 === 'above' ? 'acima' : 'abaixo'}
+              </span>
+            </span>
+          )}
+          {row.fmp.vsMa200 && (
+            <span>
+              MM200:{' '}
+              <span className={row.fmp.vsMa200 === 'above' ? 'text-emerald-400' : 'text-red-400'}>
+                {row.fmp.vsMa200 === 'above' ? 'acima' : 'abaixo'}
+              </span>
+            </span>
+          )}
+          {row.fmp.distYearHighPct != null && (
+            <span>
+              Máx 52s:{' '}
+              <span className="font-mono tabular-nums">{row.fmp.distYearHighPct.toFixed(1)}%</span> abaixo
+            </span>
+          )}
+        </div>
+      )}
       {row.momentumReason && (
         <p className="mt-2 border-t border-border/30 pt-2 text-[11px] leading-relaxed text-muted-foreground">
           {row.momentumReason}
@@ -493,6 +519,7 @@ export function DashbuddyTendencias() {
             <p className="mt-2 text-[10px] text-muted-foreground">
               Tom: {meta.analysisTone} · Período momentum: {PERIOD_LABEL[meta.momentumPeriod]} · Motor{' '}
               {meta.engine}
+              {meta.dataSources?.length ? ` · Fontes: ${meta.dataSources.join(', ')}` : ''}
             </p>
           </CardContent>
         </Card>

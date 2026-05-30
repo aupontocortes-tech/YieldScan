@@ -53,6 +53,12 @@ export type TendenciasTokenRow = {
   momentumReason: string
   strength: number
   mentionCount?: number
+  /** Dados FMP (MM 50/200, máx 52 semanas) quando FMP_API_KEY configurada */
+  fmp?: {
+    vsMa50: 'above' | 'below' | null
+    vsMa200: 'above' | 'below' | null
+    distYearHighPct: number | null
+  }
 }
 
 export type TendenciasNarrative = {
