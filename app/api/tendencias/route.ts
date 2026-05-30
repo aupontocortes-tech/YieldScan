@@ -97,7 +97,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v4'],
+  ['tendencias-trim-v5'],
   { revalidate: 120 },
 )
 

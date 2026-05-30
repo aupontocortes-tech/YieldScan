@@ -29,6 +29,13 @@ export const SCORE_MERCADO_NOME = 'Score do mercado'
 export const SCORE_TENDENCIA_FORMULA =
   'Score de Tendência = 30% momentum + 25% volume + 20% notícias + 15% DeFi + 10% relevância.'
 
+/** Sentimento derivado de score 0–100 (centro neutro = 50). */
+export function sentimentFromScore(score: number): 'optimista' | 'pessimista' | 'neutro' {
+  if (score >= 56) return 'optimista'
+  if (score <= 44) return 'pessimista'
+  return 'neutro'
+}
+
 export const POSITIVE_WORDS =
   /\b(bullish|growth|surge|breakout|partnership|expansion|adoption|record|approval|launch|rally|soars|gains|inflow|milestone|upgrade|integrat)\b/i
 

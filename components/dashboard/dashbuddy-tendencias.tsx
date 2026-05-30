@@ -84,6 +84,13 @@ const TOKEN_FILTERS: { id: TokenFilter; label: string }[] = [
 
 function fmtUsd(n: number | null | undefined, compact = false): string {
   if (n == null || !Number.isFinite(n)) return '—'
+  if (compact) {
+    const abs = Math.abs(n)
+    const sign = n < 0 ? '-' : ''
+    if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(1)} T US$`
+    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)} B US$`
+    if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)} M US$`
+  }
   return new Intl.NumberFormat('pt-PT', {
     style: 'currency',
     currency: 'USD',
@@ -139,14 +146,27 @@ function KpiCard({
   )
 }
 
-function SentimentGauge({ score, level }: { score: number; level: SentimentLevel }) {
+function SentimentGauge({
+  score,
+  level,
+  gainers,
+  losers,
+}: {
+  score: number
+  level: SentimentLevel
+  gainers?: number
+  losers?: number
+}) {
   return (
     <div className="space-y-2">
       <div className="flex items-end justify-between gap-2">
         <span className={cn('rounded-lg border px-2.5 py-1 text-sm font-semibold', sentimentClass(level))}>
           {sentimentLabel(level)}
         </span>
-        <span className="font-mono text-2xl font-bold tabular-nums">{score}</span>
+        <span className="font-mono text-2xl font-bold tabular-nums">
+          {score}
+          <span className="text-sm font-normal text-muted-foreground">/100</span>
+        </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-muted/40">
         <div
@@ -159,6 +179,16 @@ function SentimentGauge({ score, level }: { score: number; level: SentimentLevel
           style={{ width: `${score}%` }}
         />
       </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span>0 · pessimista</span>
+        <span>50 · neutro</span>
+        <span>100 · optimista</span>
+      </div>
+      {gainers != null && losers != null && (
+        <p className="text-[10px] text-muted-foreground">
+          {gainers} tokens em alta · {losers} em queda (24h)
+        </p>
+      )}
     </div>
   )
 }
@@ -490,7 +520,12 @@ export function DashbuddyTendencias() {
                 <CardTitle className="text-sm">Sentimento de mercado</CardTitle>
               </CardHeader>
               <CardContent>
-                <SentimentGauge score={market.sentimentScore} level={market.sentiment} />
+                <SentimentGauge
+                  score={market.sentimentScore}
+                  level={market.sentiment}
+                  gainers={market.gainersCount}
+                  losers={market.losersCount}
+                />
                 <div className="mt-4 grid grid-cols-2 gap-2 text-[10px]">
                   <div className="rounded-lg bg-muted/20 px-2 py-1.5">
                     <span className="text-muted-foreground">Cap. total</span>

@@ -6,7 +6,7 @@ import {
   type FmpCryptoQuote,
   type FmpQuotesRecord,
 } from '@/lib/tendencias/fetch-fmp'
-import { TRIM_CLASS_LABEL, SCORE_TENDENCIA_NOME } from '@/lib/tendencias/trim-config'
+import { TRIM_CLASS_LABEL, SCORE_TENDENCIA_NOME, sentimentFromScore } from '@/lib/tendencias/trim-config'
 import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fetch-data'
 import {
   indexProtocolFees,
@@ -45,9 +45,7 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function scoreToSentiment(score: number): SentimentLevel {
-  if (score >= 62) return 'optimista'
-  if (score <= 38) return 'pessimista'
-  return 'neutro'
+  return sentimentFromScore(score)
 }
 
 function narrativeSentiment(n: TrimNarrativeStats): SentimentLevel {
@@ -129,7 +127,25 @@ function buildMarketPanel(
 ): TendenciasMarketPanel {
   const changes = markets.map((m) => m.price_change_percentage_24h ?? 0).filter(Number.isFinite)
   const avgChange = changes.length ? changes.reduce((a, b) => a + b, 0) / changes.length : 0
-  const sentimentScore = clamp(Math.round(marketTrim * 0.55 + newsScore * 0.45), 0, 100)
+  const gainersCount = changes.filter((c) => c > 1).length
+  const losersCount = changes.filter((c) => c < -1).length
+  const n = changes.length || 1
+
+  /** Movimento real de preços 24h (centro em 50). */
+  const marketPulse = clamp(
+    Math.round(50 + avgChange * 2.2 + ((gainersCount - losersCount) / n) * 12),
+    0,
+    100,
+  )
+  const capChange = global?.market_cap_change_percentage_24h_usd ?? 0
+  const capPulse = clamp(Math.round(50 + capChange * 3.5), 0, 100)
+
+  /** Sentimento = preços 24h (45%) + cap. total 24h (15%) + tendência (20%) + notícias (20%). */
+  const sentimentScore = clamp(
+    Math.round(marketPulse * 0.45 + capPulse * 0.15 + marketTrim * 0.2 + newsScore * 0.2),
+    0,
+    100,
+  )
 
   return {
     sentiment: scoreToSentiment(sentimentScore),
@@ -141,8 +157,8 @@ function buildMarketPanel(
     trendIndex: clamp(Math.round(marketTrim + avgChange * 2), 0, 100),
     trimMarketScore: marketTrim,
     dominantNarrative: narratives[0]?.label ?? null,
-    gainersCount: changes.filter((c) => c > 1).length,
-    losersCount: changes.filter((c) => c < -1).length,
+    gainersCount,
+    losersCount,
   }
 }
 
