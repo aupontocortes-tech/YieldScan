@@ -602,18 +602,28 @@ export function SettingsPanel({
       </p>
 
       <IndicatorSection
-        title="Mayer Multiple (proxy)"
-        subtitle="Preço ÷ SMA · linha no gráfico de preço"
-        helpText="Preço ÷ SMA (200 por defeito). Mostra linha horizontal no gráfico ao nível da SMA (Mayer = 1) e o valor actual da métrica no rótulo."
+        title="The Mayer Multiple (proxy)"
+        subtitle="Preço ÷ SMA · múltiplo actual + zonas clássicas"
+        helpText="The Mayer Multiple = preço ÷ SMA (200 por defeito). Linha principal na SMA (múltiplo = 1) com valor actual no rótulo. Opcionalmente mostra zonas Trace Mayer: ×0.8 (compra histórica) e ×2.4 (bolha). Proxy só com preço — não é dado on-chain real."
         enabled={onChain.mayer.enabled}
         onToggle={(c) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, enabled: c } }))}
       >
         <div className="grid grid-cols-2 gap-2">
           <Num label="SMA base" value={onChain.mayer.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, smaPeriod: n } }))} />
           <div className="flex flex-col gap-1">
-            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <Label className="text-[10px] text-zinc-500">Cor (×1.0)</Label>
             <input type="color" value={onChain.mayer.color} onChange={(e) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
           </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/50 px-3 py-2.5">
+          <div>
+            <p className="text-xs font-medium text-zinc-300">Zonas Mayer (×0.8 / ×2.4)</p>
+            <p className="text-[10px] text-zinc-600">Compra histórica e zona de bolha sobre a SMA</p>
+          </div>
+          <Switch
+            checked={onChain.mayer.showBands !== false}
+            onCheckedChange={(c) => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, showBands: c } }))}
+          />
         </div>
       </IndicatorSection>
 

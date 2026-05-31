@@ -202,7 +202,7 @@ export function ChartIndicatorLegend({
     if (onChain.mayer.enabled) {
       onChainRows.push({
         id: 'mayer',
-        label: 'Mayer',
+        label: onChain.mayer.showBands !== false ? 'Mayer (×0.8/1/2.4)' : 'Mayer Multiple',
         color: onChain.mayer.color,
         off: () => setOnChain((p) => ({ ...p, mayer: { ...p.mayer, enabled: false } })),
       })

@@ -107,7 +107,10 @@ export type OnChainPriceOverlaySettings = {
   smaPeriod: number
 }
 
-export type MayerMultipleSettings = OnChainPriceOverlaySettings
+export type MayerMultipleSettings = OnChainPriceOverlaySettings & {
+  /** Zonas clássicas Trace Mayer: SMA × 0.8 (compra) e × 2.4 (bolha). */
+  showBands: boolean
+}
 
 export type AvivSettings = OnChainPriceOverlaySettings
 

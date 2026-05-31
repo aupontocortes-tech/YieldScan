@@ -30,11 +30,17 @@ function lastIndex(closes: number[]) {
 }
 
 function mayerTag(ratio: number): string | undefined {
-  if (ratio >= 1.35) return 'WATCH'
-  if (ratio <= 0.75) return 'WATCH'
+  if (ratio >= 2.4) return 'WATCH'
+  if (ratio <= 0.8) return 'WATCH'
   if (ratio >= 1.15) return 'STRONG'
   return 'NORMAL'
 }
+
+/** Zonas clássicas do Mayer Multiple (Trace Mayer): compra ~0.8, bolha ~2.4. */
+const MAYER_BANDS = [
+  { id: 'mayer-08', mult: 0.8, color: '#22c55e', label: 'Mayer ×0.8' },
+  { id: 'mayer-24', mult: 2.4, color: '#ef4444', label: 'Mayer ×2.4' },
+] as const
 
 function mvrvTag(ratio: number): string | undefined {
   if (ratio >= 1.8) return 'WATCH'
@@ -141,15 +147,26 @@ export function buildOnChainChartOverlays(
   if (onChain.mayer.enabled) {
     const m = mayerFairPrice(closes, onChain.mayer.smaPeriod)
     if (m) {
-      const tag = mayerTag(m.ratio)
+      if (onChain.mayer.showBands !== false) {
+        for (const band of MAYER_BANDS) {
+          out.push({
+            id: band.id,
+            label: band.label,
+            price: m.price * band.mult,
+            color: band.color,
+            lineWidth: 1,
+            metricDisplay: `×${band.mult}`,
+          })
+        }
+      }
       out.push({
         id: 'mayer',
-        label: 'Mayer Multiple',
+        label: 'The Mayer Multiple',
         price: m.price,
         color: onChain.mayer.color,
         lineWidth: onChain.mayer.lineWidth,
         metricDisplay: m.ratio.toFixed(2),
-        tag,
+        tag: mayerTag(m.ratio),
       })
     }
   }
@@ -279,6 +296,8 @@ export function buildOnChainChartOverlays(
 }
 
 const OVERLAY_SHORT_LABEL: Record<string, string> = {
+  'mayer-08': 'Mayer×0.8',
+  'mayer-24': 'Mayer×2.4',
   mayer: 'Mayer',
   aviv: 'AVIV',
   mvrv: 'MVRV',

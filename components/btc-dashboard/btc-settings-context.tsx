@@ -130,6 +130,7 @@ const DEFAULT_ON_CHAIN: OnChainBundle = {
     color: '#fb923c',
     lineWidth: 2,
     smaPeriod: 200,
+    showBands: true,
   },
   aviv: {
     enabled: false,
