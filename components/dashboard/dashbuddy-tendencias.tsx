@@ -63,6 +63,68 @@ const TRIM_CLASS: Record<TrimClass, string> = {
   acelerando: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
 }
 
+const MENTION_SYMBOL_COLOR: Record<string, string> = {
+  BTC: 'text-orange-400',
+  ETH: 'text-indigo-400',
+  XRP: 'text-sky-400',
+  ADA: 'text-blue-400',
+  SOL: 'text-violet-400',
+  BNB: 'text-yellow-400',
+  USDT: 'text-emerald-400',
+  USDC: 'text-cyan-400',
+  DAI: 'text-teal-400',
+  LINK: 'text-blue-300',
+  NEAR: 'text-lime-400',
+  POL: 'text-fuchsia-400',
+  MATIC: 'text-fuchsia-400',
+  AVAX: 'text-red-400',
+  DOGE: 'text-amber-400',
+  DOT: 'text-pink-400',
+  TRX: 'text-rose-400',
+  TON: 'text-sky-300',
+  SUI: 'text-cyan-300',
+  HYPE: 'text-purple-400',
+  AAVE: 'text-indigo-300',
+  SHIB: 'text-orange-300',
+}
+
+const MENTION_COLOR_FALLBACK = [
+  'text-yellow-400',
+  'text-cyan-400',
+  'text-pink-400',
+  'text-lime-400',
+  'text-amber-400',
+  'text-violet-400',
+  'text-rose-400',
+  'text-teal-400',
+] as const
+
+function mentionSymbolColor(symbol: string): string {
+  const key = symbol.toUpperCase()
+  if (MENTION_SYMBOL_COLOR[key]) return MENTION_SYMBOL_COLOR[key]
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+  return MENTION_COLOR_FALLBACK[h % MENTION_COLOR_FALLBACK.length]
+}
+
+function TopMentionsRow({ items }: { items: Array<{ symbol: string; count: number }> }) {
+  if (!items.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+      <span className="text-sm text-muted-foreground">Mais citados:</span>
+      {items.map((m) => (
+        <span key={m.symbol} className="inline-flex items-center gap-1.5">
+          <TokenSymbolAvatar symbol={m.symbol} size={22} />
+          <span className={cn('text-sm font-semibold tracking-wide', mentionSymbolColor(m.symbol))}>
+            {m.symbol}
+          </span>
+          <span className="text-xs tabular-nums text-muted-foreground">({m.count})</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 type TabId = 'visao' | 'tokens' | 'noticias' | 'defi'
 
 const TABS: { id: TabId; label: string; icon: typeof Sparkles }[] = [
@@ -633,54 +695,48 @@ export function DashbuddyTendencias() {
         </div>
       )}
 
-      {/* Tab: Notícias — tipografia ~3× (12px→36px manchetes, 10px→30px meta, 9px→27px badges) */}
+      {/* Tab: Notícias — tipografia +50% vs original (manchetes 18px, meta 15px, badges 14px) */}
       {tab === 'noticias' && (
         <Card className="border-border/50 bg-card/40">
-          <CardContent className="space-y-5 pt-4">
-            <p className="text-[30px] leading-snug text-muted-foreground">
+          <CardContent className="space-y-3 pt-4">
+            <p className="text-[15px] leading-snug text-muted-foreground">
               Manchetes traduzidas para português.
             </p>
-            <div className="flex flex-wrap gap-3 text-[36px] leading-tight">
-              <Badge className="gap-2 px-4 py-2 text-[36px] bg-emerald-500/15 text-emerald-400">
-                <TrendingUp className="h-9 w-9 shrink-0" />
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Badge className="bg-emerald-500/15 text-emerald-400">
+                <TrendingUp className="mr-1 h-4 w-4" />
                 {news.positivo} positivas
               </Badge>
-              <Badge variant="outline" className="px-4 py-2 text-[36px]">
-                {news.neutro} neutras
-              </Badge>
-              <Badge className="gap-2 px-4 py-2 text-[36px] bg-red-500/15 text-red-400">
-                <TrendingDown className="h-9 w-9 shrink-0" />
+              <Badge variant="outline">{news.neutro} neutras</Badge>
+              <Badge className="bg-red-500/15 text-red-400">
+                <TrendingDown className="mr-1 h-4 w-4" />
                 {news.negativo} negativas
               </Badge>
             </div>
-            {news.topMentions.length > 0 && (
-              <p className="text-[36px] leading-snug text-muted-foreground">
-                Mais citados: {news.topMentions.map((m) => `${m.symbol} (${m.count})`).join(' · ')}
-              </p>
-            )}
-            <ul className="space-y-4">
+            {news.topMentions.length > 0 && <TopMentionsRow items={news.topMentions} />}
+            <ul className="space-y-3">
               {news.headlines.length === 0 ? (
-                <li className="text-[36px] leading-snug text-muted-foreground">
+                <li className="text-lg leading-snug text-muted-foreground">
                   Sem manchetes em português no momento. Clica em Actualizar ou aguarda ~1 minuto.
                 </li>
               ) : (
                 news.headlines.map((h, i) => (
                   <li
                     key={i}
-                    className="rounded-xl border border-border/30 bg-muted/5 px-4 py-4 sm:px-5 sm:py-5"
+                    className="rounded-lg border border-border/30 bg-muted/5 px-3 py-3"
                   >
                     <a
                       href={h.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block text-[36px] font-medium leading-snug text-foreground hover:text-yellow-500 hover:underline"
+                      className="block text-lg font-medium leading-snug text-foreground hover:text-yellow-500 hover:underline"
                     >
                       {h.titulo}
                     </a>
-                    <div className="mt-3">
+                    <div className="mt-2">
                       <Badge
                         variant="outline"
-                        className={cn('px-3 py-1.5 text-[27px]', sentimentClass(h.sentiment))}
+                        className={cn('text-sm', sentimentClass(h.sentiment))}
                       >
                         {sentimentLabel(h.sentiment)}
                       </Badge>
@@ -691,7 +747,7 @@ export function DashbuddyTendencias() {
             </ul>
             <Link
               href="/news/noticias"
-              className="inline-block text-[36px] font-medium leading-snug text-yellow-500 hover:underline"
+              className="text-sm font-medium text-yellow-500 hover:underline"
             >
               Ver todas as notícias →
             </Link>
