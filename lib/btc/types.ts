@@ -111,6 +111,14 @@ export type MayerMultipleSettings = OnChainPriceOverlaySettings
 
 export type AvivSettings = OnChainPriceOverlaySettings
 
+export type SthHolderSettings = OnChainLineSettings & {
+  emaPeriod: number
+}
+
+export type LthHolderSettings = OnChainLineSettings & {
+  smaPeriod: number
+}
+
 export type OnChainBundle = {
   mvrv: MvrvSettings
   mvrvZ: MvrvZSettings
@@ -118,6 +126,8 @@ export type OnChainBundle = {
   nupl: NuplSettings
   mayer: MayerMultipleSettings
   aviv: AvivSettings
+  sth: SthHolderSettings
+  lth: LthHolderSettings
   sthLth: SthLthSettings
 }
 

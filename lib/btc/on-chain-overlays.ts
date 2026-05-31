@@ -101,6 +101,36 @@ function soprFairPrice(closes: number[], emaPeriod: number): { price: number; ra
   return { price: e, ratio }
 }
 
+/** Custo proxy de compradores de curto prazo (EMA). */
+function sthHolderPrice(
+  closes: number[],
+  emaPeriod: number,
+): { price: number; pctVsSpot: number } | null {
+  const i = lastIndex(closes)
+  const base = ema(closes, emaPeriod)[i]
+  const px = closes[i]
+  if (base == null || base <= 0 || !Number.isFinite(px)) return null
+  return { price: base, pctVsSpot: ((px - base) / base) * 100 }
+}
+
+/** Custo proxy de detentores de longo prazo (SMA). */
+function lthHolderPrice(
+  closes: number[],
+  smaPeriod: number,
+): { price: number; pctVsSpot: number } | null {
+  const i = lastIndex(closes)
+  const base = sma(closes, smaPeriod)[i]
+  const px = closes[i]
+  if (base == null || base <= 0 || !Number.isFinite(px)) return null
+  return { price: base, pctVsSpot: ((px - base) / base) * 100 }
+}
+
+function holderTag(pctVsSpot: number): string | undefined {
+  if (pctVsSpot >= 15 || pctVsSpot <= -15) return 'WATCH'
+  if (pctVsSpot >= 8) return 'STRONG'
+  return 'NORMAL'
+}
+
 export function buildOnChainChartOverlays(
   closes: number[],
   onChain: OnChainBundle,
@@ -215,6 +245,36 @@ export function buildOnChainChartOverlays(
     }
   }
 
+  if (onChain.sth.enabled) {
+    const s = sthHolderPrice(closes, onChain.sth.emaPeriod)
+    if (s) {
+      out.push({
+        id: 'sth',
+        label: 'STH (proxy)',
+        price: s.price,
+        color: onChain.sth.color,
+        lineWidth: onChain.sth.lineWidth,
+        metricDisplay: `${s.pctVsSpot >= 0 ? '+' : ''}${s.pctVsSpot.toFixed(1)}%`,
+        tag: holderTag(s.pctVsSpot),
+      })
+    }
+  }
+
+  if (onChain.lth.enabled) {
+    const l = lthHolderPrice(closes, onChain.lth.smaPeriod)
+    if (l) {
+      out.push({
+        id: 'lth',
+        label: 'LTH (proxy)',
+        price: l.price,
+        color: onChain.lth.color,
+        lineWidth: onChain.lth.lineWidth,
+        metricDisplay: `${l.pctVsSpot >= 0 ? '+' : ''}${l.pctVsSpot.toFixed(1)}%`,
+        tag: holderTag(l.pctVsSpot),
+      })
+    }
+  }
+
   return out.filter((o) => o.price > 0 && Number.isFinite(o.price))
 }
 
@@ -225,6 +285,8 @@ const OVERLAY_SHORT_LABEL: Record<string, string> = {
   mvrvZ: 'Z',
   sopr: 'SOPR',
   nupl: 'NUPL',
+  sth: 'STH',
+  lth: 'LTH',
 }
 
 function tagAbbrev(tag?: string): string | undefined {

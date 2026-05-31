@@ -691,6 +691,38 @@ export function SettingsPanel({
       </IndicatorSection>
 
       <IndicatorSection
+        title="Short-Term Holders (proxy)"
+        subtitle="Compradores de curto prazo · EMA no gráfico de preço"
+        helpText="Proxy do custo médio de compradores de curto prazo: linha horizontal na EMA (10 por defeito). Rótulo com % acima/abaixo do preço actual. Não usa dados on-chain reais de holders."
+        enabled={onChain.sth.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, sth: { ...p.sth, enabled: c } }))}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="EMA base" value={onChain.sth.emaPeriod} min={3} max={50} onChange={(n) => setOnChain((p) => ({ ...p, sth: { ...p.sth, emaPeriod: n } }))} />
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <input type="color" value={onChain.sth.color} onChange={(e) => setOnChain((p) => ({ ...p, sth: { ...p.sth, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+          </div>
+        </div>
+      </IndicatorSection>
+
+      <IndicatorSection
+        title="Long-Term Holders (proxy)"
+        subtitle="Detentores de longo prazo · SMA no gráfico de preço"
+        helpText="Proxy do custo médio de detentores de longo prazo: linha horizontal na SMA (200 por defeito). Rótulo com % acima/abaixo do preço actual. Não usa dados on-chain reais de holders."
+        enabled={onChain.lth.enabled}
+        onToggle={(c) => setOnChain((p) => ({ ...p, lth: { ...p.lth, enabled: c } }))}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Num label="SMA base" value={onChain.lth.smaPeriod} min={50} max={500} onChange={(n) => setOnChain((p) => ({ ...p, lth: { ...p.lth, smaPeriod: n } }))} />
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-zinc-500">Cor</Label>
+            <input type="color" value={onChain.lth.color} onChange={(e) => setOnChain((p) => ({ ...p, lth: { ...p.lth, color: e.target.value } }))} className="h-9 w-full cursor-pointer rounded border border-zinc-700 bg-black" />
+          </div>
+        </div>
+      </IndicatorSection>
+
+      <IndicatorSection
         title="STH vs LTH (proxy)"
         subtitle="EMA curta vs SMA longa no gráfico de preço"
         helpText="Inspirado na ideia de ‘curto’ vs ‘longo’ prazo: uma EMA curta e uma SMA longa no mesmo gráfico do BTC (USD). O valor em cada momento é um preço — vês linhas horizontais no fim do gráfico e uma barrinha com os dois níveis. Não usa dados de holders on-chain."

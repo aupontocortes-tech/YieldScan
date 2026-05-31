@@ -137,6 +137,20 @@ const DEFAULT_ON_CHAIN: OnChainBundle = {
     lineWidth: 2,
     smaPeriod: 100,
   },
+  sth: {
+    enabled: false,
+    color: '#7dd3fc',
+    lineWidth: 2,
+    style: 'line',
+    emaPeriod: 10,
+  },
+  lth: {
+    enabled: false,
+    color: '#d4af37',
+    lineWidth: 2,
+    style: 'line',
+    smaPeriod: 200,
+  },
   sthLth: {
     enabled: false,
     rsiPeriod: 10,
@@ -280,6 +294,8 @@ function mergeOnChain(o: Partial<OnChainBundle> | undefined): OnChainBundle {
     nupl: { ...DEFAULT_ON_CHAIN.nupl, ...o?.nupl },
     mayer: { ...DEFAULT_ON_CHAIN.mayer, ...o?.mayer },
     aviv: { ...DEFAULT_ON_CHAIN.aviv, ...o?.aviv },
+    sth: { ...DEFAULT_ON_CHAIN.sth, ...o?.sth },
+    lth: { ...DEFAULT_ON_CHAIN.lth, ...o?.lth },
     sthLth: { ...DEFAULT_ON_CHAIN.sthLth, ...o?.sthLth },
   }
 }

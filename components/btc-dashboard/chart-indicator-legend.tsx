@@ -247,6 +247,22 @@ export function ChartIndicatorLegend({
         off: () => setOnChain((p) => ({ ...p, nupl: { ...p.nupl, enabled: false } })),
       })
     }
+    if (onChain.sth.enabled) {
+      onChainRows.push({
+        id: 'sth',
+        label: 'STH',
+        color: onChain.sth.color,
+        off: () => setOnChain((p) => ({ ...p, sth: { ...p.sth, enabled: false } })),
+      })
+    }
+    if (onChain.lth.enabled) {
+      onChainRows.push({
+        id: 'lth',
+        label: 'LTH',
+        color: onChain.lth.color,
+        off: () => setOnChain((p) => ({ ...p, lth: { ...p.lth, enabled: false } })),
+      })
+    }
     if (onChain.sthLth.enabled) {
       onChainRows.push({
         id: 'sthLth',
