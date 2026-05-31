@@ -633,45 +633,55 @@ export function DashbuddyTendencias() {
         </div>
       )}
 
-      {/* Tab: Notícias */}
+      {/* Tab: Notícias — tipografia ~3× (12px→36px manchetes, 10px→30px meta, 9px→27px badges) */}
       {tab === 'noticias' && (
         <Card className="border-border/50 bg-card/40">
-          <CardContent className="space-y-3 pt-4">
-            <p className="text-[10px] text-muted-foreground">Manchetes traduzidas para português.</p>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge className="bg-emerald-500/15 text-emerald-400">
-                <TrendingUp className="mr-1 h-3 w-3" />
+          <CardContent className="space-y-5 pt-4">
+            <p className="text-[30px] leading-snug text-muted-foreground">
+              Manchetes traduzidas para português.
+            </p>
+            <div className="flex flex-wrap gap-3 text-[36px] leading-tight">
+              <Badge className="gap-2 px-4 py-2 text-[36px] bg-emerald-500/15 text-emerald-400">
+                <TrendingUp className="h-9 w-9 shrink-0" />
                 {news.positivo} positivas
               </Badge>
-              <Badge variant="outline">{news.neutro} neutras</Badge>
-              <Badge className="bg-red-500/15 text-red-400">
-                <TrendingDown className="mr-1 h-3 w-3" />
+              <Badge variant="outline" className="px-4 py-2 text-[36px]">
+                {news.neutro} neutras
+              </Badge>
+              <Badge className="gap-2 px-4 py-2 text-[36px] bg-red-500/15 text-red-400">
+                <TrendingDown className="h-9 w-9 shrink-0" />
                 {news.negativo} negativas
               </Badge>
             </div>
             {news.topMentions.length > 0 && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[36px] leading-snug text-muted-foreground">
                 Mais citados: {news.topMentions.map((m) => `${m.symbol} (${m.count})`).join(' · ')}
               </p>
             )}
-            <ul className="space-y-2">
+            <ul className="space-y-4">
               {news.headlines.length === 0 ? (
-                <li className="text-xs text-muted-foreground">
+                <li className="text-[36px] leading-snug text-muted-foreground">
                   Sem manchetes em português no momento. Clica em Actualizar ou aguarda ~1 minuto.
                 </li>
               ) : (
                 news.headlines.map((h, i) => (
-                  <li key={i} className="rounded-lg border border-border/30 bg-muted/5 px-2.5 py-2">
+                  <li
+                    key={i}
+                    className="rounded-xl border border-border/30 bg-muted/5 px-4 py-4 sm:px-5 sm:py-5"
+                  >
                     <a
                       href={h.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs leading-snug hover:text-yellow-500 hover:underline"
+                      className="block text-[36px] font-medium leading-snug text-foreground hover:text-yellow-500 hover:underline"
                     >
                       {h.titulo}
                     </a>
-                    <div className="mt-1">
-                      <Badge variant="outline" className={cn('text-[9px]', sentimentClass(h.sentiment))}>
+                    <div className="mt-3">
+                      <Badge
+                        variant="outline"
+                        className={cn('px-3 py-1.5 text-[27px]', sentimentClass(h.sentiment))}
+                      >
                         {sentimentLabel(h.sentiment)}
                       </Badge>
                     </div>
@@ -679,7 +689,10 @@ export function DashbuddyTendencias() {
                 ))
               )}
             </ul>
-            <Link href="/news/noticias" className="text-xs font-medium text-yellow-500 hover:underline">
+            <Link
+              href="/news/noticias"
+              className="inline-block text-[36px] font-medium leading-snug text-yellow-500 hover:underline"
+            >
               Ver todas as notícias →
             </Link>
           </CardContent>
