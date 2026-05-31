@@ -1,4 +1,5 @@
 import type { NewsDataArticle } from '@/lib/newsdata'
+import { pareceIngles } from '@/lib/news-lang'
 import {
   NEGATIVE_WORDS,
   POSITIVE_WORDS,
@@ -147,16 +148,19 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     .slice(0, 10)
     .map(([symbol, count]) => ({ symbol, count }))
 
-  const headlines: TendenciasNewsHeadline[] = articles.slice(0, 10).map((a) => ({
-    titulo: a.title,
-    impacto: a.sentiment,
-    categoria: 'CRIPTO',
-    link: a.link,
-    sentiment: a.sentiment === 'POSITIVO' ? 'optimista' : a.sentiment === 'NEGATIVO' ? 'pessimista' : 'neutro',
-    relevance: clamp(a.sentimentScore, 0, 100),
-    intensity: clamp(a.symbols.length * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0), 0, 100),
-    mentionCount: a.symbols.length,
-  }))
+  const headlines: TendenciasNewsHeadline[] = articles
+    .filter((a) => !pareceIngles(a.title))
+    .slice(0, 10)
+    .map((a) => ({
+      titulo: a.title,
+      impacto: a.sentiment,
+      categoria: 'CRIPTO',
+      link: a.link,
+      sentiment: a.sentiment === 'POSITIVO' ? 'optimista' : a.sentiment === 'NEGATIVO' ? 'pessimista' : 'neutro',
+      relevance: clamp(a.sentimentScore, 0, 100),
+      intensity: clamp(a.symbols.length * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0), 0, 100),
+      mentionCount: a.symbols.length,
+    }))
 
   return {
     insight: {

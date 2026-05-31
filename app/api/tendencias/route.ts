@@ -47,7 +47,8 @@ const fetchRaw = unstable_cache(
         fetchGlobalTvlChange7d(),
       ])
 
-    const newsArticles = mergeTrimNewsArticles(coindeskNews, cvNews)
+    const newsArticlesRaw = mergeTrimNewsArticles(coindeskNews, cvNews)
+    const newsArticles = await traduzirArtigosBrutos(newsArticlesRaw, 30)
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -96,7 +97,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v5'],
+  ['tendencias-trim-v6'],
   { revalidate: 120 },
 )
 
@@ -111,10 +112,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const raw = await fetchRaw()
-    const newsArticles = await traduzirArtigosBrutos(raw.newsArticles, 20)
     const payload = buildTrimPayload({
       ...raw,
-      newsArticles,
       period,
       tone,
     })

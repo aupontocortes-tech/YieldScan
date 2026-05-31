@@ -654,7 +654,9 @@ export function DashbuddyTendencias() {
             )}
             <ul className="space-y-2">
               {news.headlines.length === 0 ? (
-                <li className="text-xs text-muted-foreground">Sem manchetes no feed.</li>
+                <li className="text-xs text-muted-foreground">
+                  Sem manchetes em português no momento. Clica em Actualizar ou aguarda ~1 minuto.
+                </li>
               ) : (
                 news.headlines.map((h, i) => (
                   <li key={i} className="rounded-lg border border-border/30 bg-muted/5 px-2.5 py-2">

@@ -9,7 +9,9 @@ async function traduzirCampos(a: NewsDataArticle): Promise<NewsDataArticle> {
   const rawDesc = String(a.description ?? a.content ?? rawTitle).trim()
   if (!rawTitle) return a
 
-  if (parecePortugues(`${rawTitle} ${rawDesc}`)) {
+  const bloco = `${rawTitle} ${rawDesc}`
+  const lang = String(a.language ?? '').toLowerCase()
+  if (lang.startsWith('pt') || (parecePortugues(bloco) && !pareceIngles(bloco))) {
     return { ...a, language: 'pt' }
   }
 
@@ -18,13 +20,17 @@ async function traduzirCampos(a: NewsDataArticle): Promise<NewsDataArticle> {
 
   if (pareceIngles(title)) title = await traduzirParaPortugues(rawTitle, 'auto')
   if (pareceIngles(desc)) desc = await traduzirParaPortugues(rawDesc || rawTitle, 'auto')
+  if (pareceIngles(title)) {
+    await new Promise((r) => setTimeout(r, 120))
+    title = await traduzirParaPortugues(rawTitle, 'en')
+  }
 
   return {
     ...a,
     title,
     description: desc,
     content: desc,
-    language: 'pt',
+    language: pareceIngles(title) ? a.language : 'pt',
   }
 }
 
@@ -40,9 +46,11 @@ export async function traduzirArtigosBrutos(
   const indices: number[] = []
 
   for (let i = 0; i < n; i++) {
-    const bloco = `${copy[i].title ?? ''} ${copy[i].description ?? ''}`
-    if (parecePortugues(bloco)) {
-      copy[i] = { ...copy[i], language: 'pt' }
+    const a = copy[i]
+    const lang = String(a.language ?? '').toLowerCase()
+    const bloco = `${a.title ?? ''} ${a.description ?? ''}`
+    if (lang.startsWith('pt') || (parecePortugues(bloco) && !pareceIngles(bloco))) {
+      copy[i] = { ...a, language: 'pt' }
     } else {
       indices.push(i)
     }
