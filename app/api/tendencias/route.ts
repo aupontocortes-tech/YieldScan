@@ -22,7 +22,7 @@ import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
 
 export const maxDuration = 60
 
-const PERIODS = new Set<MomentumPeriod>(['7d', '30d', '90d'])
+const PERIODS = new Set<MomentumPeriod>(['24h', '7d', '30d', '90d'])
 const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(

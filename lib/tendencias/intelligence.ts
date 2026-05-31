@@ -61,6 +61,9 @@ function impactToSentiment(impacto: string): SentimentLevel {
 }
 
 function periodChange(c: RawMarketCoin, period: MomentumPeriod): number {
+  if (period === '24h') {
+    return c.price_change_percentage_24h ?? 0
+  }
   if (period === '7d') {
     return c.price_change_percentage_7d_in_currency ?? c.price_change_percentage_24h ?? 0
   }
@@ -98,7 +101,8 @@ function classifyMomentum(
 
   const strength = clamp(Math.abs(cp) + volRatio * 40 + mentionBoost * 2, 0, 100)
   const sym = c.symbol.toUpperCase()
-  const periodLabel = period === '90d' ? 'longo prazo (~200d)' : period
+  const periodLabel =
+    period === '24h' ? '24 horas' : period === '90d' ? 'longo prazo (~200d)' : period
 
   if (cp > 6 && c24 > 2 && (period === '7d' ? c24 >= cp * 0.4 : cp > c7 * 0.5)) {
     return {

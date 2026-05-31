@@ -4,7 +4,7 @@ export type SentimentLevel = 'optimista' | 'neutro' | 'pessimista'
 
 export type MomentumClass = 'acelerando' | 'estavel' | 'fraco' | 'reversao'
 
-export type MomentumPeriod = '7d' | '30d' | '90d'
+export type MomentumPeriod = '24h' | '7d' | '30d' | '90d'
 
 export type AnalysisTone = 'conservador' | 'neutro' | 'agressivo'
 

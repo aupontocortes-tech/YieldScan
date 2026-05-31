@@ -71,11 +71,13 @@ function toTokenRow(
     change7d: c.price_change_percentage_7d_in_currency ?? null,
     change30d: c.price_change_percentage_30d_in_currency ?? null,
     changePeriod:
-      period === '7d'
-        ? c.price_change_percentage_7d_in_currency ?? c.price_change_percentage_24h
-        : period === '30d'
-          ? c.price_change_percentage_30d_in_currency
-          : c.price_change_percentage_200d_in_currency ?? c.price_change_percentage_30d_in_currency,
+      period === '24h'
+        ? c.price_change_percentage_24h
+        : period === '7d'
+          ? c.price_change_percentage_7d_in_currency ?? c.price_change_percentage_24h
+          : period === '30d'
+            ? c.price_change_percentage_30d_in_currency
+            : c.price_change_percentage_200d_in_currency ?? c.price_change_percentage_30d_in_currency,
     volume24h: c.total_volume,
     marketCap: c.market_cap,
     sentiment: scoreToSentiment(trim.trimScore),

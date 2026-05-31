@@ -50,6 +50,7 @@ import {
 import Link from 'next/link'
 
 const PERIOD_LABEL: Record<MomentumPeriod, string> = {
+  '24h': '24 horas',
   '7d': '7 dias',
   '30d': '30 dias',
   '90d': '90 dias',
@@ -218,7 +219,7 @@ function TokenTableRow({ row, period }: { row: TendenciasTokenRow; period: Momen
         >
           {fmtPct(change)}
         </span>
-        <span className="ml-1 text-[9px] text-muted-foreground">{period}</span>
+        <span className="ml-1 text-[9px] text-muted-foreground">{PERIOD_LABEL[period]}</span>
       </td>
       <td className="px-2 py-2.5 text-center">
         <Badge variant="outline" className={cn('font-mono text-[10px]', TRIM_CLASS[row.trimClass])}>
@@ -299,6 +300,7 @@ function TendenciasSettings({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="24h">24 horas</SelectItem>
                 <SelectItem value="7d">7 dias</SelectItem>
                 <SelectItem value="30d">30 dias</SelectItem>
                 <SelectItem value="90d">90 dias</SelectItem>

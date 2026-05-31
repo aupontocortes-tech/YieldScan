@@ -28,7 +28,7 @@ export function writeTendenciasPrefs(prefs: TendenciasPrefs) {
 }
 
 function isPeriod(v: unknown): v is MomentumPeriod {
-  return v === '7d' || v === '30d' || v === '90d'
+  return v === '24h' || v === '7d' || v === '30d' || v === '90d'
 }
 
 function isTone(v: unknown): v is AnalysisTone {

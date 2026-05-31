@@ -50,11 +50,17 @@ export function scoreMomentum(c: RawMarketCoin, period: MomentumPeriod): {
 } {
   const { c7, c30, c90, c24 } = periodChanges(c)
   const cp =
-    period === '7d' ? c7 : period === '30d' ? c30 : c90
+    period === '24h' ? c24 : period === '7d' ? c7 : period === '30d' ? c30 : c90
 
-  let score = 50 + clamp(cp * 1.2, -35, 35) + clamp(c24 * 0.4, -10, 10)
+  let score =
+    period === '24h'
+      ? 50 + clamp(cp * 1.25, -40, 40)
+      : 50 + clamp(cp * 1.2, -35, 35) + clamp(c24 * 0.4, -10, 10)
 
-  const accelerating = period === '7d' && c7 > 4 && c24 > 1 && c24 >= c7 * 0.35
+  const accelerating =
+    period === '24h'
+      ? c24 > 4 && c24 >= (c7 / 7) * 1.2
+      : period === '7d' && c7 > 4 && c24 > 1 && c24 >= c7 * 0.35
   const decelerating = cp < -5 && c24 < -1
   const reversal = cp < -8 && c24 > 4
 
