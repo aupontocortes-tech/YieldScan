@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -8,7 +9,6 @@ import {
   BarChart3,
   BookOpen,
   Calculator,
-  Coins,
   LockKeyhole,
   Droplets,
   LayoutGrid,
@@ -144,8 +144,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <Link href="/">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-primary/35 bg-sidebar-primary/10 text-sidebar-primary">
-                    <Coins className="size-4" />
+                  <div className="relative aspect-square size-8 overflow-hidden rounded-lg border border-sidebar-primary/35 bg-black">
+                    <Image
+                      src="/icon-192.png"
+                      alt="YieldScan"
+                      width={32}
+                      height={32}
+                      className="size-full object-cover"
+                      priority
+                    />
                   </div>
                   <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">
