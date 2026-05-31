@@ -150,7 +150,7 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
 
   const headlines: TendenciasNewsHeadline[] = articles
     .filter((a) => !pareceIngles(a.title))
-    .slice(0, 10)
+    .slice(0, 40)
     .map((a) => ({
       titulo: a.title,
       impacto: a.sentiment,
@@ -160,6 +160,7 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
       relevance: clamp(a.sentimentScore, 0, 100),
       intensity: clamp(a.symbols.length * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0), 0, 100),
       mentionCount: a.symbols.length,
+      symbols: a.symbols,
     }))
 
   return {

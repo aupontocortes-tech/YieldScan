@@ -16,6 +16,7 @@ import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -107,20 +108,93 @@ function mentionSymbolColor(symbol: string): string {
   return MENTION_COLOR_FALLBACK[h % MENTION_COLOR_FALLBACK.length]
 }
 
-function TopMentionsRow({ items }: { items: Array<{ symbol: string; count: number }> }) {
-  if (!items.length) return null
+function headlineMatchesSymbol(
+  headline: { titulo: string; symbols?: string[] },
+  symbol: string,
+): boolean {
+  const sym = symbol.toUpperCase()
+  if (headline.symbols?.some((s) => s.toUpperCase() === sym)) return true
+  return new RegExp(`\\b${sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(headline.titulo)
+}
+
+const NEWS_TOP_TOKENS = 10
+const NEWS_HEADLINES_DEFAULT = 10
+const NEWS_HEADLINES_FILTERED = 15
+
+function NewsTokenFilterBar({
+  items,
+  activeSymbol,
+  onSelectSymbol,
+}: {
+  items: Array<{ symbol: string; count: number }>
+  activeSymbol: string | null
+  onSelectSymbol: (symbol: string | null) => void
+}) {
+  const [custom, setCustom] = useState('')
+  const top = items.slice(0, NEWS_TOP_TOKENS)
+
+  function applyCustom() {
+    const sym = custom.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!sym) return
+    onSelectSymbol(sym)
+    setCustom('')
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
-      <span className="text-sm text-muted-foreground">Mais citados:</span>
-      {items.map((m) => (
-        <span key={m.symbol} className="inline-flex items-center gap-1.5">
-          <TokenSymbolAvatar symbol={m.symbol} size={22} />
-          <span className={cn('text-sm font-semibold tracking-wide', mentionSymbolColor(m.symbol))}>
-            {m.symbol}
-          </span>
-          <span className="text-xs tabular-nums text-muted-foreground">({m.count})</span>
-        </span>
-      ))}
+    <div className="space-y-2 rounded-lg border border-border/40 bg-muted/5 px-2.5 py-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Filtrar por token</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          aria-pressed={!activeSymbol}
+          onClick={() => onSelectSymbol(null)}
+          className={cn(
+            'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+            !activeSymbol
+              ? 'bg-yellow-500/20 text-yellow-400'
+              : 'text-muted-foreground hover:bg-muted/20',
+          )}
+        >
+          Todas
+        </button>
+        {top.map((m) => {
+          const sym = m.symbol.toUpperCase()
+          const active = activeSymbol === sym
+          return (
+            <button
+              key={m.symbol}
+              type="button"
+              title={`${m.count} menções`}
+              aria-pressed={active}
+              onClick={() => onSelectSymbol(active ? null : sym)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 transition-colors',
+                active
+                  ? 'border-yellow-500/60 bg-yellow-500/15'
+                  : 'border-border/40 hover:border-border/70 hover:bg-muted/10',
+              )}
+            >
+              <TokenSymbolAvatar symbol={m.symbol} size={16} />
+              <span className={cn('text-xs font-semibold', mentionSymbolColor(m.symbol))}>{m.symbol}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex gap-1.5">
+        <Input
+          value={custom}
+          onChange={(e) => setCustom(e.target.value.toUpperCase())}
+          placeholder="Outro token (ex: DOGE)"
+          className="h-8 flex-1 text-xs"
+          maxLength={12}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') applyCustom()
+          }}
+        />
+        <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 px-2.5 text-xs" onClick={applyCustom}>
+          Filtrar
+        </Button>
+      </div>
     </div>
   )
 }
@@ -413,11 +487,16 @@ export function DashbuddyTendencias() {
   const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<TabId>('visao')
   const [tokenFilter, setTokenFilter] = useState<TokenFilter>('destaques')
+  const [newsTokenFilter, setNewsTokenFilter] = useState<string | null>(null)
 
   useEffect(() => {
     setPrefs(readTendenciasPrefs())
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (tab !== 'noticias') setNewsTokenFilter(null)
+  }, [tab])
 
   const savePrefs = useCallback((p: TendenciasPrefs) => {
     setPrefs(p)
@@ -445,6 +524,17 @@ export function DashbuddyTendencias() {
         return buckets.acelerando.length ? buckets.acelerando : buckets.maiorVolume
     }
   }, [data, tokenFilter])
+
+  const filteredNewsHeadlines = useMemo(() => {
+    const headlines = data?.news.headlines ?? []
+    if (!newsTokenFilter) return headlines
+    return headlines.filter((h) => headlineMatchesSymbol(h, newsTokenFilter))
+  }, [data?.news.headlines, newsTokenFilter])
+
+  const displayedNewsHeadlines = useMemo(() => {
+    const limit = newsTokenFilter ? NEWS_HEADLINES_FILTERED : NEWS_HEADLINES_DEFAULT
+    return filteredNewsHeadlines.slice(0, limit)
+  }, [filteredNewsHeadlines, newsTokenFilter])
 
   if (!mounted || isLoading) {
     return (
@@ -695,34 +785,41 @@ export function DashbuddyTendencias() {
         </div>
       )}
 
-      {/* Tab: Notícias — tipografia +50% vs original (manchetes 18px, meta 15px, badges 14px) */}
+      {/* Tab: Notícias */}
       {tab === 'noticias' && (
         <Card className="border-border/50 bg-card/40">
           <CardContent className="space-y-3 pt-4">
-            <p className="text-[15px] leading-snug text-muted-foreground">
-              Manchetes traduzidas para português.
-            </p>
-            <div className="flex flex-wrap gap-2 text-sm">
+            <div className="flex flex-wrap gap-2 text-xs">
               <Badge className="bg-emerald-500/15 text-emerald-400">
-                <TrendingUp className="mr-1 h-4 w-4" />
+                <TrendingUp className="mr-1 h-3 w-3" />
                 {news.positivo} positivas
               </Badge>
               <Badge variant="outline">{news.neutro} neutras</Badge>
               <Badge className="bg-red-500/15 text-red-400">
-                <TrendingDown className="mr-1 h-4 w-4" />
+                <TrendingDown className="mr-1 h-3 w-3" />
                 {news.negativo} negativas
               </Badge>
             </div>
-            {news.topMentions.length > 0 && <TopMentionsRow items={news.topMentions} />}
+            {news.topMentions.length > 0 && (
+              <NewsTokenFilterBar
+                items={news.topMentions}
+                activeSymbol={newsTokenFilter}
+                onSelectSymbol={setNewsTokenFilter}
+              />
+            )}
             <ul className="space-y-3">
               {news.headlines.length === 0 ? (
                 <li className="text-lg leading-snug text-muted-foreground">
                   Sem manchetes em português no momento. Clica em Actualizar ou aguarda ~1 minuto.
                 </li>
+              ) : filteredNewsHeadlines.length === 0 ? (
+                <li className="text-sm leading-snug text-muted-foreground">
+                  Sem notícias para {newsTokenFilter}. Tenta outro token ou «Todas».
+                </li>
               ) : (
-                news.headlines.map((h, i) => (
+                displayedNewsHeadlines.map((h) => (
                   <li
-                    key={i}
+                    key={h.link}
                     className="rounded-lg border border-border/30 bg-muted/5 px-3 py-3"
                   >
                     <a
@@ -745,11 +842,19 @@ export function DashbuddyTendencias() {
                 ))
               )}
             </ul>
+            {filteredNewsHeadlines.length > displayedNewsHeadlines.length && (
+              <p className="text-[11px] text-muted-foreground">
+                +{filteredNewsHeadlines.length - displayedNewsHeadlines.length} manchetes —{' '}
+                <Link href="/news/noticias" className="text-yellow-500 hover:underline">
+                  ver todas
+                </Link>
+              </p>
+            )}
             <Link
               href="/news/noticias"
               className="text-sm font-medium text-yellow-500 hover:underline"
             >
-              Ver todas as notícias →
+              Ver feed completo →
             </Link>
           </CardContent>
         </Card>

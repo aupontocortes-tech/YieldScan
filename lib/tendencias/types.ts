@@ -90,6 +90,7 @@ export type TendenciasNewsHeadline = {
   relevance: number
   intensity: number
   mentionCount: number
+  symbols: string[]
 }
 
 export type TendenciasNewsInsight = {
