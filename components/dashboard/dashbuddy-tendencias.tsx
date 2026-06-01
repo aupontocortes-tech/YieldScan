@@ -734,7 +734,7 @@ export function DashbuddyTendencias() {
 
       {/* Tab: Visão geral */}
       {tab === 'visao' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Card className="border-yellow-500/15 bg-gradient-to-br from-card to-yellow-500/[0.04]">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -750,84 +750,94 @@ export function DashbuddyTendencias() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="border-border/50 bg-card/40">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  Alertas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {alerts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum alerta relevante.</p>
-                ) : (
-                  alerts.slice(0, 4).map((a) => <AlertRow key={a.id} alert={a} />)
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 bg-card/40">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Sentimento de mercado</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SentimentGauge
-                  score={market.sentimentScore}
-                  level={market.sentiment}
-                  gainers={market.gainersCount}
-                  losers={market.losersCount}
-                />
-                <div className="mt-4 grid grid-cols-2 gap-2 text-[10px]">
-                  <div className="rounded-lg bg-muted/20 px-2 py-1.5">
-                    <span className="text-muted-foreground">Cap. total</span>
-                    <p className="font-mono font-semibold">{fmtUsd(market.totalMarketCap, true)}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/20 px-2 py-1.5">
-                    <span className="text-muted-foreground">Volume 24h</span>
-                    <p className="font-mono font-semibold">{fmtUsd(market.totalVolume24h, true)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {narratives.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Narrativas activas</p>
-              <div className="flex flex-wrap gap-2">
-                {narratives.slice(0, 6).map((n) => (
-                  <Badge key={n.id} variant="outline" className="gap-1 text-[10px]">
-                    {n.label}
-                    <span className="text-muted-foreground">· {n.mentionCount}</span>
-                  </Badge>
-                ))}
-              </div>
+          <section className="space-y-4 rounded-xl border border-cyan-500/15 bg-cyan-950/10 p-4 sm:p-5">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-cyan-400" />
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">Mercado cripto</h3>
             </div>
-          )}
 
-          {equities && equities.highlights.length > 0 && (
-            <Card className="border-blue-500/20 bg-gradient-to-br from-card to-blue-500/[0.04]">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between gap-2 text-sm font-semibold">
-                  <span className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-blue-400" />
-                    Ações americanas
-                  </span>
-                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setTab('acoes')}>
-                    Ver tudo →
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs leading-relaxed text-muted-foreground">{equities.summary}</p>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  {equities.highlights.slice(0, 4).map((r) => (
-                    <EquityHighlightCard key={r.symbol} row={r} />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="border-border/50 bg-card/40">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Alertas (tokens)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {alerts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhum alerta relevante.</p>
+                  ) : (
+                    alerts.slice(0, 4).map((a) => <AlertRow key={a.id} alert={a} />)
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/50 bg-card/40">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Sentimento cripto</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SentimentGauge
+                    score={market.sentimentScore}
+                    level={market.sentiment}
+                    gainers={market.gainersCount}
+                    losers={market.losersCount}
+                  />
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="rounded-lg bg-muted/20 px-2 py-1.5">
+                      <span className="text-muted-foreground">Cap. total</span>
+                      <p className="font-mono font-semibold">{fmtUsd(market.totalMarketCap, true)}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/20 px-2 py-1.5">
+                      <span className="text-muted-foreground">Volume 24h</span>
+                      <p className="font-mono font-semibold">{fmtUsd(market.totalVolume24h, true)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {narratives.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Narrativas cripto activas</p>
+                <div className="flex flex-wrap gap-2">
+                  {narratives.slice(0, 6).map((n) => (
+                    <Badge key={n.id} variant="outline" className="gap-1 text-[10px]">
+                      {n.label}
+                      <span className="text-muted-foreground">· {n.mentionCount}</span>
+                    </Badge>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            )}
+          </section>
+
+          {equities && equities.highlights.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-blue-400" />
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">Mercado acionário EUA</h3>
+              </div>
+              <Card className="border-blue-500/20 bg-gradient-to-br from-card to-blue-500/[0.04]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-2 text-sm font-semibold">
+                    <span>Ações americanas em destaque</span>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setTab('acoes')}>
+                      Ver tudo →
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-xs leading-relaxed text-muted-foreground">{equities.summary}</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {equities.highlights.slice(0, 4).map((r) => (
+                      <EquityHighlightCard key={r.symbol} row={r} />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
           )}
         </div>
       )}
