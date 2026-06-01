@@ -10,21 +10,21 @@ const LINKS = [
     href: '/news/mercado',
     label: 'Preços e mercado',
     shortLabel: 'Mercado',
-    description: 'BTC, ETH, SOL, top 10 e destaques em tempo real.',
+    description: 'Cripto, ações US tokenizadas (xStock) e top 10 em tempo real.',
     icon: LineChart,
   },
   {
     href: '/news/noticias',
     label: 'Notícias',
     shortLabel: 'Notícias',
-    description: 'Cripto, macro, geopolítica e IA — em português.',
+    description: 'Cripto, ações americanas, macro, geopolítica e IA — em português.',
     icon: Newspaper,
   },
   {
     href: '/news/tendencias',
     label: 'Tendências',
     shortLabel: 'Tendências',
-    description: 'Score de Tendência, sentimento, narrativas e alertas — em português.',
+    description: 'Cripto + ações US em destaque, volume, IA/tech e alertas.',
     icon: Sparkles,
   },
 ] as const
@@ -34,9 +34,9 @@ export function NewsHubHeader() {
 
   return (
     <header className="mb-8 border-b border-border/40 pb-8">
-      <h1 className="text-3xl font-bold tracking-tight text-foreground">Cripto e mercado</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-foreground">Cripto e mercado global</h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Preços, notícias e análise inteligente — escolhe a secção abaixo.
+        Preços (cripto e ações US), notícias e análise inteligente — escolhe a secção abaixo.
       </p>
 
       <nav

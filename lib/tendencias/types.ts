@@ -136,6 +136,25 @@ export type TendenciasDefiPanel = {
   summary: string
 }
 
+export type TendenciasEquityRow = {
+  symbol: string
+  name: string
+  price: number | null
+  changePct: number | null
+  volume: number | null
+  marketCap: number | null
+  sectorTag: 'indice' | 'ia' | 'semis' | 'big-tech' | 'outro'
+  /** Slug CoinGecko xStock, se existir no Mercado. */
+  xstockId: string | null
+}
+
+export type TendenciasEquitiesPanel = {
+  summary: string
+  highlights: TendenciasEquityRow[]
+  topVolume: TendenciasEquityRow[]
+  aiWatchlist: TendenciasEquityRow[]
+}
+
 export type TendenciasTokenBuckets = {
   maisComentados: TendenciasTokenRow[]
   maisPositivos: TendenciasTokenRow[]
@@ -170,6 +189,7 @@ export type TendenciasApiResponse = {
   narratives: TendenciasNarrative[]
   buckets: TendenciasTokenBuckets
   defi: TendenciasDefiPanel
+  equities: TendenciasEquitiesPanel | null
   alerts: TendenciasAlert[]
   partial: boolean
   error: string | null

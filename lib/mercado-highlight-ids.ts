@@ -5,13 +5,9 @@
 
 import { isYieldscanSqliteOpen, kvDelete, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
 import { MERCADO_HIGHLIGHT_EXTRA_ALIASES } from '@/lib/mercado-highlight-presets'
+import { DEFAULT_MARKET_HIGHLIGHT_MIX } from '@/lib/us-equities'
 
-export const DEFAULT_MARKET_HIGHLIGHT_IDS = [
-  'bitcoin',
-  'ethereum',
-  'solana',
-  'hyperliquid',
-] as const
+export const DEFAULT_MARKET_HIGHLIGHT_IDS = [...DEFAULT_MARKET_HIGHLIGHT_MIX] as const
 
 /** Máximo de moedas em destaque (URL + CoinGecko simple/price). */
 export const MAX_MARKET_HIGHLIGHTS = 12

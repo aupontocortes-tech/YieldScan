@@ -14,6 +14,7 @@ import {
   fetchTendenciasTrending,
 } from '@/lib/tendencias/fetch-data'
 import { fetchFmpCryptoQuotes, fmpQuotesToRecord } from '@/lib/tendencias/fetch-fmp'
+import { fetchUsEquitiesSnapshot } from '@/lib/tendencias/fetch-us-equities'
 import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
 import { traduzirArtigosBrutos } from '@/lib/traduzir-artigos-brutos'
 import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
@@ -27,7 +28,7 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, cvNews, coindeskNews, fmpQuotes, emissions, chains, pools, fees, tvlGlobal] =
+    const [markets, global, trending, cvNews, coindeskNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
         fetchTendenciasMarkets(100),
         fetchTendenciasGlobal(),
@@ -35,6 +36,7 @@ const fetchRaw = unstable_cache(
         fetchCryptoCvAsArticles(),
         fetchCoindeskAsArticles(80),
         fetchFmpCryptoQuotes(),
+        fetchUsEquitiesSnapshot(),
         Promise.race([
           fetchDefillamaEmissions(),
           new Promise<{ data: never[]; error: string }>((r) =>
@@ -88,6 +90,7 @@ const fetchRaw = unstable_cache(
       trending,
       newsArticles,
       fmpQuotes: fmpQuotesToRecord(fmpQuotes),
+      usEquities,
       unlocks,
       defiChains: chains,
       defiPools: pools,
@@ -97,7 +100,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v7'],
+  ['tendencias-trim-v8'],
   { revalidate: 120 },
 )
 
@@ -175,6 +178,7 @@ export async function GET(req: NextRequest) {
           topProtocols: [],
           summary: 'DeFi indisponível.',
         },
+        equities: null,
         alerts: [],
         partial: true,
         error: 'Erro ao carregar tendências.',

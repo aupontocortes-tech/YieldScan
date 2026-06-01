@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -53,8 +53,9 @@ import {
   readStoredHighlightIds,
   writeStoredHighlightIds,
 } from '@/lib/mercado-highlight-ids'
+import { isUsEquityXstock } from '@/lib/us-equities'
 import { cn } from '@/lib/utils'
-import { Coins, ExternalLink, LineChart, Plus, RefreshCw, Settings2, Trash2, TrendingUp } from 'lucide-react'
+import { Building2, Coins, ExternalLink, LineChart, Plus, RefreshCw, Settings2, Trash2, TrendingUp } from 'lucide-react'
 
 async function fetchMercado(ids: string[]): Promise<MarketApiPayload> {
   const q = `?highlights=${encodeURIComponent(ids.join(','))}`
@@ -157,7 +158,15 @@ function CoinRowCard({
   )
 }
 
-function HighlightCard({ coin, mercadoPrefs }: { coin: MercadoCoin; mercadoPrefs: MercadoDisplayPrefs }) {
+function HighlightCard({
+  coin,
+  mercadoPrefs,
+  stock,
+}: {
+  coin: MercadoCoin
+  mercadoPrefs: MercadoDisplayPrefs
+  stock?: boolean
+}) {
   const href = `https://www.coingecko.com/en/coins/${encodeURIComponent(coin.id)}`
   const displayFiat = effectiveDisplayFiatForCoin(coin.id, mercadoPrefs)
   const q = resolveMercadoDisplay(coin, displayFiat, mercadoPrefs.priceOverrides)
@@ -167,17 +176,35 @@ function HighlightCard({ coin, mercadoPrefs }: { coin: MercadoCoin; mercadoPrefs
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative flex min-w-0 flex-col rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-card/90 to-background p-3 sm:p-5 transition-all hover:border-cyan-500/45 hover:shadow-lg"
+      className={cn(
+        'group relative flex min-w-0 flex-col rounded-2xl border bg-gradient-to-br via-card/90 to-background p-3 transition-all hover:shadow-lg sm:p-5',
+        stock
+          ? 'border-blue-500/25 from-blue-950/40 hover:border-blue-500/45'
+          : 'border-cyan-500/25 from-cyan-950/40 hover:border-cyan-500/45',
+      )}
     >
       <div className="flex items-start gap-1.5 sm:gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-medium uppercase tracking-wide text-cyan-400/90 sm:text-[11px]">
-            Em destaque
+          <p
+            className={cn(
+              'text-[9px] font-medium uppercase tracking-wide sm:text-[11px]',
+              stock ? 'text-blue-400/90' : 'text-cyan-400/90',
+            )}
+          >
+            {stock ? 'Ação US em destaque' : 'Em destaque'}
           </p>
           <h3 className="mt-0.5 truncate text-xs font-bold text-foreground sm:mt-1 sm:text-lg">
             {coin.name}
           </h3>
           <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{coin.symbol}</p>
+          {stock && (
+            <Badge
+              variant="outline"
+              className="mt-1 h-4 border-blue-500/40 bg-blue-950/40 px-1 text-[9px] font-normal text-blue-200/95"
+            >
+              Ação US · tokenizado
+            </Badge>
+          )}
         </div>
         <CoinThumb coin={coin} size={32} />
       </div>
@@ -424,6 +451,19 @@ export function DashbuddyCryptoMarket() {
   }, [])
 
   const highlightCoins = data?.highlightCoins ?? []
+  const highlightSlotIds = data?.highlightIds ?? highlightIds
+
+  const { cryptoHighlightSlots, stockHighlightSlots } = useMemo(() => {
+    const crypto: { id: string; coin: MercadoCoin | null | undefined; index: number }[] = []
+    const stock: { id: string; coin: MercadoCoin | null | undefined; index: number }[] = []
+    highlightSlotIds.forEach((id, index) => {
+      const slot = { id, coin: highlightCoins[index], index }
+      if (isUsEquityXstock(id)) stock.push(slot)
+      else crypto.push(slot)
+    })
+    return { cryptoHighlightSlots: crypto, stockHighlightSlots: stock }
+  }, [highlightSlotIds, highlightCoins])
+
   const displayFiatLive = displayPrefs.displayFiat
   const fiatLabel = FIAT_OPTIONS.find((x) => x.id === displayFiatLive)?.label ?? displayFiatLive.toUpperCase()
   const hasPerCoinFiat = Object.keys(displayPrefs.displayFiatByCoinId).length > 0
@@ -503,7 +543,7 @@ export function DashbuddyCryptoMarket() {
                     <section className="space-y-3">
                       <div>
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Moedas em destaque
+                          Destaques (cripto e ações US)
                         </h3>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Escreve o <strong className="text-foreground">slug CoinGecko</strong> (ex.{' '}
@@ -781,33 +821,69 @@ export function DashbuddyCryptoMarket() {
 
       {data && (
         <>
-          <div>
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Moedas em destaque
-            </h3>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
-              {highlightCoins.map((coin, i) => {
-                const id = data.highlightIds[i] ?? ''
-                const displayCoin = coinForHighlightDisplay(coin, id, displayPrefs)
-                if (displayCoin) {
+          {cryptoHighlightSlots.length > 0 && (
+            <div>
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                <Coins className="h-4 w-4 text-cyan-500/80" />
+                Cripto em destaque
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+                {cryptoHighlightSlots.map(({ id, coin, index }) => {
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  if (displayCoin) {
+                    return (
+                      <HighlightCard
+                        key={`crypto-${displayCoin.id}-${index}`}
+                        coin={displayCoin}
+                        mercadoPrefs={displayPrefs}
+                      />
+                    )
+                  }
                   return (
-                    <HighlightCard
-                      key={`${displayCoin.id}-${i}`}
-                      coin={displayCoin}
+                    <HighlightEmptyCard
+                      key={`empty-crypto-${id || index}`}
+                      id={id}
                       mercadoPrefs={displayPrefs}
                     />
                   )
-                }
-                return (
-                  <HighlightEmptyCard
-                    key={`empty-${id || i}`}
-                    id={id}
-                    mercadoPrefs={displayPrefs}
-                  />
-                )
-              })}
+                })}
+              </div>
             </div>
-          </div>
+          )}
+
+          {stockHighlightSlots.length > 0 && (
+            <div>
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                <Building2 className="h-4 w-4 text-blue-500/80" />
+                Ações americanas em destaque
+              </h3>
+              <p className="-mt-2 mb-4 text-xs text-muted-foreground">
+                Cotações tokenizadas (xStock) via CoinGecko — referência às ações EUA.
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+                {stockHighlightSlots.map(({ id, coin, index }) => {
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  if (displayCoin) {
+                    return (
+                      <HighlightCard
+                        key={`stock-${displayCoin.id}-${index}`}
+                        coin={displayCoin}
+                        mercadoPrefs={displayPrefs}
+                        stock
+                      />
+                    )
+                  }
+                  return (
+                    <HighlightEmptyCard
+                      key={`empty-stock-${id || index}`}
+                      id={id}
+                      mercadoPrefs={displayPrefs}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">

@@ -27,6 +27,7 @@ import {
   type TrimTokenScores,
 } from '@/lib/tendencias/trim-scores'
 import { generateDefiInterpretation, generateObserveToday, generateTokenSummary } from '@/lib/tendencias/trim-text'
+import type { UsEquitiesSnapshot } from '@/lib/tendencias/fetch-us-equities'
 import type {
   AnalysisTone,
   MomentumPeriod,
@@ -34,6 +35,7 @@ import type {
   TendenciasAlert,
   TendenciasApiResponse,
   TendenciasDefiPanel,
+  TendenciasEquitiesPanel,
   TendenciasMarketPanel,
   TendenciasNarrative,
   TendenciasTokenBuckets,
@@ -312,9 +314,11 @@ function buildAlerts(input: {
 function buildDataSources(input: {
   fmpQuotes?: FmpQuotesRecord
   newsArticles: NewsDataArticle[]
+  hasUsEquities?: boolean
 }): string[] {
   const sources = ['coingecko', 'defillama']
   if (input.fmpQuotes && Object.keys(input.fmpQuotes).length) sources.push('fmp')
+  if (input.hasUsEquities) sources.push('fmp-acoes')
   const hasCoindesk = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('coindesk-'))
   const hasCv = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('cryptocv-'))
   if (hasCoindesk) sources.push('coindesk')
@@ -333,6 +337,7 @@ export function buildTrimPayload(input: {
   defiFees?: RawProtocolFees[]
   defiTvlGlobal?: { current: number | null; changePct: number | null }
   fmpQuotes?: FmpQuotesRecord
+  usEquities?: UsEquitiesSnapshot | null
   period?: MomentumPeriod
   tone?: AnalysisTone
   partial?: boolean
@@ -428,13 +433,26 @@ export function buildTrimPayload(input: {
     unlocks: buckets.proximosUnlocks,
   })
 
+  const equities: TendenciasEquitiesPanel | null = input.usEquities
+    ? {
+        summary: input.usEquities.summary,
+        highlights: input.usEquities.highlights,
+        topVolume: input.usEquities.topVolume,
+        aiWatchlist: input.usEquities.aiWatchlist,
+      }
+    : null
+
   return {
     updatedAt: new Date().toISOString(),
     meta: {
       momentumPeriod: period,
       analysisTone: tone,
       engine: 'score-tendencia-v2',
-      dataSources: buildDataSources(input),
+      dataSources: buildDataSources({
+        fmpQuotes: input.fmpQuotes,
+        newsArticles: input.newsArticles,
+        hasUsEquities: equities != null,
+      }),
     },
     market,
     observeToday,
@@ -442,6 +460,7 @@ export function buildTrimPayload(input: {
     narratives,
     buckets,
     defi,
+    equities,
     alerts,
     partial: input.partial ?? false,
     error: input.error ?? null,

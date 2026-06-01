@@ -47,6 +47,7 @@ async function fetchNoticias(): Promise<NewsPayload> {
 const FILTROS = [
   { label: 'Todos', value: 'todos' },
   { label: 'Cripto', value: 'CRIPTO' },
+  { label: 'Ações Americanas', value: 'ACOES' },
   { label: 'Geopolítica', value: 'GEOPOLÍTICA' },
   { label: 'Macroeconomia', value: 'MACRO' },
   { label: 'IA', value: 'IA' },
@@ -91,6 +92,7 @@ const LABEL_IMPACTO: Record<InsightNoticia['impacto'], string> = {
 
 const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300',
+  ACOES: 'border-blue-400/40 bg-blue-500/15 text-blue-300',
   GEOPOLÍTICA: 'border-amber-400/40 bg-amber-500/15 text-amber-300',
   MACRO: 'border-yellow-400/40 bg-yellow-500/15 text-yellow-300',
   IA: 'border-violet-500/40 bg-violet-500/15 text-violet-300',
@@ -98,6 +100,7 @@ const BADGE_CAT: Record<InsightNoticia['categoria'], string> = {
 
 const LABEL_CAT: Record<InsightNoticia['categoria'], string> = {
   CRIPTO: 'Cripto',
+  ACOES: 'Ações EUA',
   GEOPOLÍTICA: 'Geopolítica',
   MACRO: 'Macroeconomia',
   IA: 'IA',

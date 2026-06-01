@@ -26,7 +26,7 @@ export const NEWSDATA_NEWS_URL = 'https://newsdata.io/api/1/news'
 export interface InsightNoticia {
   titulo: string
   resumo: string
-  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO' | 'IA'
+  categoria: 'CRIPTO' | 'GEOPOLÍTICA' | 'MACRO' | 'IA' | 'ACOES'
   impacto: 'POSITIVO' | 'NEGATIVO' | 'NEUTRO'
   ativos: Array<'BTC' | 'ETH' | 'ALTCOINS' | 'MERCADO GLOBAL'>
   confianca: 'ALTA' | 'MÉDIA' | 'BAIXA'
@@ -224,6 +224,8 @@ function classificarAutomatica(full: string, article: NewsDataArticle): InsightN
     iaKw || (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full))
 
   if (geo) return 'GEOPOLÍTICA'
+  const acoesKw = RE_CLASS_ACOES.test(full)
+  if (acoesKw && !criptoKw && !fromDedicatedCrypto) return 'ACOES'
   if (macro) return 'MACRO'
   if (criptoKw || fromDedicatedCrypto) return 'CRIPTO'
   if (iaMarcada) return 'IA'
@@ -255,7 +257,11 @@ const RE_MACRO =
 
 /** Mercados e empresas (não basta a palavra «mercado» genérica). */
 const RE_MACRO_MERCADOS =
-  /\b(nasdaq|dow jones|s&p|sp\s*500|ibovespa|bovespa|stock(s)?\b|acoes\b|share(s)? price|equity market|earnings\b|eps\b|ipo\b|m&a|merger|bull market|bear market|volatil|vix\b|commodit(y|ies)|brent|wti\b|gold price|oil price|forex|fx market|negociacao\b|trading floor)\b/i
+  /\b(ibovespa|bovespa|bull market|bear market|volatil|vix\b|commodit(y|ies)|brent|wti\b|gold price|oil price|forex|fx market|negociacao\b|trading floor)\b/i
+
+/** Bolsa americana, earnings e grandes tech — aba «Ações Americanas». */
+const RE_CLASS_ACOES =
+  /\b(nasdaq|nyse|dow jones|s&p 500|sp\s*500|wall street|stock market|american stocks|us stocks|acoes americanas|earnings (report|call|season|beat|miss)|quarterly earnings|share price|stock price|equity market|pre-?market|after hours|magnificent seven|faang|semiconductor stocks|chip stocks|ai stocks|nvda\b|nvidia corp|apple inc|aapl\b|microsoft corp|msft\b|alphabet inc|meta platforms|amazon\.com|tesla inc|amd\b|intel corp|broadcom|palantir|coinbase stock)\b/i
 const RE_CRYPTO =
   /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
 
@@ -397,6 +403,7 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
    */
   if (cry || futuroCripto) return 'CRIPTO'
   if (geo) return 'GEOPOLÍTICA'
+  if (RE_CLASS_ACOES.test(blob) && !cry) return 'ACOES'
   if (policyMacro || pol || gov || mercados) return 'MACRO'
   return 'MACRO'
 }
@@ -441,7 +448,8 @@ function ativosAfetados(full: string, categoria: InsightNoticia['categoria']): I
   if (
     categoria === 'GEOPOLÍTICA' ||
     categoria === 'MACRO' ||
-    categoria === 'IA'
+    categoria === 'IA' ||
+    categoria === 'ACOES'
   ) {
     out.add('MERCADO GLOBAL')
   }

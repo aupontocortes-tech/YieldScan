@@ -8,6 +8,7 @@ import {
   type MomentumPeriod,
   type SentimentLevel,
   type TendenciasAlert,
+  type TendenciasEquityRow,
   type TendenciasPrefs,
   type TendenciasTokenRow,
 } from '@/lib/tendencias/types'
@@ -39,6 +40,7 @@ import { type TrimClass, SCORE_MERCADO_NOME, SCORE_TENDENCIA_FORMULA, SCORE_TEND
 import { cn } from '@/lib/utils'
 import {
   AlertTriangle,
+  Building2,
   Layers,
   Newspaper,
   RefreshCw,
@@ -199,14 +201,31 @@ function NewsTokenFilterBar({
   )
 }
 
-type TabId = 'visao' | 'tokens' | 'noticias' | 'defi'
+type TabId = 'visao' | 'tokens' | 'acoes' | 'noticias' | 'defi'
 
 const TABS: { id: TabId; label: string; icon: typeof Sparkles }[] = [
   { id: 'visao', label: 'Visão geral', icon: Sparkles },
   { id: 'tokens', label: 'Tokens', icon: TrendingUp },
+  { id: 'acoes', label: 'Ações US', icon: Building2 },
   { id: 'noticias', label: 'Notícias', icon: Newspaper },
   { id: 'defi', label: 'DeFi', icon: Layers },
 ]
+
+const EQUITY_SECTOR_LABEL: Record<TendenciasEquityRow['sectorTag'], string> = {
+  indice: 'Índice',
+  ia: 'IA',
+  semis: 'Semicondutores',
+  'big-tech': 'Big Tech',
+  outro: 'Ações',
+}
+
+const EQUITY_SECTOR_CLASS: Record<TendenciasEquityRow['sectorTag'], string> = {
+  indice: 'border-slate-500/35 bg-slate-500/10 text-slate-300',
+  ia: 'border-violet-500/35 bg-violet-500/10 text-violet-300',
+  semis: 'border-cyan-500/35 bg-cyan-500/10 text-cyan-300',
+  'big-tech': 'border-blue-500/35 bg-blue-500/10 text-blue-300',
+  outro: 'border-border/40 bg-muted/10 text-muted-foreground',
+}
 
 type TokenFilter = 'destaques' | 'gainers' | 'losers' | 'volume' | 'trim' | 'mencoes'
 
@@ -327,6 +346,85 @@ function SentimentGauge({
         </p>
       )}
     </div>
+  )
+}
+
+function equityHref(row: TendenciasEquityRow): string {
+  if (row.xstockId) {
+    return `https://www.coingecko.com/en/coins/${encodeURIComponent(row.xstockId)}`
+  }
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(row.symbol)}`
+}
+
+function EquityHighlightCard({ row }: { row: TendenciasEquityRow }) {
+  const up = (row.changePct ?? 0) >= 0
+  return (
+    <a
+      href={equityHref(row)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex min-w-0 flex-col rounded-2xl border border-blue-500/25 bg-gradient-to-br from-blue-950/35 via-card/90 to-background p-4 transition-all hover:border-blue-500/45 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-blue-400/90">Ação US</p>
+          <p className="mt-0.5 truncate text-sm font-bold text-foreground">{row.name}</p>
+          <p className="font-mono text-xs text-muted-foreground">{row.symbol}</p>
+        </div>
+        <Badge variant="outline" className={cn('shrink-0 text-[9px]', EQUITY_SECTOR_CLASS[row.sectorTag])}>
+          {EQUITY_SECTOR_LABEL[row.sectorTag]}
+        </Badge>
+      </div>
+      <p className="mt-3 font-mono text-xl font-bold tabular-nums tracking-tight">{fmtUsd(row.price)}</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Hoje</span>
+        <span className={cn('font-semibold tabular-nums', up ? 'text-emerald-400' : 'text-red-400')}>
+          {fmtPct(row.changePct)}
+        </span>
+      </div>
+      {row.volume != null && (
+        <p className="mt-2 text-[10px] text-muted-foreground">Volume · {fmtUsd(row.volume, true)}</p>
+      )}
+      {row.xstockId && (
+        <p className="mt-2 text-[10px] text-blue-300/80">Também no Mercado (xStock)</p>
+      )}
+    </a>
+  )
+}
+
+function EquityTableRow({ row }: { row: TendenciasEquityRow }) {
+  const up = (row.changePct ?? 0) >= 0
+  return (
+    <tr className="border-b border-border/30 transition-colors hover:bg-muted/10">
+      <td className="px-2 py-2.5">
+        <a
+          href={equityHref(row)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block min-w-0 hover:text-yellow-500"
+        >
+          <p className="font-semibold leading-none">{row.symbol}</p>
+          <p className="truncate text-[10px] text-muted-foreground">{row.name}</p>
+        </a>
+      </td>
+      <td className="hidden px-2 py-2.5 sm:table-cell">
+        <Badge variant="outline" className={cn('text-[9px]', EQUITY_SECTOR_CLASS[row.sectorTag])}>
+          {EQUITY_SECTOR_LABEL[row.sectorTag]}
+        </Badge>
+      </td>
+      <td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">{fmtUsd(row.price)}</td>
+      <td className="px-2 py-2.5 text-right">
+        <span className={cn('font-mono text-xs font-medium tabular-nums', up ? 'text-emerald-400' : 'text-red-400')}>
+          {fmtPct(row.changePct)}
+        </span>
+      </td>
+      <td className="hidden px-2 py-2.5 text-right font-mono text-[10px] tabular-nums text-muted-foreground md:table-cell">
+        {fmtUsd(row.volume, true)}
+      </td>
+      <td className="hidden px-2 py-2.5 text-right font-mono text-[10px] tabular-nums text-muted-foreground lg:table-cell">
+        {fmtUsd(row.marketCap, true)}
+      </td>
+    </tr>
   )
 }
 
@@ -557,7 +655,7 @@ export function DashbuddyTendencias() {
     )
   }
 
-  const { market, observeToday, news, narratives, buckets, alerts, defi, meta } = data
+  const { market, observeToday, news, narratives, buckets, alerts, defi, equities, meta } = data
   const sourcesLabel = meta.dataSources?.join(' · ') ?? 'coingecko · defillama'
 
   return (
@@ -565,9 +663,9 @@ export function DashbuddyTendencias() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Tendências de mercado</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Tendências · cripto e ações US</h2>
           <p className="text-xs text-muted-foreground">
-            {SCORE_TENDENCIA_NOME} · análise quantitativa · {sourcesLabel}
+            {SCORE_TENDENCIA_NOME} · tokens e bolsa americana · {sourcesLabel}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -707,6 +805,30 @@ export function DashbuddyTendencias() {
               </div>
             </div>
           )}
+
+          {equities && equities.highlights.length > 0 && (
+            <Card className="border-blue-500/20 bg-gradient-to-br from-card to-blue-500/[0.04]">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between gap-2 text-sm font-semibold">
+                  <span className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-blue-400" />
+                    Ações americanas
+                  </span>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setTab('acoes')}>
+                    Ver tudo →
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs leading-relaxed text-muted-foreground">{equities.summary}</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {equities.highlights.slice(0, 4).map((r) => (
+                    <EquityHighlightCard key={r.symbol} row={r} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -781,6 +903,100 @@ export function DashbuddyTendencias() {
                 </Link>
               </CardContent>
             </Card>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Ações US */}
+      {tab === 'acoes' && (
+        <div className="space-y-4">
+          {!equities ? (
+            <Card className="border-border/50 bg-card/40">
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                <Building2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p>Dados de ações americanas indisponíveis.</p>
+                <p className="mt-1 text-xs">
+                  Configura <span className="font-mono">FMP_API_KEY</span> no servidor para activar cotações EUA (FMP).
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <p className="rounded-lg border border-blue-500/20 bg-blue-950/15 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                {equities.summary}
+              </p>
+
+              {equities.highlights.length > 0 && (
+                <div>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Em destaque hoje
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {equities.highlights.map((r) => (
+                      <EquityHighlightCard key={`hi-${r.symbol}`} row={r} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {equities.aiWatchlist.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    IA e tecnologia
+                  </h3>
+                  <div className="overflow-x-auto rounded-xl border border-border/50 bg-card/30">
+                    <table className="w-full min-w-[480px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <th className="px-2 py-2 font-medium">Ticker</th>
+                          <th className="hidden px-2 py-2 font-medium sm:table-cell">Sector</th>
+                          <th className="px-2 py-2 text-right font-medium">Preço</th>
+                          <th className="px-2 py-2 text-right font-medium">Variação</th>
+                          <th className="hidden px-2 py-2 text-right font-medium md:table-cell">Volume</th>
+                          <th className="hidden px-2 py-2 text-right font-medium lg:table-cell">Cap.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {equities.aiWatchlist.map((r) => (
+                          <EquityTableRow key={`ai-${r.symbol}`} row={r} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {equities.topVolume.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Maior volume (mercado EUA)
+                  </h3>
+                  <div className="overflow-x-auto rounded-xl border border-border/50 bg-card/30">
+                    <table className="w-full min-w-[480px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <th className="px-2 py-2 font-medium">Ticker</th>
+                          <th className="hidden px-2 py-2 font-medium sm:table-cell">Sector</th>
+                          <th className="px-2 py-2 text-right font-medium">Preço</th>
+                          <th className="px-2 py-2 text-right font-medium">Variação</th>
+                          <th className="hidden px-2 py-2 text-right font-medium md:table-cell">Volume</th>
+                          <th className="hidden px-2 py-2 text-right font-medium lg:table-cell">Cap.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {equities.topVolume.map((r) => (
+                          <EquityTableRow key={`vol-${r.symbol}`} row={r} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-center text-[10px] text-muted-foreground">
+                Fonte: Financial Modeling Prep · referência, não é recomendação de investimento.
+              </p>
+            </>
           )}
         </div>
       )}
