@@ -92,7 +92,7 @@ const montarNoticiasEmCache = unstable_cache(
     }
     return { traduzidas: [], aviso: AVISO_SEM_ARTIGOS }
   },
-  ['api-news-montar-v20'],
+  ['api-news-montar-v21'],
   { revalidate: NEWS_SERVER_REVALIDATE_SECONDS, tags: ['news'] }
 )
 
