@@ -53,7 +53,7 @@ import {
   readStoredHighlightIds,
   writeStoredHighlightIds,
 } from '@/lib/mercado-highlight-ids'
-import { isUsEquityXstock } from '@/lib/us-equities'
+import { isUsEquityXstock, MARKET_PINNED_STOCK_IDS } from '@/lib/us-equities'
 import { cn } from '@/lib/utils'
 import { Building2, Coins, ExternalLink, LineChart, Plus, RefreshCw, Settings2, Trash2, TrendingUp } from 'lucide-react'
 
@@ -358,6 +358,17 @@ export function DashbuddyCryptoMarket() {
   }, [])
 
   const highlightsCacheKey = highlightIds.join('|')
+  const pinnedStockIds = [...MARKET_PINNED_STOCK_IDS]
+
+  const { data: pinnedStocksData, isLoading: pinnedStocksLoading } = useQuery({
+    queryKey: ['crypto-market-pinned-stocks', pinnedStockIds.join('|')],
+    queryFn: () => fetchMercado(pinnedStockIds),
+    staleTime: 55_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+    gcTime: 120_000,
+    retry: 2,
+  })
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['crypto-market', highlightsCacheKey],
@@ -453,16 +464,21 @@ export function DashbuddyCryptoMarket() {
   const highlightCoins = data?.highlightCoins ?? []
   const highlightSlotIds = data?.highlightIds ?? highlightIds
 
-  const { cryptoHighlightSlots, stockHighlightSlots } = useMemo(() => {
+  const pinnedSet = useMemo(() => new Set(pinnedStockIds), [pinnedStockIds])
+
+  const { cryptoHighlightSlots, extraStockHighlightSlots } = useMemo(() => {
     const crypto: { id: string; coin: MercadoCoin | null | undefined; index: number }[] = []
     const stock: { id: string; coin: MercadoCoin | null | undefined; index: number }[] = []
     highlightSlotIds.forEach((id, index) => {
       const slot = { id, coin: highlightCoins[index], index }
-      if (isUsEquityXstock(id)) stock.push(slot)
-      else crypto.push(slot)
+      if (isUsEquityXstock(id)) {
+        if (!pinnedSet.has(id)) stock.push(slot)
+      } else {
+        crypto.push(slot)
+      }
     })
-    return { cryptoHighlightSlots: crypto, stockHighlightSlots: stock }
-  }, [highlightSlotIds, highlightCoins])
+    return { cryptoHighlightSlots: crypto, extraStockHighlightSlots: stock }
+  }, [highlightSlotIds, highlightCoins, pinnedSet])
 
   const displayFiatLive = displayPrefs.displayFiat
   const fiatLabel = FIAT_OPTIONS.find((x) => x.id === displayFiatLive)?.label ?? displayFiatLive.toUpperCase()
@@ -821,6 +837,47 @@ export function DashbuddyCryptoMarket() {
 
       {data && (
         <>
+          <div>
+            <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-400/95">
+              <Building2 className="h-4 w-4" />
+              Ações americanas em destaque
+            </h3>
+            <p className="mb-4 text-xs text-muted-foreground">
+              NVIDIA, Nasdaq, Microsoft e outras referências US (tokenizadas xStock · CoinGecko).
+            </p>
+            {pinnedStocksLoading && !pinnedStocksData ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={`pin-sk-${i}`} className="h-44 rounded-2xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+                {pinnedStockIds.map((id, i) => {
+                  const coin = pinnedStocksData?.highlightCoins[i]
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  if (displayCoin) {
+                    return (
+                      <HighlightCard
+                        key={`pinned-${displayCoin.id}`}
+                        coin={displayCoin}
+                        mercadoPrefs={displayPrefs}
+                        stock
+                      />
+                    )
+                  }
+                  return (
+                    <HighlightEmptyCard
+                      key={`pinned-empty-${id}`}
+                      id={id}
+                      mercadoPrefs={displayPrefs}
+                    />
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           {cryptoHighlightSlots.length > 0 && (
             <div>
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -851,17 +908,14 @@ export function DashbuddyCryptoMarket() {
             </div>
           )}
 
-          {stockHighlightSlots.length > 0 && (
+          {extraStockHighlightSlots.length > 0 && (
             <div>
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 <Building2 className="h-4 w-4 text-blue-500/80" />
-                Ações americanas em destaque
+                Mais ações nos teus destaques
               </h3>
-              <p className="-mt-2 mb-4 text-xs text-muted-foreground">
-                Cotações tokenizadas (xStock) via CoinGecko — referência às ações EUA.
-              </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
-                {stockHighlightSlots.map(({ id, coin, index }) => {
+                {extraStockHighlightSlots.map(({ id, coin, index }) => {
                   const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
                   if (displayCoin) {
                     return (

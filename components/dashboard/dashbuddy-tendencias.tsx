@@ -910,14 +910,21 @@ export function DashbuddyTendencias() {
       {/* Tab: Ações US */}
       {tab === 'acoes' && (
         <div className="space-y-4">
-          {!equities ? (
+          {!equities ||
+          (equities.highlights.length === 0 &&
+            equities.aiWatchlist.length === 0 &&
+            equities.topVolume.length === 0) ? (
             <Card className="border-border/50 bg-card/40">
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 <Building2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                <p>Dados de ações americanas indisponíveis.</p>
+                <p>A carregar cotações de ações…</p>
                 <p className="mt-1 text-xs">
-                  Configura <span className="font-mono">FMP_API_KEY</span> no servidor para activar cotações EUA (FMP).
+                  Se persistir, verifica a ligação ou <span className="font-mono">FMP_API_KEY</span> na Vercel (opcional;
+                  sem chave usamos xStock via CoinGecko).
                 </p>
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
+                  Actualizar
+                </Button>
               </CardContent>
             </Card>
           ) : (

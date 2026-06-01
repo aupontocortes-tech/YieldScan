@@ -318,7 +318,7 @@ function buildDataSources(input: {
 }): string[] {
   const sources = ['coingecko', 'defillama']
   if (input.fmpQuotes && Object.keys(input.fmpQuotes).length) sources.push('fmp')
-  if (input.hasUsEquities) sources.push('fmp-acoes')
+  if (input.hasUsEquities) sources.push('acoes-us')
   const hasCoindesk = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('coindesk-'))
   const hasCv = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('cryptocv-'))
   if (hasCoindesk) sources.push('coindesk')

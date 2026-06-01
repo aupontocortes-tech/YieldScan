@@ -19,15 +19,38 @@ export const US_STOCK_XSTOCK_IDS = [
   'microstrategy-xstock',
 ] as const
 
-/** Destaques mistos sugeridos para novos utilizadores (cripto + ações). */
-export const DEFAULT_MARKET_HIGHLIGHT_MIX = [
-  'bitcoin',
-  'ethereum',
-  'solana',
+/** Cartões fixos no topo do Mercado (sempre visíveis). */
+export const MARKET_PINNED_STOCK_IDS = [
   'nvidia-xstock',
   'nasdaq-xstock',
   'microsoft-xstock',
+  'alphabet-xstock',
+  'tesla-xstock',
+  'sp500-xstock',
 ] as const
+
+/** Destaques mistos sugeridos para novos utilizadores (ações primeiro). */
+export const DEFAULT_MARKET_HIGHLIGHT_MIX = [
+  'nvidia-xstock',
+  'nasdaq-xstock',
+  'microsoft-xstock',
+  'bitcoin',
+  'ethereum',
+  'solana',
+] as const
+
+/** Slug xStock → ticker FMP / rótulo. */
+export const XSTOCK_ID_TO_TICKER: Record<string, string> = {
+  'nasdaq-xstock': 'QQQ',
+  'sp500-xstock': 'SPY',
+  'nvidia-xstock': 'NVDA',
+  'microsoft-xstock': 'MSFT',
+  'alphabet-xstock': 'GOOGL',
+  'meta-xstock': 'META',
+  'amazon-xstock': 'AMZN',
+  'tesla-xstock': 'TSLA',
+  'microstrategy-xstock': 'MSTR',
+}
 
 /** Tickers FMP — IA, semis e big tech (EUA). */
 export const US_AI_TECH_TICKERS = [

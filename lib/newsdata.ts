@@ -10,7 +10,7 @@
 import { fetchAiNewsFromRssFeeds } from '@/lib/ai-news-rss'
 import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
 import { fetchCoindeskAsArticles } from '@/lib/tendencias/fetch-coindesk'
-import { fetchGnewsAsArticles } from '@/lib/gnews'
+import { fetchGnewsAsArticles, fetchGnewsStocksAsArticles } from '@/lib/gnews'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
 import { textoIndicaFocoInteligenciaArtificial } from '@/lib/news-ia-strict'
 import { normalizeNewsPublishedAt, parseNewsPublishedAt } from '@/lib/news-time'
@@ -75,6 +75,8 @@ export interface NewsDataArticle {
   _yieldscanCryptoQuery?: boolean
   /** Interno: veio da query NewsData só IA — classificar como IA no filtro. */
   _yieldscanAiQuery?: boolean
+  /** Interno: veio da query NewsData só ações US — classificar como ACOES no filtro. */
+  _yieldscanStocksQuery?: boolean
 }
 
 export type NewsDataApiResponse =
@@ -105,6 +107,13 @@ const KEYWORDS_AI =
   'artificial intelligence OR machine learning OR OpenAI OR ChatGPT OR generative AI OR deep learning OR neural network OR large language model'
 
 const KEYWORDS_AI_ALT = 'Anthropic OR Claude OR Gemini OR Copilot OR Nvidia AI OR AI chip OR AI model'
+
+/** Query dedicada bolsa americana — alimenta o filtro «Ações Americanas». */
+const KEYWORDS_STOCKS =
+  'NASDAQ OR NYSE OR "Wall Street" OR earnings OR "stock market" OR "S&P 500" OR NVIDIA OR "Apple stock" OR "Microsoft stock" OR Tesla OR semiconductor OR "US stocks" OR "stock price"'
+
+const KEYWORDS_STOCKS_ALT =
+  'NYSE OR equities OR "share price" OR "quarterly earnings" OR AMD OR "Amazon stock" OR "Meta stock" OR "Magnificent Seven" OR FAANG'
 
 /** Fontes tratadas como maior credibilidade editorial (heurística conservadora). */
 const FONTES_ALTA = new Set(
@@ -142,6 +151,10 @@ const RE_CLASS_CRIPTO =
 const RE_CLASS_IA =
   /\b(openai|nvidia|chatgpt|machine learning|artificial intelligence|inteligencia artificial|\bai\b)\b/i
 
+/** Bolsa americana, earnings e grandes tech — aba «Ações Americanas». */
+const RE_CLASS_ACOES =
+  /\b(nasdaq|nyse|dow jones|s&p 500|sp\s*500|wall street|stock market|american stocks|us stocks|acoes americanas|earnings (report|call|season|beat|miss)|quarterly earnings|share price|stock price|equity market|pre-?market|after hours|magnificent seven|faang|semiconductor stocks|chip stocks|ai stocks|nvda\b|nvidia corp|apple inc|aapl\b|microsoft corp|msft\b|alphabet inc|meta platforms|amazon\.com|tesla inc|amd\b|intel corp|broadcom|palantir|coinbase stock)\b/i
+
 function passaFiltroPalavrasChave(full: string, article: NewsDataArticle): boolean {
   if (
     RE_CLASS_GEO.test(full) ||
@@ -151,8 +164,11 @@ function passaFiltroPalavrasChave(full: string, article: NewsDataArticle): boole
   )
     return true
   if (article._yieldscanCryptoQuery === true) return true
+  if (article._yieldscanStocksQuery === true) return true
+  if (RE_CLASS_ACOES.test(full)) return true
   const aid = article.article_id
   if (typeof aid === 'string' && (aid.startsWith('cryptopanic-') || aid.startsWith('cryptocv-'))) return true
+  if (typeof aid === 'string' && aid.startsWith('gnews-stocks-')) return true
   if (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full)) return true
   return false
 }
@@ -170,6 +186,8 @@ const RE_SCORE_MACRO =
 const RE_SCORE_CRIPTO =
   /\b(\betf\b|bitcoin|\bbtc\b|\bsec\b|ethereum|\beth\b|aave|binance|crypto|cripto|blackrock)\b/i
 const RE_SCORE_IA = /\b(openai|nvidia|chatgpt|\bai\b)\b/i
+const RE_SCORE_ACOES =
+  /\b(nasdaq|nyse|earnings|wall street|nvidia|apple|microsoft|tesla|stock market|s&p|semiconductor)\b/i
 
 /** Pontuação só por conteúdo (Bloomberg-style); blocos somados. */
 function pontuarPalavrasChaveNoticia(full: string): number {
@@ -178,6 +196,7 @@ function pontuarPalavrasChaveNoticia(full: string): number {
   if (RE_SCORE_MACRO.test(full)) score += 4
   if (RE_SCORE_CRIPTO.test(full)) score += 3
   if (RE_SCORE_IA.test(full)) score += 2
+  if (RE_SCORE_ACOES.test(full)) score += 3
   return score
 }
 
@@ -220,12 +239,15 @@ function classificarAutomatica(full: string, article: NewsDataArticle): InsightN
     article._yieldscanCryptoQuery === true ||
     (typeof article.article_id === 'string' &&
       (article.article_id.startsWith('cryptopanic-') || article.article_id.startsWith('cryptocv-')))
+  const fromDedicatedStocks =
+    article._yieldscanStocksQuery === true ||
+    (typeof article.article_id === 'string' && article.article_id.startsWith('gnews-stocks-'))
   const iaMarcada =
     iaKw || (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full))
 
   if (geo) return 'GEOPOLÍTICA'
   const acoesKw = RE_CLASS_ACOES.test(full)
-  if (acoesKw && !criptoKw && !fromDedicatedCrypto) return 'ACOES'
+  if ((fromDedicatedStocks || acoesKw) && !criptoKw && !fromDedicatedCrypto) return 'ACOES'
   if (macro) return 'MACRO'
   if (criptoKw || fromDedicatedCrypto) return 'CRIPTO'
   if (iaMarcada) return 'IA'
@@ -259,9 +281,6 @@ const RE_MACRO =
 const RE_MACRO_MERCADOS =
   /\b(ibovespa|bovespa|bull market|bear market|volatil|vix\b|commodit(y|ies)|brent|wti\b|gold price|oil price|forex|fx market|negociacao\b|trading floor)\b/i
 
-/** Bolsa americana, earnings e grandes tech — aba «Ações Americanas». */
-const RE_CLASS_ACOES =
-  /\b(nasdaq|nyse|dow jones|s&p 500|sp\s*500|wall street|stock market|american stocks|us stocks|acoes americanas|earnings (report|call|season|beat|miss)|quarterly earnings|share price|stock price|equity market|pre-?market|after hours|magnificent seven|faang|semiconductor stocks|chip stocks|ai stocks|nvda\b|nvidia corp|apple inc|aapl\b|microsoft corp|msft\b|alphabet inc|meta platforms|amazon\.com|tesla inc|amd\b|intel corp|broadcom|palantir|coinbase stock)\b/i
 const RE_CRYPTO =
   /\b(bitcoin|btc|ethereum|eth|ether|crypto|cripto|criptomoedas?|cryptocurrenc(y|ies)|blockchain|defi|stablecoins?|stable\s*coins?|altcoins?|solana|dogecoin|memecoins?|web3|nfts?|tokens?|satoshi|halving|coinbase|binance|kraken|etf\s*bitcoin|spot\s*etf|negociacao\s+de\s+cripto|mercado\s+de\s+cripto|crypto\s+futures|futures?\s+cripto|xrp|ripple|bnb|polygon|avax|cardano|ada|monero|litecoin)\b/i
 
@@ -579,6 +598,28 @@ function enrichYieldscanAiFlag(results: NewsDataArticle[], aiArticles: NewsDataA
  * Quando uma URL entrou primeiro pela query geral, pode perder o marcador de query cripto.
  * Reaplica _yieldscanCryptoQuery por URL para o filtro «Cripto» não esvaziar.
  */
+function enrichYieldscanStocksFlag(results: NewsDataArticle[], stocksArticles: NewsDataArticle[]): void {
+  if (!stocksArticles.length) return
+  const keys = new Set<string>()
+  for (const a of stocksArticles) {
+    const raw = (a.link ?? '').trim()
+    const key =
+      normalizarLinkDedupe(raw || undefined) ||
+      `id:${String(a.article_id ?? a.title ?? '').toLowerCase()}`
+    keys.add(key)
+  }
+  for (const a of results) {
+    const raw = (a.link ?? '').trim()
+    const key =
+      normalizarLinkDedupe(raw || undefined) ||
+      `id:${String(a.article_id ?? a.title ?? '').toLowerCase()}`
+    if (!keys.has(key)) continue
+    if (a._yieldscanCryptoQuery === true) continue
+    if (RE_CLASS_CRIPTO.test(textoParaAnalise(a)) && !RE_CLASS_ACOES.test(textoParaAnalise(a))) continue
+    a._yieldscanStocksQuery = true
+  }
+}
+
 function enrichYieldscanCryptoFlag(results: NewsDataArticle[], cryptoArticles: NewsDataArticle[]): void {
   if (!cryptoArticles.length) return
   const cryptoKeys = new Set<string>()
@@ -601,15 +642,25 @@ function enrichYieldscanCryptoFlag(results: NewsDataArticle[], cryptoArticles: N
 
 /** NewsData + RSS IA (fallback). CryptoPanic e GNews ficam em `pegarTodasNoticias`. */
 async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
-  const [newsdataGeral, newsdataCripto, newsdataCriptoFallback, newsdataAi, newsdataAiAlt, rssAiArticles] =
-    await Promise.all([
-      fetchQueryAccumulate(ndKey, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
-      fetchQueryAccumulate(ndKey, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
-      fetchQueryAccumulate(ndKey, 'bitcoin OR ethereum OR crypto', { maxArticles: 18, maxPages: 3, size: '10' }),
-      fetchQueryAccumulate(ndKey, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
-      fetchQueryAccumulate(ndKey, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
-      fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
-    ])
+  const [
+    newsdataGeral,
+    newsdataCripto,
+    newsdataCriptoFallback,
+    newsdataStocks,
+    newsdataStocksAlt,
+    newsdataAi,
+    newsdataAiAlt,
+    rssAiArticles,
+  ] = await Promise.all([
+    fetchQueryAccumulate(ndKey, KEYWORDS_Q, { maxArticles: 18, maxPages: 3, size: '10' }),
+    fetchQueryAccumulate(ndKey, KEYWORDS_CRYPTO, { maxArticles: 28, maxPages: 4, size: '10' }),
+    fetchQueryAccumulate(ndKey, 'bitcoin OR ethereum OR crypto', { maxArticles: 18, maxPages: 3, size: '10' }),
+    fetchQueryAccumulate(ndKey, KEYWORDS_STOCKS, { maxArticles: 28, maxPages: 4, size: '10' }),
+    fetchQueryAccumulate(ndKey, KEYWORDS_STOCKS_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
+    fetchQueryAccumulate(ndKey, KEYWORDS_AI, { maxArticles: 24, maxPages: 4, size: '10' }),
+    fetchQueryAccumulate(ndKey, KEYWORDS_AI_ALT, { maxArticles: 16, maxPages: 3, size: '10' }),
+    fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
+  ])
 
   const newsdataAiMerged = mergeArticlesDedupe(
     mergeArticlesDedupe(newsdataAi, newsdataAiAlt),
@@ -617,9 +668,14 @@ async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
   )
 
   const newsdataCriptoMerged = mergeArticlesDedupe(newsdataCripto, newsdataCriptoFallback)
+  const newsdataStocksMerged = mergeArticlesDedupe(newsdataStocks, newsdataStocksAlt)
   const newsdataCriptoMarcados: NewsDataArticle[] = newsdataCriptoMerged.map((a) => ({
     ...a,
     _yieldscanCryptoQuery: true,
+  }))
+  const newsdataStocksMarcados: NewsDataArticle[] = newsdataStocksMerged.map((a) => ({
+    ...a,
+    _yieldscanStocksQuery: true,
   }))
 
   const newsdataAiMarcados: NewsDataArticle[] = newsdataAiMerged.map((a) => ({
@@ -628,8 +684,10 @@ async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
   }))
 
   const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
-  const mergedNdComIa = mergeArticlesDedupe(mergedNd, newsdataAiMarcados)
+  const mergedNdComStocks = mergeArticlesDedupe(mergedNd, newsdataStocksMarcados)
+  const mergedNdComIa = mergeArticlesDedupe(mergedNdComStocks, newsdataAiMarcados)
   enrichYieldscanCryptoFlag(mergedNdComIa, newsdataCriptoMarcados)
+  enrichYieldscanStocksFlag(mergedNdComIa, newsdataStocksMarcados)
   enrichYieldscanAiFlag(mergedNdComIa, newsdataAiMerged)
   return mergedNdComIa
 }
@@ -643,12 +701,13 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
 }> {
   const ndKey = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim() || ''
 
-  const [ndBundle, coindesk, gnews, cryptoCv, cryptopanicResults] = await Promise.all([
+  const [ndBundle, coindesk, gnews, gnewsStocks, cryptoCv, cryptopanicResults] = await Promise.all([
     ndKey
       ? fetchNewsdataComRss(ndKey)
       : fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
     fetchCoindeskAsArticles(60),
     fetchGnewsAsArticles(),
+    fetchGnewsStocksAsArticles(),
     fetchCryptoCvAsArticles(),
     fetchCryptopanicAsNewsDataArticles(),
   ])
@@ -658,11 +717,18 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
     _yieldscanCryptoQuery: true,
   }))
 
+  const gnewsStocksMarcados: NewsDataArticle[] = gnewsStocks.map((a) => ({
+    ...a,
+    _yieldscanStocksQuery: true,
+  }))
+
   let merged = mergeArticlesDedupe(gnews, coindeskMarcados)
+  merged = mergeArticlesDedupe(merged, gnewsStocksMarcados)
   merged = mergeArticlesDedupe(merged, cryptoCv)
   merged = mergeArticlesDedupe(merged, cryptopanicResults)
   merged = mergeArticlesDedupe(merged, ndBundle)
   enrichYieldscanCryptoFlag(merged, [...cryptoCv, ...coindeskMarcados])
+  enrichYieldscanStocksFlag(merged, gnewsStocksMarcados)
   merged = dedupeArtigosPorTitulo(merged)
 
   const temChave =

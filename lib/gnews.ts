@@ -104,3 +104,54 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
     return []
   }
 }
+
+/** Notícias de bolsa americana (EN + PT). */
+export async function fetchGnewsStocksAsArticles(): Promise<NewsDataArticle[]> {
+  const token = process.env.GNEWS_API_KEY?.trim()
+  if (!token) return []
+
+  const q =
+    'NASDAQ OR NYSE OR "stock market" OR earnings OR NVIDIA OR Apple OR Microsoft OR Tesla OR "Wall Street" OR "S&P 500"'
+  const url = new URL(GNEWS_SEARCH)
+  url.searchParams.set('q', q)
+  url.searchParams.set('lang', 'en')
+  url.searchParams.set('sortby', 'publishedAt')
+  url.searchParams.set('max', '20')
+  url.searchParams.set('token', token)
+
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 12_000)
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      const data: unknown = await res.json().catch(() => null)
+      const rec = asRecord(data)
+      if (!rec) return []
+
+      const articles = rec.articles
+      if (!Array.isArray(articles)) return []
+
+      const out: NewsDataArticle[] = []
+      for (const item of articles) {
+        const r = asRecord(item)
+        if (!r) continue
+        const mapped = mapArticle(r)
+        if (!mapped) continue
+        out.push({
+          ...mapped,
+          article_id: `gnews-stocks-${mapped.article_id ?? hashId(mapped.link ?? '')}`,
+        })
+      }
+      return out
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch {
+    return []
+  }
+}

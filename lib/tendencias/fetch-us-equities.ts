@@ -1,6 +1,7 @@
 /**
- * Cotações de ações americanas via Financial Modeling Prep (FMP_API_KEY).
+ * Cotações de ações americanas — FMP stable API + fallback CoinGecko (xStock).
  */
+import { fetchEquitiesFromCoingecko } from '@/lib/tendencias/fetch-equities-coingecko'
 import {
   US_AI_TECH_TICKERS,
   equityDisplayName,
@@ -10,7 +11,8 @@ import {
 } from '@/lib/us-equities'
 import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 
-const FMP_BASE = 'https://financialmodelingprep.com/api/v3'
+const FMP_STABLE = 'https://financialmodelingprep.com/stable'
+const FMP_LEGACY = 'https://financialmodelingprep.com/api/v3'
 
 function fmpKey(): string {
   return process.env.FMP_API_KEY?.trim() ?? ''
@@ -47,44 +49,74 @@ function mapStockRow(raw: FmpStockRaw): TendenciasEquityRow | null {
   }
 }
 
-async function fetchQuotesBatch(symbols: string[]): Promise<TendenciasEquityRow[]> {
+async function fetchJson(url: string): Promise<unknown> {
+  const res = await fetch(url, {
+    next: { revalidate: 120 },
+    signal: AbortSignal.timeout(18_000),
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) return null
+  return res.json()
+}
+
+async function fetchStableBatch(symbols: string[]): Promise<TendenciasEquityRow[]> {
   const key = fmpKey()
   if (!key || symbols.length === 0) return []
 
-  const chunk = symbols.slice(0, 40).join(',')
-  try {
-    const url = `${FMP_BASE}/quote/${encodeURIComponent(chunk)}?apikey=${encodeURIComponent(key)}`
-    const res = await fetch(url, {
-      next: { revalidate: 120 },
-      signal: AbortSignal.timeout(18_000),
-      headers: { Accept: 'application/json' },
-    })
-    if (!res.ok) return []
-    const rows = (await res.json()) as FmpStockRaw[]
-    if (!Array.isArray(rows)) return []
-    return rows.map(mapStockRow).filter((r): r is TendenciasEquityRow => r != null)
-  } catch {
-    return []
+  const list = symbols.slice(0, 40).join(',')
+  const urls = [
+    `${FMP_STABLE}/batch-quote?symbols=${encodeURIComponent(list)}&apikey=${encodeURIComponent(key)}`,
+    `${FMP_LEGACY}/quote/${encodeURIComponent(list)}?apikey=${encodeURIComponent(key)}`,
+  ]
+
+  for (const url of urls) {
+    try {
+      const data = await fetchJson(url)
+      if (!Array.isArray(data)) continue
+      const rows = data.map(mapStockRow).filter((r): r is TendenciasEquityRow => r != null)
+      if (rows.length) return rows
+    } catch {
+      /* try next */
+    }
   }
+
+  const out: TendenciasEquityRow[] = []
+  for (const sym of symbols.slice(0, 12)) {
+    try {
+      const url = `${FMP_STABLE}/quote?symbol=${encodeURIComponent(sym)}&apikey=${encodeURIComponent(key)}`
+      const data = await fetchJson(url)
+      const row = Array.isArray(data) ? data[0] : data
+      if (row && typeof row === 'object') {
+        const mapped = mapStockRow(row as FmpStockRaw)
+        if (mapped) out.push(mapped)
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return out
 }
 
 async function fetchActives(): Promise<TendenciasEquityRow[]> {
   const key = fmpKey()
   if (!key) return []
-  try {
-    const url = `${FMP_BASE}/stock_market/actives?apikey=${encodeURIComponent(key)}`
-    const res = await fetch(url, {
-      next: { revalidate: 120 },
-      signal: AbortSignal.timeout(18_000),
-      headers: { Accept: 'application/json' },
-    })
-    if (!res.ok) return []
-    const rows = (await res.json()) as FmpStockRaw[]
-    if (!Array.isArray(rows)) return []
-    return rows.map(mapStockRow).filter((r): r is TendenciasEquityRow => r != null)
-  } catch {
-    return []
+
+  const urls = [
+    `${FMP_STABLE}/most-actives?apikey=${encodeURIComponent(key)}`,
+    `${FMP_LEGACY}/stock_market/actives?apikey=${encodeURIComponent(key)}`,
+  ]
+
+  for (const url of urls) {
+    try {
+      const data = await fetchJson(url)
+      if (!Array.isArray(data)) continue
+      const rows = data.map(mapStockRow).filter((r): r is TendenciasEquityRow => r != null)
+      if (rows.length) return rows
+    } catch {
+      /* try next */
+    }
   }
+  return []
 }
 
 function dedupeBySymbol(rows: TendenciasEquityRow[]): TendenciasEquityRow[] {
@@ -106,6 +138,33 @@ function sortByChange(rows: TendenciasEquityRow[]): TendenciasEquityRow[] {
   return [...rows].sort((a, b) => Math.abs(b.changePct ?? 0) - Math.abs(a.changePct ?? 0))
 }
 
+function buildSnapshot(
+  watchlist: TendenciasEquityRow[],
+  actives: TendenciasEquityRow[],
+  sourceLabel: string,
+): UsEquitiesSnapshot {
+  const aiWatchlist = sortByChange(
+    watchlist.filter((r) => ['ia', 'semis', 'big-tech'].includes(r.sectorTag)),
+  ).slice(0, 12)
+
+  const highlights = sortByChange(watchlist).slice(0, 8)
+  const topVolume = sortByVolume(dedupeBySymbol([...actives, ...watchlist])).slice(0, 10)
+
+  const leader = highlights[0]
+  const volLeader = topVolume[0]
+
+  let summary = `Mercado acionário EUA (${sourceLabel}). `
+  if (leader?.changePct != null) {
+    summary += `${leader.name} (${leader.symbol}) ${leader.changePct >= 0 ? '+' : ''}${leader.changePct.toFixed(2)}% hoje. `
+  }
+  if (volLeader?.volume != null) {
+    summary += `Maior volume: ${volLeader.symbol}. `
+  }
+  summary += 'Foco em tecnologia e IA.'
+
+  return { highlights, topVolume, aiWatchlist, summary }
+}
+
 export type UsEquitiesSnapshot = {
   highlights: TendenciasEquityRow[]
   topVolume: TendenciasEquityRow[]
@@ -115,37 +174,16 @@ export type UsEquitiesSnapshot = {
 
 export async function fetchUsEquitiesSnapshot(): Promise<UsEquitiesSnapshot | null> {
   const key = fmpKey()
-  if (!key) return null
 
-  const [watchlist, actives] = await Promise.all([
-    fetchQuotesBatch([...US_AI_TECH_TICKERS]),
-    fetchActives(),
-  ])
-
-  const aiWatchlist = sortByChange(
-    watchlist.filter((r) => ['ia', 'semis', 'big-tech'].includes(r.sectorTag)),
-  ).slice(0, 12)
-
-  const highlights = sortByChange(watchlist).slice(0, 8)
-
-  const topVolume = sortByVolume(dedupeBySymbol([...actives, ...watchlist])).slice(0, 10)
-
-  const leader = highlights[0]
-  const volLeader = topVolume[0]
-
-  let summary = 'Mercado acionário EUA (dados FMP). '
-  if (leader?.changePct != null) {
-    summary += `${leader.name} (${leader.symbol}) ${leader.changePct >= 0 ? '+' : ''}${leader.changePct.toFixed(2)}% hoje. `
+  if (key) {
+    const [watchlist, actives] = await Promise.all([
+      fetchStableBatch([...US_AI_TECH_TICKERS]),
+      fetchActives(),
+    ])
+    if (watchlist.length > 0) {
+      return buildSnapshot(watchlist, actives, 'FMP')
+    }
   }
-  if (volLeader?.volume != null) {
-    summary += `Maior volume entre as ações monitorizadas: ${volLeader.symbol}. `
-  }
-  summary += 'Destaques focados em tecnologia e IA.'
 
-  return {
-    highlights,
-    topVolume,
-    aiWatchlist,
-    summary,
-  }
+  return fetchEquitiesFromCoingecko()
 }
