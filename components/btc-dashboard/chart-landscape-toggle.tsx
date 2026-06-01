@@ -1,11 +1,11 @@
 'use client'
 
-import { Smartphone } from 'lucide-react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useChartLandscapeContext } from '@/components/btc-dashboard/chart-landscape-context'
 import { cn } from '@/lib/utils'
 
-/** Botão visível no header (mobile) para girar o gráfico em paisagem. */
+/** Botão visível no header (mobile) para ampliar o gráfico a ecrã cheio. */
 export function ChartLandscapeToggle() {
   const ctx = useChartLandscapeContext()
   if (!ctx?.isMobile) return null
@@ -25,13 +25,18 @@ export function ChartLandscapeToggle() {
       )}
       onClick={toggle}
       aria-pressed={active}
-      title={active ? 'Voltar à vertical' : 'Girar ecrã — gráfico em horizontal'}
+      title={
+        active
+          ? 'Sair do ecrã cheio'
+          : 'Ampliar gráfico. Para paisagem, rode o telemóvel (não gira a interface).'
+      }
     >
-      <Smartphone
-        className={cn('h-3.5 w-3.5 shrink-0', active ? 'rotate-0' : '-rotate-90')}
-        aria-hidden
-      />
-      <span className="font-medium">{active ? 'Vertical' : 'Girar'}</span>
+      {active ? (
+        <Minimize2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      ) : (
+        <Maximize2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      )}
+      <span className="font-medium">{active ? 'Sair' : 'Ampliar'}</span>
     </Button>
   )
 }

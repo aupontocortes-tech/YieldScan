@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
+import { cn } from '@/lib/utils'
 import {
   CandlestickSeries,
   ColorType,
@@ -152,9 +153,9 @@ export function BtcChartsSuite({
   const stochRef = useRef<HTMLDivElement>(null)
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
 
-  const isMobile = useIsMobile()
-  /** No telemóvel: só o gráfico principal (painéis RSI/MACD/etc. ficam no desktop). */
-  const showSubPanels = !isMobile
+  const isPhone = useIsMobile()
+  const showSubPanels = !focusPrice
+  const oscHeight = isPhone ? 68 : 92
 
   const onChainOverlays = useMemo(
     () => (!focusPrice ? buildOnChainChartOverlays(closes, onChain) : []),
@@ -176,6 +177,15 @@ export function BtcChartsSuite({
       stochCfg.enabled ? stochastic(highs, lows, closes, stochCfg.kPeriod, stochCfg.dPeriod, stochCfg.smooth) : null,
     [highs, lows, closes, stochCfg.enabled, stochCfg.kPeriod, stochCfg.dPeriod, stochCfg.smooth],
   )
+
+  const showRsiPanel =
+    showSubPanels && rsiCfg.enabled && rsiSeries != null && rsiCfg.view === 'panel'
+  const showMacdPanel = showSubPanels && macdCfg.enabled && macdOut != null
+  const showStochPanel = showSubPanels && stochCfg.enabled && stochOut != null
+  const oscillatorCount = [showRsiPanel, showMacdPanel, showStochPanel].filter(Boolean).length
+  const hasSthLthBar = showSubPanels && onChain.sthLth.enabled
+  const hasOscillatorStack = oscillatorCount > 0 || hasSthLthBar
+
   const bbSeries = useMemo(() => {
     if (!bbCfg.enabled || closes.length < bbCfg.period) return null
     return bollingerBands(closes, bbCfg.period, bbCfg.stdDev)
@@ -576,7 +586,7 @@ export function BtcChartsSuite({
       }
     }
 
-    const subH = 92
+    const subH = oscHeight
     const chartW = Math.max(wrap.clientWidth, 200)
 
     const addOscillator = (
@@ -589,7 +599,7 @@ export function BtcChartsSuite({
       build(c)
     }
 
-    if (!focusPrice && showSubPanels && rsiCfg.enabled && rsiSeries && rsiCfg.view === 'panel') {
+    if (showRsiPanel && rsiSeries) {
       addOscillator(rsiRef.current, (cRsi) => {
         const line = cRsi.addSeries(LineSeries, {
           color: rsiCfg.colors.line,
@@ -621,7 +631,7 @@ export function BtcChartsSuite({
       })
     }
 
-    if (!focusPrice && showSubPanels && macdCfg.enabled && macdOut) {
+    if (showMacdPanel && macdOut) {
       addOscillator(macdRef.current, (cMacd) => {
         cMacd.addSeries(HistogramSeries, { priceFormat: { type: 'price', precision: 4, minMove: 0.0001 } }).setData(
           bars.map((b, i) => ({
@@ -639,7 +649,7 @@ export function BtcChartsSuite({
       })
     }
 
-    if (!focusPrice && showSubPanels && stochCfg.enabled && stochOut) {
+    if (showStochPanel && stochOut) {
       addOscillator(stochRef.current, (cStoch) => {
         cStoch
           .addSeries(LineSeries, { color: stochCfg.colors.k, lineWidth: stochCfg.lineWidth, priceLineVisible: false })
@@ -655,7 +665,7 @@ export function BtcChartsSuite({
 
     const ro = new ResizeObserver(() => {
       const nw = Math.max(wrap.clientWidth, 200)
-      charts.slice(1).forEach((c) => c.applyOptions({ width: nw }))
+      charts.slice(1).forEach((c) => c.applyOptions({ width: nw, height: subH }))
     })
     ro.observe(wrap)
 
@@ -684,7 +694,10 @@ export function BtcChartsSuite({
     candles,
     onChain,
     onChainOverlays,
-    showSubPanels,
+    showRsiPanel,
+    showMacdPanel,
+    showStochPanel,
+    oscHeight,
     resetKey,
     bullMarketBand,
     bullBandOnChart,
@@ -732,9 +745,19 @@ export function BtcChartsSuite({
     <div
       ref={wrapRef}
       data-no-swipe-nav
-      className="flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden rounded-lg bg-[#050505]"
+      className={cn(
+        'flex min-h-0 w-full flex-1 flex-col gap-0 rounded-lg bg-[#050505]',
+        isPhone && hasOscillatorStack ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
+      )}
     >
-      <div className="relative min-h-[200px] w-full min-w-0 flex-1 sm:min-h-[240px]">
+      <div
+        className={cn(
+          'relative w-full min-w-0',
+          isPhone && hasOscillatorStack
+            ? 'h-[min(46dvh,340px)] shrink-0'
+            : 'min-h-[200px] flex-1 sm:min-h-[240px]',
+        )}
+      >
         <div ref={mainRef} className="absolute inset-0" />
         <DrawingSystemOverlay bars={bars} />
         <ChartDrawingsLegend />
@@ -785,9 +808,9 @@ export function BtcChartsSuite({
             </div>
           )}
       </div>
-      {!focusPrice && showSubPanels && onChain.sthLth.enabled && sthLthLevels && (
-        <div className="border-t border-white/[0.06] px-2 py-2">
-          <div className="mb-1.5 flex flex-wrap gap-2">
+      {hasSthLthBar && sthLthLevels && (
+        <div className="shrink-0 border-t border-white/[0.06] px-2 py-1.5">
+          <div className="mb-1 flex flex-wrap gap-1.5">
             <div
               className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-white/[0.08] bg-black/50 pl-2 pr-2.5 py-1.5"
               style={{ borderLeftWidth: 3, borderLeftColor: onChain.sthLth.colorSth }}
@@ -803,37 +826,43 @@ export function BtcChartsSuite({
               <span className="truncate font-mono text-xs tabular-nums text-zinc-100">{fmtUsdCompact.format(sthLthLevels.lth)}</span>
             </div>
           </div>
-          <p className="text-[10px] leading-snug text-zinc-600">
-            EMA({onChain.sthLth.rsiPeriod}) e SMA({onChain.sthLth.smaPeriod}) no gráfico acima — linhas horizontais marcam o último nível (USD). Proxies visuais, não dados de holders on-chain.
-          </p>
+          {!isPhone && (
+            <p className="text-[10px] leading-snug text-zinc-600">
+              EMA({onChain.sthLth.rsiPeriod}) e SMA({onChain.sthLth.smaPeriod}) no gráfico acima — linhas horizontais marcam o último nível (USD). Proxies visuais, não dados de holders on-chain.
+            </p>
+          )}
         </div>
       )}
 
-      {!focusPrice && showSubPanels && rsiCfg.enabled && rsiCfg.view === 'panel' && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+      {showRsiPanel && (
+        <div className="shrink-0 border-t border-white/[0.06]">
+          <div className="px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-zinc-500 sm:py-1 sm:text-[10px]">
             RSI ({rsiCfg.period})
           </div>
-          <div ref={rsiRef} className="w-full shrink-0" />
-        </>
+          <div ref={rsiRef} className="w-full shrink-0" style={{ height: oscHeight }} />
+        </div>
       )}
 
-      {!focusPrice && showSubPanels && macdCfg.enabled && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">MACD</div>
-          <div ref={macdRef} className="w-full shrink-0" />
-        </>
+      {showMacdPanel && (
+        <div className="shrink-0 border-t border-white/[0.06]">
+          <div className="px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-zinc-500 sm:py-1 sm:text-[10px]">
+            MACD
+          </div>
+          <div ref={macdRef} className="w-full shrink-0" style={{ height: oscHeight }} />
+        </div>
       )}
 
-      {!focusPrice && showSubPanels && stochCfg.enabled && (
-        <>
-          <div className="border-t border-white/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Stochastic</div>
-          <div ref={stochRef} className="w-full shrink-0" />
-        </>
+      {showStochPanel && (
+        <div className="shrink-0 border-t border-white/[0.06]">
+          <div className="px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-zinc-500 sm:py-1 sm:text-[10px]">
+            Stochastic
+          </div>
+          <div ref={stochRef} className="w-full shrink-0" style={{ height: oscHeight }} />
+        </div>
       )}
 
-      {!focusPrice && showSubPanels && onChainOverlays.length > 0 && (
-        <div className="border-t border-white/[0.06] px-2 py-2">
+      {showSubPanels && onChainOverlays.length > 0 && (
+        <div className="shrink-0 border-t border-white/[0.06] px-2 py-1.5 sm:py-2">
           <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             On-chain no gráfico de preço
           </p>

@@ -38,6 +38,8 @@ import {
 import { ChartDrawingActiveBanner } from '@/components/btc-dashboard/chart-drawing-active-banner'
 import type { ChartLegendSettingsFocus } from '@/components/btc-dashboard/chart-indicator-legend'
 import { ChartLandscapeToggle } from '@/components/btc-dashboard/chart-landscape-toggle'
+import { useChartLandscapeContext } from '@/components/btc-dashboard/chart-landscape-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { DrawingsPanel } from '@/components/btc-dashboard/drawings-panel'
 
 const SettingsPanelLazy = dynamic(
@@ -95,6 +97,8 @@ export function BtcDashboard() {
   const [drawingsOpen, setDrawingsOpen] = useState(false)
   const [chartFocus, setChartFocus] = useState<'none' | 'goldenCross'>('none')
   const [chartResetKey, setChartResetKey] = useState(0)
+  const chartExpanded = useChartLandscapeContext()?.active ?? false
+  const isPhone = useIsMobile()
 
   const openGoldenCrossFullscreen = () => {
     const tf = TIMEFRAME_PRESETS.find((t) => t.id === '1d')
@@ -312,61 +316,77 @@ export function BtcDashboard() {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col bg-[#050505] text-zinc-100">
-      <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-x-2 gap-y-1.5 border-b border-white/[0.06] px-2 py-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2 sm:px-3 sm:py-2">
-        <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1">
-          <LayoutGrid className="h-4 w-4 shrink-0 text-[#d4af37]/90" aria-hidden />
+      <header
+        className={cn(
+          'grid shrink-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 border-b border-white/[0.06] px-2 py-1.5 sm:px-3 sm:py-2',
+          chartExpanded
+            ? 'grid-rows-1 items-center'
+            : 'grid-rows-[auto_auto] gap-y-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2',
+        )}
+      >
+        <div
+          className={cn(
+            'col-start-1 row-start-1 flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1',
+            chartExpanded && 'col-span-1',
+          )}
+        >
+          {!chartExpanded && <LayoutGrid className="h-4 w-4 shrink-0 text-[#d4af37]/90" aria-hidden />}
           <IndicatorPairSelector pair={pair} onSelect={setPair} />
         </div>
 
         <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:col-start-3 sm:row-start-1 sm:gap-1">
           <ChartLandscapeToggle />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-              drawerOpen
-                ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-            )}
-            onClick={() => {
-              setDrawingsOpen(false)
-              setDrawerOpen(true)
-            }}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Indicadores</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-              drawingsOpen
-                ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-            )}
-            onClick={() => {
-              setDrawerOpen(false)
-              setDrawingsOpen(true)
-            }}
-          >
-            <PenLine className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Desenhos</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1 text-[11px] text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-            onClick={resetLayout}
-            title="Reajusta zoom dos gráficos"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Layout</span>
-          </Button>
+          {!chartExpanded && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                  drawerOpen
+                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+                )}
+                onClick={() => {
+                  setDrawingsOpen(false)
+                  setDrawerOpen(true)
+                }}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Indicadores</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                  drawingsOpen
+                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+                )}
+                onClick={() => {
+                  setDrawerOpen(false)
+                  setDrawingsOpen(true)
+                }}
+              >
+                <PenLine className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Desenhos</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 text-[11px] text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                onClick={resetLayout}
+                title="Reajusta zoom dos gráficos"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Layout</span>
+              </Button>
+            </>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -391,7 +411,12 @@ export function BtcDashboard() {
 
         <nav
           aria-label="Intervalo das velas"
-          className="col-span-2 row-start-2 -mx-0.5 flex min-h-[36px] min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-0.5 py-0.5 [scrollbar-width:thin] sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mx-0"
+          className={cn(
+            'flex min-h-[36px] min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-0.5 py-0.5 [scrollbar-width:thin]',
+            chartExpanded
+              ? 'col-span-2 col-start-1 row-start-2 -mx-0.5'
+              : 'col-span-2 row-start-2 -mx-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mx-0',
+          )}
         >
           {TF_PRESETS.map((tf) => (
             <button
@@ -412,11 +437,23 @@ export function BtcDashboard() {
         </nav>
       </header>
 
-      <div className="shrink-0 border-b border-white/[0.04] px-2 py-1.5 sm:px-3 sm:py-2">
-        <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" />
-      </div>
+      {!chartExpanded && (
+        <div
+          className={cn(
+            'shrink-0 border-b border-white/[0.04] px-2 py-1.5 sm:px-3 sm:py-2',
+            isPhone && '[@media(orientation:landscape)]:hidden',
+          )}
+        >
+          <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" />
+        </div>
+      )}
 
-      <div className="flex min-h-0 min-h-[240px] flex-1 flex-col overflow-hidden p-1.5 sm:p-2 md:p-3">
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col overflow-hidden',
+          chartExpanded ? 'p-1' : 'min-h-[240px] p-1.5 sm:p-2 md:p-3',
+        )}
+      >
         {isError && (
           <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
             Não foi possível carregar as velas. Tenta outro intervalo ou atualiza.

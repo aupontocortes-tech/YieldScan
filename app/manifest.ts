@@ -11,7 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     display_override: ['standalone', 'browser'],
-    orientation: 'portrait-primary',
+    /** Permite rodar o telemóvel sem o PWA fechar ou forçar retrato. */
+    orientation: 'any',
     background_color: '#07090f',
     theme_color: '#07090f',
     categories: ['finance', 'productivity'],
