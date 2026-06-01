@@ -837,6 +837,36 @@ export function DashbuddyCryptoMarket() {
 
       {data && (
         <>
+          {cryptoHighlightSlots.length > 0 && (
+            <div>
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                <Coins className="h-4 w-4 text-cyan-500/80" />
+                Cripto em destaque
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+                {cryptoHighlightSlots.map(({ id, coin, index }) => {
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  if (displayCoin) {
+                    return (
+                      <HighlightCard
+                        key={`crypto-${displayCoin.id}-${index}`}
+                        coin={displayCoin}
+                        mercadoPrefs={displayPrefs}
+                      />
+                    )
+                  }
+                  return (
+                    <HighlightEmptyCard
+                      key={`empty-crypto-${id || index}`}
+                      id={id}
+                      mercadoPrefs={displayPrefs}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-400/95">
               <Building2 className="h-4 w-4" />
@@ -877,36 +907,6 @@ export function DashbuddyCryptoMarket() {
               </div>
             )}
           </div>
-
-          {cryptoHighlightSlots.length > 0 && (
-            <div>
-              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                <Coins className="h-4 w-4 text-cyan-500/80" />
-                Cripto em destaque
-              </h3>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
-                {cryptoHighlightSlots.map(({ id, coin, index }) => {
-                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
-                  if (displayCoin) {
-                    return (
-                      <HighlightCard
-                        key={`crypto-${displayCoin.id}-${index}`}
-                        coin={displayCoin}
-                        mercadoPrefs={displayPrefs}
-                      />
-                    )
-                  }
-                  return (
-                    <HighlightEmptyCard
-                      key={`empty-crypto-${id || index}`}
-                      id={id}
-                      mercadoPrefs={displayPrefs}
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
           {extraStockHighlightSlots.length > 0 && (
             <div>
