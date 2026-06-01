@@ -5,7 +5,7 @@
  * Documentação alinhada ao cliente oficial (base URL + /posts/).
  */
 
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 
 const CRYPTOPANIC_POSTS_URL = 'https://cryptopanic.com/api/developer/v2/posts/'
 

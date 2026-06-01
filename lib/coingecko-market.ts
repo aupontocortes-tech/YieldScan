@@ -7,6 +7,7 @@ import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
 import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
+import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 
 /** Moedas fiduciárias suportadas na UI (cotações e exibição). */
 export type MercadoFiat = 'usd' | 'brl' | 'eur'
@@ -38,6 +39,8 @@ export type MarketApiPayload = {
   highlightIds: string[]
   top10: MercadoCoin[]
   trending: MercadoCoin[]
+  /** Ações US em tendência (volume / movimento; FMP ou xStock). */
+  trendingStocks: TendenciasEquityRow[]
   cachedAt: string
   partial: boolean
   erro: string | null
@@ -537,6 +540,7 @@ function emptyPayload(
     highlightIds,
     top10: [],
     trending: [],
+    trendingStocks: [],
     cachedAt: new Date().toISOString(),
     partial,
     erro,
@@ -675,6 +679,7 @@ export async function agregarMercadoCoinGecko(
     highlightIds: ids,
     top10,
     trending,
+    trendingStocks: [],
     cachedAt: new Date().toISOString(),
     partial: partial || semDados,
     erro: semDados

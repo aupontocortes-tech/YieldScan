@@ -187,3 +187,16 @@ export async function fetchUsEquitiesSnapshot(): Promise<UsEquitiesSnapshot | nu
 
   return fetchEquitiesFromCoingecko()
 }
+
+/** Maior volume + maiores movimentos — secção «Em tendência» no Mercado. */
+export async function fetchMercadoStocksTrending(): Promise<TendenciasEquityRow[]> {
+  const snap = await fetchUsEquitiesSnapshot()
+  if (!snap) return []
+
+  const merged = dedupeBySymbol([
+    ...snap.topVolume,
+    ...sortByChange(snap.highlights),
+    ...snap.aiWatchlist,
+  ])
+  return merged.slice(0, 16)
+}

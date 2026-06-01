@@ -7,6 +7,7 @@ import {
   type MercadoCoin,
 } from '@/lib/coingecko-market'
 import { parseHighlightsQueryParam } from '@/lib/mercado-highlight-ids'
+import { fetchMercadoStocksTrending } from '@/lib/tendencias/fetch-us-equities'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,7 +58,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const fresh = applyHighlightIdCache(await agregarMercadoCoinGecko(highlightIds))
+    const [base, trendingStocks] = await Promise.all([
+      agregarMercadoCoinGecko(highlightIds),
+      fetchMercadoStocksTrending(),
+    ])
+    const fresh = applyHighlightIdCache({ ...base, trendingStocks })
 
     const anyHighlight = fresh.highlightCoins.some((c) => c != null && c.price != null)
     const semNada =
@@ -115,6 +120,7 @@ export async function GET(req: NextRequest) {
       highlightIds,
       top10: [],
       trending: [],
+      trendingStocks: [],
       cachedAt: new Date().toISOString(),
       partial: true,
       erro: 'Não foi possível obter dados de mercado.',

@@ -1,4 +1,4 @@
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 
 function dedupeKey(a: NewsDataArticle): string {
   const link = (a.link ?? '').trim().toLowerCase()

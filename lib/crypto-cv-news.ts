@@ -3,7 +3,7 @@
  * Resposta tratada de forma defensiva (estrutura pode variar).
  */
 
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 
 const CRYPTO_CV_NEWS_URL = 'https://cryptocurrency.cv/api/news'
 

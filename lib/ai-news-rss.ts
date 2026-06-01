@@ -3,7 +3,7 @@
  * A NewsData.io gratuita muitas vezes não devolve linhas suficientes para queries só de IA.
  */
 
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 import {
   normalizarTextoParaClassificacaoIa,
   textoIndicaFocoInteligenciaArtificial,

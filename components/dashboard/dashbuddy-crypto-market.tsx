@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { openYieldscanSqlite } from '@/lib/client-db/sqlite-core'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
+import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 import { syntheticHighlightCoin, withDisplayQuotes } from '@/lib/coingecko-market'
 import {
   highlightMetaFromPresetOrId,
@@ -102,6 +103,49 @@ function CoinThumb({ coin, size = 40 }: { coin: MercadoCoin; size?: number }) {
       size={size}
       className="bg-muted/40"
     />
+  )
+}
+
+function stockTrendHref(row: TendenciasEquityRow): string {
+  if (row.xstockId) {
+    return `https://www.coingecko.com/en/coins/${encodeURIComponent(row.xstockId)}`
+  }
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(row.symbol)}`
+}
+
+function StockTrendRowCard({ row }: { row: TendenciasEquityRow }) {
+  const up = (row.changePct ?? 0) >= 0
+  return (
+    <a
+      href={stockTrendHref(row)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-3 rounded-xl border border-border/50 bg-card/80 p-2.5 transition-colors hover:border-blue-500/35 hover:bg-card"
+    >
+      <TokenSymbolAvatar symbol={row.symbol} coingeckoId={row.xstockId} size={36} className="bg-muted/40" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate font-medium text-foreground">{row.name}</span>
+          <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{row.symbol}</span>
+        </div>
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="max-w-full break-words text-sm font-semibold tabular-nums leading-tight text-foreground">
+            {formatMercadoFiatAmount(row.price, 'usd')}
+          </span>
+          <span
+            className={cn(
+              'text-xs font-semibold tabular-nums',
+              up ? 'text-emerald-400' : 'text-red-400',
+            )}
+          >
+            {row.changePct != null && Number.isFinite(row.changePct)
+              ? `${up ? '+' : ''}${row.changePct.toFixed(2)}%`
+              : '—'}
+          </span>
+        </div>
+      </div>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-50" />
+    </a>
   )
 }
 
@@ -971,8 +1015,29 @@ export function DashbuddyCryptoMarket() {
             )}
           </div>
 
+          <div>
+            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <Building2 className="h-4 w-4 text-blue-500/80" />
+              Em tendência (bolsa US)
+            </h3>
+            <p className="-mt-2 mb-3 text-xs text-muted-foreground">
+              Maior volume e movimentos do dia — tecnologia e blue chips (FMP ou xStock).
+            </p>
+            {(data.trendingStocks ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tendências de ações indisponíveis no momento.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {(data.trendingStocks ?? []).map((r) => (
+                  <StockTrendRowCard key={`st-${r.symbol}`} row={r} />
+                ))}
+              </div>
+            )}
+          </div>
+
           <p className="text-center text-[11px] text-muted-foreground/70">
-            Fonte: CoinGecko API pública · <span className="tabular-nums">{data.fonte}</span> · última resposta{' '}
+            Fonte: CoinGecko
+            {(data.trendingStocks ?? []).length > 0 ? ' · ações US (FMP/xStock)' : ''} ·{' '}
+            <span className="tabular-nums">{data.fonte}</span> · última resposta{' '}
             {data.cachedAt ? new Date(data.cachedAt).toLocaleString('pt-PT') : '—'}
           </p>
         </>

@@ -1,4 +1,4 @@
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 import { pareceIngles } from '@/lib/news-lang'
 import {
   NEGATIVE_WORDS,

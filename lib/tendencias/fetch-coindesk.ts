@@ -4,7 +4,7 @@
  * https://developers.coindesk.com
  */
 
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 
 function coindeskKey(): string {
   return (

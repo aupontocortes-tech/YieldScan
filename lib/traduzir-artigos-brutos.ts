@@ -1,4 +1,4 @@
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 import { pareceIngles, parecePortugues } from '@/lib/news-lang'
 import { traduzirParaPortugues } from '@/lib/translate'
 
