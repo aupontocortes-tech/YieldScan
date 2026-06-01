@@ -3,7 +3,7 @@
  * https://gnews.io/
  */
 
-import type { NewsDataArticle } from '@/lib/newsdata'
+import type { NewsDataArticle } from '@/lib/news-article'
 
 const GNEWS_SEARCH = 'https://gnews.io/api/v4/search'
 

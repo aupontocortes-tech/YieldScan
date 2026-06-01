@@ -45,51 +45,8 @@ export interface NoticiaProcessada extends InsightNoticia {
   isBreaking: boolean
 }
 
-export interface NewsDataArticle {
-  article_id?: string
-  title?: string | null
-  link?: string | null
-  description?: string | null
-  content?: string | null
-  pubDate?: string | null
-  source_id?: string | null
-  source_name?: string | null
-  source_priority?: number | null
-  category?: string[] | null
-  country?: string[] | null
-  language?: string | null
-  keywords?: string[] | null
-  image_url?: string | null
-  /** Campos opcionais de imagem que algumas fontes devolvem. */
-  image?: string | null
-  imageUrl?: string | null
-  thumbnail?: string | null
-  enclosure?: { link?: string | null; url?: string | null } | null
-  media?: { thumbnail?: string | null; content?: string | null } | null
-  /** Nome comum em APIs estilo NewsAPI. */
-  urlToImage?: string | null
-  /**
-   * Interno: veio da query NewsData só cripto — classificar como CRIPTO no filtro
-   * (a API já filtrou por termos cripto; sem isto, muitos caíam em «Macro» só pela palavra «mercado»).
-   */
-  _yieldscanCryptoQuery?: boolean
-  /** Interno: veio da query NewsData só IA — classificar como IA no filtro. */
-  _yieldscanAiQuery?: boolean
-  /** Interno: veio da query NewsData só ações US — classificar como ACOES no filtro. */
-  _yieldscanStocksQuery?: boolean
-}
-
-export type NewsDataApiResponse =
-  | {
-      status: 'success'
-      totalResults?: number
-      results: NewsDataArticle[]
-      nextPage?: string
-    }
-  | {
-      status: 'error'
-      results: { message?: string; code?: string }
-    }
+export type { NewsDataArticle, NewsDataApiResponse } from '@/lib/news-article'
+import type { NewsDataArticle, NewsDataApiResponse } from '@/lib/news-article'
 
 /** Query geral: macro, geo e mercado (+ termos IA para classificação no feed «Todos»). */
 const KEYWORDS_Q =
