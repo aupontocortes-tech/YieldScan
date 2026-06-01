@@ -44,11 +44,14 @@ export function MarketCard({
   signal,
   pair,
   variant = 'default',
+  compact = false,
 }: {
   bars: OhlcvBar[]
   signal: SignalEngineResult | null
   pair: IndicatorPair
   variant?: 'default' | 'strip'
+  /** Faixa mínima no mobile — menos texto à frente do gráfico. */
+  compact?: boolean
 }) {
   const CG_BY_BASE: Record<string, string> = {
     BTC: 'bitcoin',
@@ -97,6 +100,30 @@ export function MarketCard({
         : '—'
 
   if (variant === 'strip') {
+    if (compact) {
+      return (
+        <div className="flex items-center gap-2 overflow-hidden text-[10px] text-zinc-400">
+          <span className="shrink-0 font-mono font-medium tabular-nums text-zinc-100">
+            {last
+              ? pair.quote === 'USD'
+                ? `$${last.close.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                : `${last.close.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+              : '—'}
+          </span>
+          {ch != null && (
+            <span className={cn('shrink-0 tabular-nums', ch >= 0 ? 'text-emerald-400/90' : 'text-red-400/90')}>
+              {ch >= 0 ? '+' : ''}
+              {ch.toFixed(2)}%
+            </span>
+          )}
+          {signal ? (
+            <span className="min-w-0 truncate text-zinc-500">
+              {TRADE_SIGNAL_PT[signal.tradeSignal].replace(/^[^\s]+\s/, '')}
+            </span>
+          ) : null}
+        </div>
+      )
+    }
     return (
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-zinc-400 sm:gap-x-5 sm:text-[11px] sm:gap-y-1.5">
         <span className="font-mono text-zinc-100">
@@ -116,7 +143,7 @@ export function MarketCard({
         {signal ? (
           <>
             <span className="text-[#d4af37]">Score {signal.score}</span>
-            <span className="text-zinc-300">{MARKET_REGIME_PT[signal.marketRegime]}</span>
+            <span className="hidden text-zinc-300 min-[400px]:inline">{MARKET_REGIME_PT[signal.marketRegime]}</span>
             <span className="text-zinc-200">{TRADE_SIGNAL_PT[signal.tradeSignal]}</span>
           </>
         ) : (
@@ -124,7 +151,7 @@ export function MarketCard({
         )}
         <span className="hidden sm:inline text-zinc-600">{trendLabel}</span>
         {ctx?.coingecko && (
-          <span className="text-zinc-500">
+          <span className="hidden text-zinc-500 sm:inline">
             CG US$ {ctx.coingecko.usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             {ctx.coingecko.change24h != null && (
               <span className={ctx.coingecko.change24h >= 0 ? ' text-emerald-400/90' : ' text-red-400/90'}>

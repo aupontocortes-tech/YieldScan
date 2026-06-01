@@ -2,37 +2,57 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export type ChartLandscapeMode = 'off' | 'fullscreen'
+export type ChartViewState = {
+  fullscreen: boolean
+  rotated: boolean
+}
 
 function notifyChartResize() {
   window.dispatchEvent(new Event('resize'))
   requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
 }
 
-/** Ecrã cheio do gráfico (sem rotação CSS — evita layout torto no preview/desktop). */
+/** Ampliar (ecrã cheio) e Rodar (paisagem simulada em retrato) — independentes. */
 export function useChartLandscape() {
-  const [mode, setMode] = useState<ChartLandscapeMode>('off')
-  const modeRef = useRef(mode)
-  modeRef.current = mode
+  const [view, setView] = useState<ChartViewState>({ fullscreen: false, rotated: false })
+  const viewRef = useRef(view)
+  viewRef.current = view
 
-  const active = mode === 'fullscreen'
+  const active = view.fullscreen || view.rotated
 
-  const disable = useCallback(() => {
-    setMode('off')
-    notifyChartResize()
-  }, [])
-
-  const enable = useCallback(() => {
-    setMode('fullscreen')
+  const notify = useCallback(() => {
     notifyChartResize()
     setTimeout(notifyChartResize, 120)
     setTimeout(notifyChartResize, 400)
   }, [])
 
-  const toggle = useCallback(() => {
-    if (modeRef.current !== 'off') disable()
-    else enable()
-  }, [disable, enable])
+  const setPartial = useCallback(
+    (patch: Partial<ChartViewState>) => {
+      setView((v) => {
+        const next = { ...v, ...patch }
+        viewRef.current = next
+        return next
+      })
+      notify()
+    },
+    [notify],
+  )
+
+  const disable = useCallback(() => {
+    setView({ fullscreen: false, rotated: false })
+    viewRef.current = { fullscreen: false, rotated: false }
+    notifyChartResize()
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    const v = viewRef.current
+    setPartial({ fullscreen: !v.fullscreen })
+  }, [setPartial])
+
+  const toggleRotated = useCallback(() => {
+    const v = viewRef.current
+    setPartial({ rotated: !v.rotated })
+  }, [setPartial])
 
   useEffect(() => {
     if (!active) return
@@ -43,5 +63,22 @@ export function useChartLandscape() {
     }
   }, [active])
 
-  return { active, mode, toggle, disable, enable }
+  /** Rotação física: desliga modo simulado para não duplicar. */
+  useEffect(() => {
+    const onOrient = () => {
+      if (viewRef.current.rotated) setPartial({ rotated: false })
+    }
+    window.addEventListener('orientationchange', onOrient)
+    return () => window.removeEventListener('orientationchange', onOrient)
+  }, [setPartial])
+
+  return {
+    view,
+    fullscreen: view.fullscreen,
+    rotated: view.rotated,
+    active,
+    toggleFullscreen,
+    toggleRotated,
+    disable,
+  }
 }

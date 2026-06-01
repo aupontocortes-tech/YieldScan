@@ -97,7 +97,8 @@ export function BtcDashboard() {
   const [drawingsOpen, setDrawingsOpen] = useState(false)
   const [chartFocus, setChartFocus] = useState<'none' | 'goldenCross'>('none')
   const [chartResetKey, setChartResetKey] = useState(0)
-  const chartExpanded = useChartLandscapeContext()?.active ?? false
+  const chartCtx = useChartLandscapeContext()
+  const chartExpanded = chartCtx?.fullscreen ?? chartCtx?.rotateActive ?? false
   const isPhone = useIsMobile()
 
   const openGoldenCrossFullscreen = () => {
@@ -440,11 +441,12 @@ export function BtcDashboard() {
       {!chartExpanded && (
         <div
           className={cn(
-            'shrink-0 border-b border-white/[0.04] px-2 py-1.5 sm:px-3 sm:py-2',
+            'shrink-0 border-b border-white/[0.04]',
+            isPhone ? 'px-2 py-1' : 'px-2 py-1.5 sm:px-3 sm:py-2',
             isPhone && '[@media(orientation:landscape)]:hidden',
           )}
         >
-          <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" />
+          <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" compact={isPhone} />
         </div>
       )}
 

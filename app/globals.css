@@ -236,3 +236,11 @@
 .wallet-adapter-modal-wrapper {
   z-index: 200001 !important;
 }
+
+/* Logo TradingView (lightweight-charts) — desactivado também via attributionLogo */
+.yieldscan-chart-root a[href*='tradingview.com'],
+.yieldscan-chart-root table a {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

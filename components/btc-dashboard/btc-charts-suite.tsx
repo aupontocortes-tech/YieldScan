@@ -50,26 +50,27 @@ const BG = '#050505'
 const GRID = '#1a1a1a'
 const TEXT = '#d4d4d8'
 
-/** Espaço extra (px) entre o último ponto e a régua de preços — evita que o rótulo tape a ponta da linha. */
-const TIME_SCALE_RIGHT_GAP_PX = 14
-
-function baseLayout(width: number, height: number) {
+function baseLayout(width: number, height: number, compact = false) {
   return {
     width,
     height,
     layout: {
       background: { type: ColorType.Solid, color: BG },
       textColor: TEXT,
-      fontSize: 11,
+      fontSize: compact ? 10 : 11,
+      attributionLogo: false,
     },
     grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
     crosshair: { mode: CrosshairMode.Normal },
-    rightPriceScale: { borderColor: '#27272a' },
+    rightPriceScale: {
+      borderColor: '#27272a',
+      minimumWidth: compact ? 44 : undefined,
+    },
     timeScale: {
       borderColor: '#27272a',
       timeVisible: true,
       secondsVisible: false,
-      rightOffsetPixels: TIME_SCALE_RIGHT_GAP_PX,
+      rightOffsetPixels: compact ? 36 : 18,
     },
   } as const
 }
@@ -272,7 +273,7 @@ export function BtcChartsSuite({
     const charts: ReturnType<typeof createChart>[] = []
 
     const cMain = createChart(elM, {
-      ...baseLayout(0, 0),
+      ...baseLayout(0, 0, isPhone),
       autoSize: true,
     })
     charts.push(cMain)
@@ -286,6 +287,8 @@ export function BtcChartsSuite({
       borderDownColor: down,
       wickUpColor: up,
       wickDownColor: wickDown,
+      priceLineVisible: false,
+      lastValueVisible: !isPhone,
     })
     registerMainChart({ chart: cMain, series: candle, container: elM })
     candle.setData(
@@ -305,7 +308,10 @@ export function BtcChartsSuite({
     )
 
     cMain.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } })
-    cMain.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.18 } })
+    cMain.priceScale('right').applyOptions({
+      scaleMargins: { top: 0.08, bottom: 0.12 },
+      autoScale: true,
+    })
 
     for (const ov of onChainOverlays) {
       candle.createPriceLine({
@@ -313,8 +319,8 @@ export function BtcChartsSuite({
         color: ov.color,
         lineWidth: ov.lineWidth,
         lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: overlayAxisTitleShort(ov),
+        axisLabelVisible: !isPhone,
+        title: isPhone ? '' : overlayAxisTitleShort(ov),
       })
     }
 
@@ -330,7 +336,7 @@ export function BtcChartsSuite({
         title: `${ma.type} ${ma.period}`,
         lineWidth: ma.lineWidth,
         priceLineVisible: false,
-        lastValueVisible: true,
+        lastValueVisible: !isPhone,
       }).setData(lineData)
     })
 
@@ -345,7 +351,7 @@ export function BtcChartsSuite({
           title: 'SMA 200 (Diário)',
           lineWidth: s200.lineWidth,
           priceLineVisible: false,
-          lastValueVisible: true,
+          lastValueVisible: !isPhone,
         }).setData(smaLine)
       }
     }
@@ -361,7 +367,7 @@ export function BtcChartsSuite({
           title: 'SMA 50 (Semanal)',
           lineWidth: s50.lineWidth,
           priceLineVisible: false,
-          lastValueVisible: true,
+          lastValueVisible: !isPhone,
         }).setData(smaLine)
       }
     }
@@ -377,7 +383,7 @@ export function BtcChartsSuite({
           title: 'SMA 50 (Diário)',
           lineWidth: gc.lineWidth,
           priceLineVisible: false,
-          lastValueVisible: true,
+          lastValueVisible: !isPhone,
         }).setData(line50)
       }
     }
@@ -393,7 +399,7 @@ export function BtcChartsSuite({
           title: 'SMA 200 (Diário)',
           lineWidth: gc.lineWidth,
           priceLineVisible: false,
-          lastValueVisible: true,
+          lastValueVisible: !isPhone,
         }).setData(line200)
       }
     }
@@ -402,7 +408,7 @@ export function BtcChartsSuite({
       const bw = bullMarketBand
       const bandOpts = {
         priceLineVisible: false,
-        lastValueVisible: true,
+        lastValueVisible: !isPhone,
         lineWidth: bw.lineWidth,
       } as const
       const fillLineWidth = Math.min(4, bw.lineWidth + 1) as 1 | 2 | 3 | 4
@@ -490,8 +496,8 @@ export function BtcChartsSuite({
           color: st.colorSth,
           lineWidth: st.lineWidth,
           /** Linha horizontal no gráfico ao nível do último valor (nível “até onde vai” o STH proxy) */
-          priceLineVisible: true,
-          lastValueVisible: true,
+          priceLineVisible: !isPhone,
+          lastValueVisible: !isPhone,
         })
         .setData(
           bars
@@ -502,8 +508,8 @@ export function BtcChartsSuite({
         .addSeries(LineSeries, {
           color: st.colorLth,
           lineWidth: st.lineWidth,
-          priceLineVisible: true,
-          lastValueVisible: true,
+          priceLineVisible: !isPhone,
+          lastValueVisible: !isPhone,
         })
         .setData(
           bars
@@ -522,7 +528,7 @@ export function BtcChartsSuite({
             color: BTC_CHART_THEME.zoneMa50,
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
+            axisLabelVisible: !isPhone,
             title: 'MA50',
           })
         if (ma100v != null)
@@ -531,7 +537,7 @@ export function BtcChartsSuite({
             color: BTC_CHART_THEME.zoneMa100,
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
+            axisLabelVisible: !isPhone,
             title: 'MA100',
           })
         if (ma200v != null)
@@ -540,7 +546,7 @@ export function BtcChartsSuite({
             color: BTC_CHART_THEME.zoneMa200,
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
+            axisLabelVisible: !isPhone,
             title: 'MA200',
           })
       }
@@ -550,16 +556,16 @@ export function BtcChartsSuite({
           color: BTC_CHART_THEME.zoneSupportResistance,
           lineWidth: 1,
           lineStyle: LineStyle.Dotted,
-          axisLabelVisible: true,
-          title: 'Máx 50v',
+          axisLabelVisible: !isPhone,
+          title: isPhone ? '' : 'Máx 50v',
         })
         anchor.createPriceLine({
           price: recentLow,
           color: BTC_CHART_THEME.zoneSupportResistance,
           lineWidth: 1,
           lineStyle: LineStyle.Dotted,
-          axisLabelVisible: true,
-          title: 'Mín 50v',
+          axisLabelVisible: !isPhone,
+          title: isPhone ? '' : 'Mín 50v',
         })
       }
       if (zonesCfg.showSmartMultipliers && zoneValues.ma200v != null) {
@@ -579,8 +585,8 @@ export function BtcChartsSuite({
               color,
               lineWidth: 1,
               lineStyle: LineStyle.Dashed,
-              axisLabelVisible: true,
-              title: label,
+              axisLabelVisible: !isPhone,
+              title: isPhone ? '' : label,
             })
         })
       }
@@ -594,7 +600,7 @@ export function BtcChartsSuite({
       build: (chart: ReturnType<typeof createChart>) => void,
     ) => {
       if (!el) return
-      const c = createChart(el, { ...baseLayout(chartW, subH) })
+      const c = createChart(el, { ...baseLayout(chartW, subH, isPhone) })
       charts.push(c)
       build(c)
     }
@@ -616,7 +622,7 @@ export function BtcChartsSuite({
             color: rsiCfg.colors.oversold,
             lineWidth: 1,
             lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
+            axisLabelVisible: !isPhone,
             title: String(rsiCfg.oversold),
           })
           line.createPriceLine({
@@ -624,7 +630,7 @@ export function BtcChartsSuite({
             color: rsiCfg.colors.overbought,
             lineWidth: 1,
             lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
+            axisLabelVisible: !isPhone,
             title: String(rsiCfg.overbought),
           })
         }
@@ -712,6 +718,7 @@ export function BtcChartsSuite({
     candleBars,
     timeframe.id,
     registerMainChart,
+    isPhone,
   ])
 
   useEffect(() => {
@@ -758,12 +765,13 @@ export function BtcChartsSuite({
             : 'min-h-[200px] flex-1 sm:min-h-[240px]',
         )}
       >
-        <div ref={mainRef} className="absolute inset-0" />
+        <div ref={mainRef} className="yieldscan-chart-root absolute inset-0" />
         <DrawingSystemOverlay bars={bars} />
         <ChartDrawingsLegend />
         <ChartIndicatorLegend
           goldenCrossState={goldenCrossState}
           onOpenSettings={onOpenIndicatorSettings}
+          className={isPhone ? 'bottom-auto left-1.5 top-1.5 max-w-[min(42%,9.5rem)]' : undefined}
         />
         {bullMarketBand.enabled && bullBandLoading && (
           <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-[#d4af37]/30 bg-black/80 px-2 py-1 text-[10px] text-[#d4af37]">
@@ -861,7 +869,7 @@ export function BtcChartsSuite({
         </div>
       )}
 
-      {showSubPanels && onChainOverlays.length > 0 && (
+      {showSubPanels && onChainOverlays.length > 0 && !isPhone && (
         <div className="shrink-0 border-t border-white/[0.06] px-2 py-1.5 sm:py-2">
           <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             On-chain no gráfico de preço
