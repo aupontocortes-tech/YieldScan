@@ -72,7 +72,8 @@ function baseLayout(width: number, height: number, compact = false) {
     crosshair: { mode: CrosshairMode.Normal },
     rightPriceScale: {
       borderColor: '#27272a',
-      minimumWidth: compact ? 44 : undefined,
+      /** Largura mínima para caber preço BTC (ex. 67258.80) no mobile. */
+      minimumWidth: compact ? 52 : undefined,
     },
     timeScale: {
       borderColor: '#27272a',
@@ -437,7 +438,7 @@ export function BtcChartsSuite({
       wickUpColor: up,
       wickDownColor: wickDown,
       priceLineVisible: false,
-      lastValueVisible: !isPhone,
+      lastValueVisible: true,
     })
     registerMainChart({ chart: cMain, series: candle, container: elM })
     const candleData = candleBars.map((b) => ({
