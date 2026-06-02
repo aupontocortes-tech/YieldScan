@@ -14,6 +14,8 @@ import {
   type RawProtocolFees,
   type RawYieldPool,
 } from '@/lib/tendencias/fetch-defi'
+import { applyRankedNewsMentions } from '@/lib/tendencias/rank-news-mentions'
+import { applyRankedNewsMentions } from '@/lib/tendencias/rank-news-mentions'
 import {
   analyzeTrimNews,
   newsSentimentToLevel,
@@ -424,15 +426,6 @@ export function buildTrimPayload(input: {
     tone,
   })
 
-  const alerts = buildAlerts({
-    markets: input.markets,
-    trimById,
-    rows,
-    news: newsAnalysis.insight,
-    defi,
-    unlocks: buckets.proximosUnlocks,
-  })
-
   const equities: TendenciasEquitiesPanel | null = input.usEquities
     ? {
         summary: input.usEquities.summary,
@@ -441,6 +434,21 @@ export function buildTrimPayload(input: {
         aiWatchlist: input.usEquities.aiWatchlist,
       }
     : null
+
+  const news = applyRankedNewsMentions(newsAnalysis.insight, {
+    tokenRows: rows,
+    equities,
+    period,
+  })
+
+  const alerts = buildAlerts({
+    markets: input.markets,
+    trimById,
+    rows,
+    news,
+    defi,
+    unlocks: buckets.proximosUnlocks,
+  })
 
   return {
     updatedAt: new Date().toISOString(),
@@ -456,7 +464,7 @@ export function buildTrimPayload(input: {
     },
     market,
     observeToday,
-    news: newsAnalysis.insight,
+    news,
     narratives,
     buckets,
     defi,

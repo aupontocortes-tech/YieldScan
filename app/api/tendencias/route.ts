@@ -115,7 +115,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v13'],
+  ['tendencias-trim-v14'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v13',
+          'X-Tendencias-Cache': 'trim-v14',
         }
 
     return NextResponse.json(

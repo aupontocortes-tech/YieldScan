@@ -94,7 +94,12 @@ export type TendenciasNewsHeadline = {
   stockSymbols: string[]
 }
 
-export type TendenciasNewsMention = { symbol: string; count: number }
+export type TendenciasNewsMention = {
+  symbol: string
+  count: number
+  /** Variação % no período de momentum (só entra no top se > 0). */
+  changePct?: number | null
+}
 
 export type TendenciasNewsInsight = {
   positivo: number
@@ -104,6 +109,8 @@ export type TendenciasNewsInsight = {
   topMentions: TendenciasNewsMention[]
   topCryptoMentions: TendenciasNewsMention[]
   topStockMentions: TendenciasNewsMention[]
+  /** Período usado no filtro «preço a subir». */
+  rankingPeriod?: MomentumPeriod
   dominantNarrative: string | null
   headlines: TendenciasNewsHeadline[]
 }

@@ -9,10 +9,12 @@ import {
   type SentimentLevel,
   type TendenciasAlert,
   type TendenciasEquityRow,
+  type TendenciasNewsMention,
   type TendenciasPrefs,
   type TendenciasTokenRow,
 } from '@/lib/tendencias/types'
 import { readTendenciasPrefs, writeTendenciasPrefs } from '@/lib/tendencias/prefs'
+import { NEWS_MENTIONS_RANKING_HINT } from '@/lib/tendencias/rank-news-mentions'
 import { TICKER_TO_XSTOCK } from '@/lib/us-equities'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import { Badge } from '@/components/ui/badge'
@@ -111,159 +113,149 @@ function mentionSymbolColor(symbol: string): string {
   return MENTION_COLOR_FALLBACK[h % MENTION_COLOR_FALLBACK.length]
 }
 
-function headlineMatchesSymbol(
-  headline: { titulo: string; symbols?: string[]; stockSymbols?: string[] },
-  symbol: string,
-): boolean {
-  const sym = symbol.toUpperCase()
-  if (headline.symbols?.some((s) => s.toUpperCase() === sym)) return true
-  if (headline.stockSymbols?.some((s) => s.toUpperCase() === sym)) return true
-  return new RegExp(`\\b${sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(headline.titulo)
+const NEWS_HEADLINES_DEFAULT = 10
+
+const PERIOD_LABEL: Record<MomentumPeriod, string> = {
+  '24h': '24h',
+  '7d': '7 dias',
+  '30d': '30 dias',
+  '90d': '90 dias',
 }
 
-const NEWS_TOP_MENTIONS = 10
-const NEWS_HEADLINES_DEFAULT = 10
-const NEWS_HEADLINES_FILTERED = 15
+function fmtMentionChange(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return ''
+  const sign = pct >= 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}%`
+}
 
 function NewsMentionChip({
-  symbol,
-  count,
-  active,
+  item,
   kind,
-  onToggle,
 }: {
-  symbol: string
-  count: number
-  active: boolean
+  item: TendenciasNewsMention
   kind: 'crypto' | 'stock'
-  onToggle: () => void
 }) {
-  const sym = symbol.toUpperCase()
+  const sym = item.symbol.toUpperCase()
   const xstockId = kind === 'stock' ? TICKER_TO_XSTOCK[sym] : undefined
+  const ch = fmtMentionChange(item.changePct)
   return (
-    <button
-      type="button"
-      title={`${count} menção${count === 1 ? '' : 'ões'} na imprensa`}
-      aria-pressed={active}
-      onClick={onToggle}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors',
-        active
-          ? 'border-yellow-500/60 bg-yellow-500/15'
-          : 'border-border/40 bg-background/40 hover:border-border/70 hover:bg-muted/10',
-      )}
+    <div
+      title={`${item.count} menção${item.count === 1 ? '' : 'ões'} · preço ${ch || '—'} no período`}
+      className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-background/40 px-2.5 py-1"
     >
       <TokenSymbolAvatar symbol={sym} coingeckoId={xstockId} size={18} />
       <span className={cn('text-xs font-semibold', mentionSymbolColor(sym))}>{sym}</span>
       <span className="rounded-full bg-muted/30 px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
-        {count}
+        {item.count}
       </span>
-    </button>
+      {ch ? (
+        <span className="text-[10px] font-medium tabular-nums text-emerald-400">{ch}</span>
+      ) : null}
+    </div>
+  )
+}
+
+function NewsMentionExpand({
+  total,
+  visible,
+  onExpand,
+}: {
+  total: number
+  visible: number
+  onExpand: (next: 10 | 15 | 20) => void
+}) {
+  if (total <= 10) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {visible < 15 && total > 10 ? (
+        <button
+          type="button"
+          onClick={() => onExpand(15)}
+          className="text-[10px] font-medium text-yellow-500 hover:underline"
+        >
+          Ver até 15
+        </button>
+      ) : null}
+      {visible < 20 && total > 15 ? (
+        <button
+          type="button"
+          onClick={() => onExpand(20)}
+          className="text-[10px] font-medium text-yellow-500 hover:underline"
+        >
+          Ver até 20
+        </button>
+      ) : null}
+      {visible > 10 ? (
+        <button
+          type="button"
+          onClick={() => onExpand(10)}
+          className="text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Só top 10
+        </button>
+      ) : null}
+    </div>
   )
 }
 
 function NewsTopMentionsSection({
   topCrypto,
   topStocks,
-  activeSymbol,
-  onSelectSymbol,
+  period,
 }: {
-  topCrypto: Array<{ symbol: string; count: number }>
-  topStocks: Array<{ symbol: string; count: number }>
-  activeSymbol: string | null
-  onSelectSymbol: (symbol: string | null) => void
+  topCrypto: TendenciasNewsMention[]
+  topStocks: TendenciasNewsMention[]
+  period: MomentumPeriod
 }) {
-  const [custom, setCustom] = useState('')
-  const cryptoItems = topCrypto.slice(0, NEWS_TOP_MENTIONS)
-  const stockItems = topStocks.slice(0, NEWS_TOP_MENTIONS)
+  const [cryptoLimit, setCryptoLimit] = useState<10 | 15 | 20>(10)
+  const [stockLimit, setStockLimit] = useState<10 | 15 | 20>(10)
 
-  function applyCustom() {
-    const sym = custom.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
-    if (!sym) return
-    onSelectSymbol(sym)
-    setCustom('')
+  const cryptoVisible = topCrypto.slice(0, cryptoLimit)
+  const stockVisible = topStocks.slice(0, stockLimit)
+
+  if (!cryptoVisible.length && !stockVisible.length) {
+    return (
+      <p className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5 text-xs text-muted-foreground">
+        Nenhum token ou ação cumpre os critérios agora (menções em notícias + preço a subir em{' '}
+        {PERIOD_LABEL[period]}).
+      </p>
+    )
   }
-
-  function toggle(sym: string) {
-    const key = sym.toUpperCase()
-    onSelectSymbol(activeSymbol === key ? null : key)
-  }
-
-  if (!cryptoItems.length && !stockItems.length) return null
 
   return (
     <div className="space-y-3">
-      {cryptoItems.length > 0 && (
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        {NEWS_MENTIONS_RANKING_HINT} Período do preço: <span className="text-foreground">{PERIOD_LABEL[period]}</span>.
+      </p>
+
+      {cryptoVisible.length > 0 ? (
         <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            10 tokens mais falados
+            Tokens mais falados (preço a subir)
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {cryptoItems.map((m) => (
-              <NewsMentionChip
-                key={`c-${m.symbol}`}
-                symbol={m.symbol}
-                count={m.count}
-                kind="crypto"
-                active={activeSymbol === m.symbol.toUpperCase()}
-                onToggle={() => toggle(m.symbol)}
-              />
+            {cryptoVisible.map((m) => (
+              <NewsMentionChip key={`c-${m.symbol}`} item={m} kind="crypto" />
             ))}
           </div>
+          <NewsMentionExpand total={topCrypto.length} visible={cryptoLimit} onExpand={setCryptoLimit} />
         </section>
-      )}
+      ) : null}
 
-      {stockItems.length > 0 && (
+      {stockVisible.length > 0 ? (
         <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
           <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             <Building2 className="h-3.5 w-3.5" aria-hidden />
-            10 ações mais faladas
+            Ações mais faladas (preço a subir)
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {stockItems.map((m) => (
-              <NewsMentionChip
-                key={`s-${m.symbol}`}
-                symbol={m.symbol}
-                count={m.count}
-                kind="stock"
-                active={activeSymbol === m.symbol.toUpperCase()}
-                onToggle={() => toggle(m.symbol)}
-              />
+            {stockVisible.map((m) => (
+              <NewsMentionChip key={`s-${m.symbol}`} item={m} kind="stock" />
             ))}
           </div>
+          <NewsMentionExpand total={topStocks.length} visible={stockLimit} onExpand={setStockLimit} />
         </section>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/30 bg-muted/5 px-2.5 py-2">
-        <button
-          type="button"
-          aria-pressed={!activeSymbol}
-          onClick={() => onSelectSymbol(null)}
-          className={cn(
-            'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-            !activeSymbol
-              ? 'bg-yellow-500/20 text-yellow-400'
-              : 'text-muted-foreground hover:bg-muted/20',
-          )}
-        >
-          Todas as manchetes
-        </button>
-        <div className="flex min-w-[12rem] flex-1 gap-1.5">
-          <Input
-            value={custom}
-            onChange={(e) => setCustom(e.target.value.toUpperCase())}
-            placeholder="Outro ticker (ex: DOGE, NVDA)"
-            className="h-8 flex-1 text-xs"
-            maxLength={12}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') applyCustom()
-            }}
-          />
-          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 px-2.5 text-xs" onClick={applyCustom}>
-            Filtrar
-          </Button>
-        </div>
-      </div>
+      ) : null}
     </div>
   )
 }
@@ -652,16 +644,10 @@ export function DashbuddyTendencias() {
   const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<TabId>('visao')
   const [tokenFilter, setTokenFilter] = useState<TokenFilter>('destaques')
-  const [newsTokenFilter, setNewsTokenFilter] = useState<string | null>(null)
-
   useEffect(() => {
     setPrefs(readTendenciasPrefs())
     setMounted(true)
   }, [])
-
-  useEffect(() => {
-    if (tab !== 'noticias') setNewsTokenFilter(null)
-  }, [tab])
 
   const savePrefs = useCallback((p: TendenciasPrefs) => {
     setPrefs(p)
@@ -690,16 +676,10 @@ export function DashbuddyTendencias() {
     }
   }, [data, tokenFilter])
 
-  const filteredNewsHeadlines = useMemo(() => {
-    const headlines = data?.news.headlines ?? []
-    if (!newsTokenFilter) return headlines
-    return headlines.filter((h) => headlineMatchesSymbol(h, newsTokenFilter))
-  }, [data?.news.headlines, newsTokenFilter])
-
-  const displayedNewsHeadlines = useMemo(() => {
-    const limit = newsTokenFilter ? NEWS_HEADLINES_FILTERED : NEWS_HEADLINES_DEFAULT
-    return filteredNewsHeadlines.slice(0, limit)
-  }, [filteredNewsHeadlines, newsTokenFilter])
+  const displayedNewsHeadlines = useMemo(
+    () => (data?.news.headlines ?? []).slice(0, NEWS_HEADLINES_DEFAULT),
+    [data?.news.headlines],
+  )
 
   if (!mounted || isLoading) {
     return (
@@ -1100,25 +1080,17 @@ export function DashbuddyTendencias() {
                 {news.negativo} negativas
               </Badge>
             </div>
-            {(news.topCryptoMentions?.length ?? news.topMentions.length) > 0 ||
-            (news.topStockMentions?.length ?? 0) > 0 ? (
-              <NewsTopMentionsSection
-                topCrypto={
-                  news.topCryptoMentions?.length ? news.topCryptoMentions : news.topMentions
-                }
-                topStocks={news.topStockMentions ?? []}
-                activeSymbol={newsTokenFilter}
-                onSelectSymbol={setNewsTokenFilter}
-              />
-            ) : null}
+            <NewsTopMentionsSection
+              topCrypto={
+                news.topCryptoMentions?.length ? news.topCryptoMentions : news.topMentions
+              }
+              topStocks={news.topStockMentions ?? []}
+              period={news.rankingPeriod ?? period}
+            />
             <ul className="space-y-3">
               {news.headlines.length === 0 ? (
                 <li className="text-lg leading-snug text-muted-foreground">
                   Sem manchetes em português no momento. Clica em Actualizar ou aguarda ~1 minuto.
-                </li>
-              ) : filteredNewsHeadlines.length === 0 ? (
-                <li className="text-sm leading-snug text-muted-foreground">
-                  Sem notícias para {newsTokenFilter}. Tenta outro token ou «Todas».
                 </li>
               ) : (
                 displayedNewsHeadlines.map((h) => (
@@ -1146,9 +1118,9 @@ export function DashbuddyTendencias() {
                 ))
               )}
             </ul>
-            {filteredNewsHeadlines.length > displayedNewsHeadlines.length && (
+            {(data?.news.headlines.length ?? 0) > displayedNewsHeadlines.length && (
               <p className="text-[11px] text-muted-foreground">
-                +{filteredNewsHeadlines.length - displayedNewsHeadlines.length} manchetes —{' '}
+                +{(data?.news.headlines.length ?? 0) - displayedNewsHeadlines.length} manchetes —{' '}
                 <Link href="/news/noticias" className="text-yellow-500 hover:underline">
                   ver todas
                 </Link>
