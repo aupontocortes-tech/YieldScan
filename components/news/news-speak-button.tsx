@@ -9,6 +9,7 @@ import {
   getNewsSpeechActiveIdServer,
   isNewsSpeechSupported,
   playNewsSpeech,
+  primeNewsSpeechVoices,
   subscribeNewsSpeech,
   toggleNewsSpeech,
 } from '@/lib/speech/news-speech'
@@ -52,7 +53,14 @@ export function NewsSpeakButton({ speechId, title, description, heard, className
   )
   const playing = activeId === speechId
 
-  if (!mounted || !isNewsSpeechSupported()) return null
+  if (!mounted) {
+    return (
+      <span
+        className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center', className)}
+        aria-hidden
+      />
+    )
+  }
 
   return (
     <button
@@ -60,6 +68,7 @@ export function NewsSpeakButton({ speechId, title, description, heard, className
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
+        primeNewsSpeechVoices()
         toggleNewsSpeech(speechId, title, description)
       }}
       className={cn(

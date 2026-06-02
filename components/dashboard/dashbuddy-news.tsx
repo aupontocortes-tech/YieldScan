@@ -161,9 +161,9 @@ function NewsCard({
   }
 
   const meta = (
-    <div className="mt-auto flex items-center justify-between border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
+    <div className="flex items-center gap-2 border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
       <span
-        className="min-w-0 truncate"
+        className="min-w-0 flex-1 truncate"
         title={
           n.dataPublicacao
             ? formatRelativeNewsTime(n.dataPublicacao, nowMs)
@@ -179,8 +179,30 @@ function NewsCard({
           return label ? ` · ${label}` : ''
         })() : ''}
       </span>
-      {hasLink && (
-        <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-40 group-hover:opacity-100" />
+      <NewsSpeakButton
+        speechId={speechId}
+        title={n.titulo}
+        description={n.resumo}
+        heard={ttsHeard}
+        autoPlay={autoTts === true}
+        className="h-8 w-8 shrink-0 text-[15px]"
+      />
+      {hasLink ? (
+        <a
+          href={n.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-muted/40"
+          aria-label="Abrir artigo na fonte"
+          onClick={(e) => {
+            e.stopPropagation()
+            markSeenOnce()
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />
+        </a>
+      ) : (
+        <span className="h-8 w-8 shrink-0" aria-hidden />
       )}
     </div>
   )
@@ -205,7 +227,6 @@ function NewsCard({
         {n.titulo}
       </h3>
       <p className="mt-2 line-clamp-5 text-xs leading-relaxed text-muted-foreground">{n.resumo}</p>
-      {meta}
     </>
   )
 
@@ -259,18 +280,10 @@ function NewsCard({
               />
             )}
           </div>
-          <div className="flex flex-1 flex-col p-4 pb-10">{texto}</div>
+          <div className="flex flex-1 flex-col p-4 pb-3">{texto}</div>
         </>
       </a>
-      <NewsSpeakButton
-        speechId={speechId}
-        title={n.titulo}
-        description={n.resumo}
-        heard={ttsHeard}
-        autoPlay={autoTts === true}
-        // Botão TTS mais visível e centralizado na base do card
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 h-9 w-9 text-[17px]"
-      />
+      <div className="px-4 pb-4 pt-0">{meta}</div>
     </div>
   )
 }

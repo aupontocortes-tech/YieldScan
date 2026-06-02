@@ -206,5 +206,21 @@ function internalStart(id: string, text: string, syn: SpeechSynthesis) {
 }
 
 export function isNewsSpeechSupported(): boolean {
-  return typeof window !== 'undefined' && typeof window.speechSynthesis !== 'undefined'
+  if (typeof window === 'undefined') return false
+  try {
+    return Boolean(window.speechSynthesis)
+  } catch {
+    return false
+  }
+}
+
+/** iOS/Safari: força carregar vozes após gesto do utilizador. */
+export function primeNewsSpeechVoices(): void {
+  const syn = getSynth()
+  if (!syn) return
+  try {
+    syn.getVoices()
+  } catch {
+    /* ignore */
+  }
 }
