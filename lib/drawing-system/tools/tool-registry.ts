@@ -53,6 +53,11 @@ export function isFreehandTool(toolId: DrawingToolId): boolean {
   return spec?.interaction === 'freehand'
 }
 
+export function isDrag2Tool(toolId: DrawingToolId): boolean {
+  const spec = getToolSpec(toolId)
+  return spec?.interaction === 'drag2'
+}
+
 const TYPE_TO_TOOL: Record<DrawingType, DrawingToolId> = {
   ruler: 'ruler',
   trendLine: 'trend-line',

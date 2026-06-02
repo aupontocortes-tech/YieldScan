@@ -9,7 +9,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChartFullscreenButton } from '@/components/btc-dashboard/chart-landscape-toggle'
 import { CycleBottomPanel } from '@/components/btc-dashboard/cycle-bottom-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
-import type { MaType } from '@/lib/btc/types'
+import {
+  CHART_LABEL_MODE_LABELS,
+} from '@/lib/btc/chart-indicator-display'
+import type { ChartIndicatorLabelMode, ChartIndicatorTapAction } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -233,6 +236,8 @@ export function SettingsPanel({
     setCandles,
     onChain,
     setOnChain,
+    chartIndicatorDisplay,
+    setChartIndicatorDisplay,
     resetDefaults,
   } = useBtcSettings()
 
@@ -255,6 +260,63 @@ export function SettingsPanel({
           </Button>
         </div>
       )}
+
+      <IndicatorSection
+        title="Rótulos no gráfico"
+        subtitle="Menos texto no eixo direito — clique na linha do indicador para ajustar"
+        helpText="Por defeito os rótulos ficam compactos. Ao clicar numa linha no gráfico abre um menu rápido (se escolher «Menu rápido» abaixo). Também podes abrir configurações completas a partir desse menu."
+        defaultOpen={embedded}
+      >
+        <div className="space-y-3">
+          <div>
+            <p className="mb-1.5 text-[10px] font-medium text-zinc-400">Rótulo por defeito (novos indicadores)</p>
+            <div className="flex gap-1">
+              {(['compact', 'full', 'hidden'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={cn(
+                    'flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-medium transition-colors',
+                    chartIndicatorDisplay.defaultLabelMode === mode
+                      ? 'border-[#d4af37]/45 bg-[#d4af37]/12 text-[#d4af37]'
+                      : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300',
+                  )}
+                  onClick={() =>
+                    setChartIndicatorDisplay({ ...chartIndicatorDisplay, defaultLabelMode: mode })
+                  }
+                >
+                  {CHART_LABEL_MODE_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-[10px] font-medium text-zinc-400">Ao clicar na linha no gráfico</p>
+            <div className="flex gap-1">
+              {(
+                [
+                  { id: 'quick-menu' as ChartIndicatorTapAction, label: 'Menu rápido' },
+                  { id: 'settings' as ChartIndicatorTapAction, label: 'Abrir configurações' },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={cn(
+                    'flex-1 rounded-lg border px-2 py-1.5 text-[10px] font-medium transition-colors',
+                    chartIndicatorDisplay.tapAction === id
+                      ? 'border-[#d4af37]/45 bg-[#d4af37]/12 text-[#d4af37]'
+                      : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300',
+                  )}
+                  onClick={() => setChartIndicatorDisplay({ ...chartIndicatorDisplay, tapAction: id })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </IndicatorSection>
 
       <IndicatorSection
         title="Fundos de ciclo · Bull market (Pompx)"

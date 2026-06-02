@@ -3,6 +3,7 @@ import { hitTestDrawings } from '@/lib/drawing-system/core/hit-test'
 import { createDrawing, useDrawingStore } from '@/lib/drawing-system/store/drawing-store'
 import {
   getDefaultStyleForTool,
+  isDrag2Tool,
   isFreehandTool,
   isMultiClickTool,
   isSingleClickTool,
@@ -25,6 +26,8 @@ import {
 /** Distância mínima (px) antes de atualizar preview / pincel — menos trabalho no mobile. */
 const PREVIEW_MOVE_PX = 2
 const FREEHAND_MOVE_PX = 3
+/** Arrasto mínimo (px ecrã) para gravar linha/retângulo drag2 num só gesto. */
+const DRAG2_COMMIT_PX = 4
 
 type DragState =
   | { kind: 'none' }
@@ -47,6 +50,8 @@ export class PointerEngine {
   private lastClientX = 0
   private lastClientY = 0
   private hasLastClient = false
+  private gestureStartClientX = 0
+  private gestureStartClientY = 0
 
   constructor(
     private mapper: CoordinateMapper,
@@ -78,6 +83,33 @@ export class PointerEngine {
     this.lastClientX = clientX
     this.lastClientY = clientY
     this.hasLastClient = true
+  }
+
+  private resetGestureStart(clientX: number, clientY: number) {
+    this.gestureStartClientX = clientX
+    this.gestureStartClientY = clientY
+    this.resetMoveAnchor(clientX, clientY)
+  }
+
+  private screenDragPx(clientX: number, clientY: number) {
+    return Math.hypot(clientX - this.gestureStartClientX, clientY - this.gestureStartClientY)
+  }
+
+  private commitDrag2Drawing(
+    draft: DrawingDraft,
+    start: ChartPoint,
+    end: ChartPoint,
+  ) {
+    const store = useDrawingStore.getState()
+    store.addDrawing(
+      createDrawing(draft.type, [start, end], {
+        toolId: draft.toolId,
+        style: draft.toolId ? getDefaultStyleForTool(draft.toolId as DrawingToolId) : undefined,
+      }),
+    )
+    store.clearTransient()
+    clearGesturePreview()
+    this.drawingGesture = false
   }
 
   private movedEnough(clientX: number, clientY: number, minPx: number): boolean {
@@ -133,6 +165,14 @@ export class PointerEngine {
     this.drawingGesture = true
   }
 
+  private pendingDrag2Draft(toolId: DrawingToolId): DrawingDraft | null {
+    const store = useDrawingStore.getState()
+    const draft = store.transient.draft
+    if (!draft || draft.toolId !== toolId || !isDrag2Tool(toolId)) return null
+    if (draft.points.length !== 1) return null
+    return draft
+  }
+
   /** @returns true se o evento foi consumido */
   handlePointerDown(clientX: number, clientY: number, container: HTMLElement): boolean {
     const store = useDrawingStore.getState()
@@ -170,7 +210,7 @@ export class PointerEngine {
       const spec = getToolSpec(toolId)
       if (!type || !spec) return false
 
-      this.resetMoveAnchor(clientX, clientY)
+      this.resetGestureStart(clientX, clientY)
 
       if (isSingleClickTool(toolId)) {
         let text: string | undefined
@@ -186,6 +226,14 @@ export class PointerEngine {
             style: getDefaultStyleForTool(toolId),
           }),
         )
+        return true
+      }
+
+      const pendingDrag2 = isDrag2Tool(toolId) ? this.pendingDrag2Draft(toolId) : null
+      if (pendingDrag2) {
+        const start = this.snapPt(pendingDrag2.points[0])
+        const end = this.snapPt(pt)
+        this.commitDrag2Drawing(pendingDrag2, start, end)
         return true
       }
 
@@ -292,6 +340,25 @@ export class PointerEngine {
     const y = clientY - rect.top
 
     const { draft: gestureDraft, move: gestureMove } = this.activeTransient()
+    const pendingDrag2 = store.transient.draft
+
+    if (
+      !gestureDraft &&
+      !gestureMove &&
+      this.drag.kind === 'none' &&
+      pendingDrag2?.toolId &&
+      isDrag2Tool(pendingDrag2.toolId) &&
+      pendingDrag2.points.length === 1
+    ) {
+      const ptHover = this.mapper.fromXY(x, y, { snap: false })
+      if (ptHover) {
+        this.pushGestureDraft({
+          ...pendingDrag2,
+          preview: ptHover,
+        })
+        return
+      }
+    }
 
     if (!gestureDraft && !gestureMove && this.drag.kind === 'none') {
       const ptHover = this.mapper.fromXY(x, y, { snap: false })
@@ -406,6 +473,32 @@ export class PointerEngine {
           }),
         )
       }
+      store.clearTransient()
+      return
+    }
+
+    if (draft.toolId && isDrag2Tool(draft.toolId)) {
+      const start = this.snapPt(draft.points[0])
+      const previewEnd = draft.preview ? this.snapPt(draft.preview) : pt ? this.snapPt(pt) : null
+      const end = previewEnd ?? (pt ? this.snapPt(pt) : null)
+      const screenDist = this.screenDragPx(clientX, clientY)
+
+      if (end && screenDist >= DRAG2_COMMIT_PX) {
+        const a = this.mapper.toXY(start)
+        const b = this.mapper.toXY(end)
+        if (a && b && Math.hypot(b.x - a.x, b.y - a.y) >= 2) {
+          this.commitDrag2Drawing(draft, start, end)
+          return
+        }
+      }
+
+      if (draft.points.length === 1) {
+        store.setTransientDraft({ ...draft, points: [start], preview: undefined })
+        clearGesturePreview()
+        this.drawingGesture = false
+        return
+      }
+
       store.clearTransient()
       return
     }

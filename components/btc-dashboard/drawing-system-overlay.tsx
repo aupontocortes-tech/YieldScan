@@ -110,7 +110,10 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
 
     const { chart, container } = api
 
-    const onRange = () => useDrawingStore.getState().bumpRevision()
+    const onRange = () => {
+      mapperRef.current?.refreshLogicalMap()
+      useDrawingStore.getState().bumpRevision()
+    }
     const ts = chart.timeScale()
     ts.subscribeVisibleLogicalRangeChange(onRange)
 
@@ -144,7 +147,15 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
     }
 
     const onUp = (e: PointerEvent) => {
+      try {
+        if (container.hasPointerCapture(e.pointerId)) {
+          container.releasePointerCapture(e.pointerId)
+        }
+      } catch {
+        /* ignore */
+      }
       engine.handlePointerUp(e.clientX, e.clientY, container)
+      capturingRef.current = false
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
@@ -159,6 +170,11 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
         capturingRef.current = true
         e.preventDefault()
         e.stopPropagation()
+        try {
+          container.setPointerCapture(e.pointerId)
+        } catch {
+          /* ignore */
+        }
         window.addEventListener('pointermove', onMove, { passive: false })
         window.addEventListener('pointerup', onUp)
         window.addEventListener('pointercancel', onUp)
@@ -168,8 +184,13 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
 
     const onHoverMove = (e: PointerEvent) => {
       if (capturingRef.current) return
-      const mode = resolveToolMode(useDrawingStore.getState().activeToolId)
-      if (mode === 'draw' || mode === 'erase') return
+      const store = useDrawingStore.getState()
+      const mode = resolveToolMode(store.activeToolId)
+      const pendingDrag2 =
+        store.transient.draft?.points.length === 1 &&
+        store.transient.draft.toolId &&
+        store.transient.draft.toolId === store.activeToolId
+      if ((mode === 'draw' || mode === 'erase') && !pendingDrag2) return
       engine.handlePointerMove(e.clientX, e.clientY, container)
       schedulePaint()
     }

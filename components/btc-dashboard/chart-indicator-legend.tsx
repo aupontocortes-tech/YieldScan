@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
+import {
+  ChartIndicatorQuickMenu,
+  type ChartIndicatorQuickMenuState,
+} from '@/components/btc-dashboard/chart-indicator-quick-menu'
 import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
 import {
@@ -27,6 +31,7 @@ type LegendRow = {
   statusTone?: 'bull' | 'bear' | 'neutral'
   onRemove: () => void
   settingsFocus: ChartLegendSettingsFocus
+  labelIds?: string[]
 }
 
 type ChartIndicatorLegendProps = {
@@ -44,9 +49,11 @@ function statusToneClass(tone?: LegendRow['statusTone']) {
 function LegendPill({
   row,
   onOpenSettings,
+  onOpenQuickMenu,
 }: {
   row: LegendRow
   onOpenSettings?: (focus: ChartLegendSettingsFocus) => void
+  onOpenQuickMenu?: (row: LegendRow, el: HTMLElement) => void
 }) {
   return (
     <div
@@ -56,24 +63,30 @@ function LegendPill({
         row.statusTone === 'bull' && 'border-emerald-500/25',
       )}
     >
-      <div className="flex shrink-0 items-center gap-0.5">
-        {row.colors.map((c, i) => (
-          <span
-            key={`${row.id}-${i}`}
-            className="h-2 w-2 rounded-[2px] border border-white/10"
-            style={{ backgroundColor: c }}
-            aria-hidden
-          />
-        ))}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-medium leading-tight text-zinc-100">{row.label}</p>
-        {row.status ? (
-          <p className={cn('truncate text-[8px] leading-snug', statusToneClass(row.statusTone))}>
-            {row.status}
-          </p>
-        ) : null}
-      </div>
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 rounded-sm text-left hover:bg-white/5"
+        onClick={(e) => onOpenQuickMenu?.(row, e.currentTarget)}
+      >
+        <div className="flex shrink-0 items-center gap-0.5">
+          {row.colors.map((c, i) => (
+            <span
+              key={`${row.id}-${i}`}
+              className="h-2 w-2 rounded-[2px] border border-white/10"
+              style={{ backgroundColor: c }}
+              aria-hidden
+            />
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[10px] font-medium leading-tight text-zinc-100">{row.label}</p>
+          {row.status ? (
+            <p className={cn('truncate text-[8px] leading-snug', statusToneClass(row.statusTone))}>
+              {row.status}
+            </p>
+          ) : null}
+        </div>
+      </button>
       {onOpenSettings ? (
         <button
           type="button"
@@ -102,6 +115,8 @@ export function ChartIndicatorLegend({
   className,
 }: ChartIndicatorLegendProps) {
   const [expanded, setExpanded] = useState(false)
+  const [quickMenu, setQuickMenu] = useState<ChartIndicatorQuickMenuState | null>(null)
+  const { chartIndicatorDisplay } = useBtcSettings()
   const {
     mas,
     removeMa,
@@ -134,6 +149,7 @@ export function ChartIndicatorLegend({
         id: 'goldenCross',
         label: meta?.label ?? 'Golden / Death Cross',
         colors: [goldenCrossDaily.colorSma50, goldenCrossDaily.colorSma200],
+        labelIds: ['goldenSma50', 'goldenSma200'],
         status: goldenCrossState?.message,
         statusTone:
           goldenCrossState?.regime === 'golden'
@@ -148,7 +164,8 @@ export function ChartIndicatorLegend({
       const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'sma200')
       list.push({
         id: 'sma200',
-        label: `SMA 200 (${meta?.timeframeLabel ?? 'Di├írio'})`,
+        label: `SMA 200 (${meta?.timeframeLabel ?? 'Diário'})`,
+        labelIds: ['sma200'],
         colors: [sma200Daily.color],
         onRemove: () => setSma200Daily({ ...sma200Daily, enabled: false }),
         settingsFocus: 'cycle',
@@ -172,7 +189,8 @@ export function ChartIndicatorLegend({
         id: 'bmsb',
         label: meta?.label ?? 'Bull Market Band',
         colors: [bullMarketBand.colorSma, bullMarketBand.colorEma],
-        status: `SMA ${BULL_MARKET_BAND_SMA_WEEKS}w ┬À EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
+        status: `SMA ${BULL_MARKET_BAND_SMA_WEEKS}w · EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
+        labelIds: ['bmsb-sma', 'bmsb-ema'],
         onRemove: () => setBullMarketBand({ ...bullMarketBand, enabled: false }),
         settingsFocus: 'cycle',
       })
@@ -183,6 +201,7 @@ export function ChartIndicatorLegend({
         id: `ma-${ma.id}`,
         label: `${ma.type} ${ma.period}`,
         colors: [ma.color],
+        labelIds: [`ma-${ma.id}`],
         onRemove: () => removeMa(ma.id),
         settingsFocus: 'moving-averages',
       })
@@ -336,7 +355,33 @@ export function ChartIndicatorLegend({
 
   if (rows.length === 0) return null
 
+  const openQuickMenuForRow = (row: LegendRow, el: HTMLElement) => {
+    if (chartIndicatorDisplay.tapAction === 'settings') {
+      onOpenSettings?.(row.settingsFocus)
+      return
+    }
+    const rect = el.getBoundingClientRect()
+    setQuickMenu({
+      x: rect.right + 6,
+      y: rect.top,
+      id: row.id,
+      labelIds: row.labelIds ?? [row.id],
+      label: row.label,
+      colors: row.colors,
+      settingsFocus: row.settingsFocus,
+      onRemove: row.onRemove,
+    })
+  }
+
   return (
+    <>
+      {quickMenu ? (
+        <ChartIndicatorQuickMenu
+          menu={quickMenu}
+          onClose={() => setQuickMenu(null)}
+          onOpenSettings={onOpenSettings}
+        />
+      ) : null}
     <div
       className={cn(
         'pointer-events-auto absolute bottom-2 left-2 z-20 flex max-w-[min(calc(100%-5rem),18rem)] flex-col-reverse items-start gap-1',
@@ -371,10 +416,16 @@ export function ChartIndicatorLegend({
           className="flex max-h-[min(38vh,14rem)] w-full flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-md border border-white/[0.08] bg-black/80 p-1 shadow-lg backdrop-blur-sm [scrollbar-width:thin]"
         >
           {rows.map((row) => (
-            <LegendPill key={row.id} row={row} onOpenSettings={onOpenSettings} />
+            <LegendPill
+              key={row.id}
+              row={row}
+              onOpenSettings={onOpenSettings}
+              onOpenQuickMenu={openQuickMenuForRow}
+            />
           ))}
         </div>
       ) : null}
     </div>
+    </>
   )
 }

@@ -172,6 +172,24 @@ export type GoldenCrossDailySettings = {
   colorSma200: string
 }
 
+/** Rótulo do indicador no eixo direito do gráfico. */
+export type ChartIndicatorLabelMode = 'full' | 'compact' | 'hidden'
+
+/** Ao tocar/clicar na linha do indicador no gráfico. */
+export type ChartIndicatorTapAction = 'quick-menu' | 'settings'
+
+export type ChartIndicatorDisplaySettings = {
+  tapAction: ChartIndicatorTapAction
+  defaultLabelMode: ChartIndicatorLabelMode
+  labelModes: Record<string, ChartIndicatorLabelMode>
+}
+
+export const DEFAULT_CHART_INDICATOR_DISPLAY: ChartIndicatorDisplaySettings = {
+  tapAction: 'quick-menu',
+  defaultLabelMode: 'compact',
+  labelModes: {},
+}
+
 /** Períodos fixos (velas 1w) — iguais ao script popular zkdev / TradingView. */
 export const BULL_MARKET_BAND_SMA_WEEKS = 20
 export const BULL_MARKET_BAND_EMA_WEEKS = 21

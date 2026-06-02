@@ -12,6 +12,7 @@ import {
   LineStyle,
 } from 'lightweight-charts'
 import type { IChartApi, Time } from 'lightweight-charts'
+import { buildFutureWhitespace } from '@/lib/btc/chart-whitespace'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import {
@@ -30,9 +31,16 @@ import {
   type ChartLegendSettingsFocus,
 } from '@/components/btc-dashboard/chart-indicator-legend'
 import { ChartDrawingsLegend } from '@/components/btc-dashboard/chart-drawings-legend'
+import { ChartIndicatorHitLayer } from '@/components/btc-dashboard/chart-indicator-hit-layer'
+import { useChartIndicators } from '@/components/btc-dashboard/chart-indicators-context'
 import { DrawingSystemOverlay } from '@/components/btc-dashboard/drawing-system-overlay'
+import {
+  resolveIndicatorLabelMode,
+  seriesLabelFromMode,
+} from '@/lib/btc/chart-indicator-display'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
+import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
 import {
   computeBullMarketBandOnChart,
   computeSma200OnDailyAligned,
@@ -129,6 +137,7 @@ export function BtcChartsSuite({
 }: BtcChartsSuiteProps) {
   const {
     mas,
+    removeMa,
     rsi: rsiCfg,
     macd: macdCfg,
     stoch: stochCfg,
@@ -136,15 +145,22 @@ export function BtcChartsSuite({
     zones: zonesCfg,
     candles,
     onChain,
+    setOnChain,
     bullMarketBand,
+    setBullMarketBand,
     sma200Daily,
+    setSma200Daily,
     sma50Weekly,
+    setSma50Weekly,
     goldenCrossDaily,
+    setGoldenCrossDaily,
+    chartIndicatorDisplay,
     timeframe,
   } = useBtcSettings()
 
   const focusPrice = priceOnlyFocus
   const { registerMainChart } = useChartDrawings()
+  const { setTargets } = useChartIndicators()
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
@@ -155,6 +171,8 @@ export function BtcChartsSuite({
   const closes = useMemo(() => bars.map((b) => b.close), [bars])
 
   const isPhone = useIsMobile()
+  const indicatorLabel = (id: string, fullTitle: string) =>
+    seriesLabelFromMode(resolveIndicatorLabelMode(id, chartIndicatorDisplay), fullTitle, isPhone)
   const showSubPanels = !focusPrice
   const oscHeight = isPhone ? 68 : 92
 
@@ -265,6 +283,137 @@ export function BtcChartsSuite({
     [],
   )
 
+  const sthValsForChart = useMemo(
+    () => (onChain.sthLth.enabled ? ema(closes, onChain.sthLth.rsiPeriod) : null),
+    [closes, onChain.sthLth.enabled, onChain.sthLth.rsiPeriod],
+  )
+  const lthValsForChart = useMemo(
+    () => (onChain.sthLth.enabled ? sma(closes, onChain.sthLth.smaPeriod) : null),
+    [closes, onChain.sthLth.enabled, onChain.sthLth.smaPeriod],
+  )
+
+  const indicatorRegistry = useMemo(() => {
+    const list: Parameters<typeof setTargets>[0] = []
+
+    if (goldenCrossDaily.enabled && goldenSma50OnChart) {
+      list.push({
+        id: 'goldenSma50',
+        label: 'SMA 50 (Diário)',
+        colors: [goldenCrossDaily.colorSma50],
+        values: goldenSma50OnChart,
+        settingsFocus: 'cycle',
+        onRemove: () => setGoldenCrossDaily({ ...goldenCrossDaily, enabled: false }),
+      })
+    }
+    if (goldenCrossDaily.enabled && goldenSma200OnChart) {
+      list.push({
+        id: 'goldenSma200',
+        label: 'SMA 200 (Diário)',
+        colors: [goldenCrossDaily.colorSma200],
+        values: goldenSma200OnChart,
+        settingsFocus: 'cycle',
+        onRemove: () => setGoldenCrossDaily({ ...goldenCrossDaily, enabled: false }),
+      })
+    }
+    if (sma200OnChart && sma200Daily.enabled && !goldenCrossDaily.enabled) {
+      const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'sma200')
+      list.push({
+        id: 'sma200',
+        label: `SMA 200 (${meta?.timeframeLabel ?? 'Diário'})`,
+        colors: [sma200Daily.color],
+        values: sma200OnChart,
+        settingsFocus: 'cycle',
+        onRemove: () => setSma200Daily({ ...sma200Daily, enabled: false }),
+      })
+    }
+    if (sma50OnChart && sma50Weekly.enabled) {
+      const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'sma50w')
+      list.push({
+        id: 'sma50w',
+        label: `SMA 50 (${meta?.timeframeLabel ?? 'Semanal'})`,
+        colors: [sma50Weekly.color],
+        values: sma50OnChart,
+        settingsFocus: 'cycle',
+        onRemove: () => setSma50Weekly({ ...sma50Weekly, enabled: false }),
+      })
+    }
+    if (bullBandOnChart) {
+      list.push({
+        id: 'bmsb-sma',
+        label: `BMSB SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`,
+        colors: [bullMarketBand.colorSma],
+        values: bullBandOnChart.sma,
+        settingsFocus: 'cycle',
+        onRemove: () => setBullMarketBand({ ...bullMarketBand, enabled: false }),
+      })
+      list.push({
+        id: 'bmsb-ema',
+        label: `BMSB EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
+        colors: [bullMarketBand.colorEma],
+        values: bullBandOnChart.ema,
+        settingsFocus: 'cycle',
+        onRemove: () => setBullMarketBand({ ...bullMarketBand, enabled: false }),
+      })
+    }
+    if (!focusPrice) {
+      mas.forEach((ma) => {
+        list.push({
+          id: `ma-${ma.id}`,
+          label: `${ma.type} ${ma.period}`,
+          colors: [ma.color],
+          values: movingAverage(closes, ma.period, ma.type),
+          settingsFocus: 'moving-averages',
+          onRemove: () => removeMa(ma.id),
+        })
+      })
+    }
+    if (!focusPrice && sthValsForChart && lthValsForChart && onChain.sthLth.enabled) {
+      list.push({
+        id: 'sthLth-sth',
+        label: 'STH/LTH (STH)',
+        colors: [onChain.sthLth.colorSth],
+        values: sthValsForChart,
+        settingsFocus: 'on-chain',
+        onRemove: () => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, enabled: false } })),
+      })
+      list.push({
+        id: 'sthLth-lth',
+        label: 'STH/LTH (LTH)',
+        colors: [onChain.sthLth.colorLth],
+        values: lthValsForChart,
+        settingsFocus: 'on-chain',
+        onRemove: () => setOnChain((p) => ({ ...p, sthLth: { ...p.sthLth, enabled: false } })),
+      })
+    }
+    return list
+  }, [
+    goldenCrossDaily,
+    setGoldenCrossDaily,
+    goldenSma50OnChart,
+    goldenSma200OnChart,
+    sma200OnChart,
+    sma200Daily,
+    setSma200Daily,
+    sma50OnChart,
+    sma50Weekly,
+    setSma50Weekly,
+    bullBandOnChart,
+    bullMarketBand,
+    setBullMarketBand,
+    mas,
+    removeMa,
+    closes,
+    focusPrice,
+    sthValsForChart,
+    lthValsForChart,
+    onChain.sthLth,
+    setOnChain,
+  ])
+
+  useEffect(() => {
+    setTargets(indicatorRegistry)
+  }, [indicatorRegistry, setTargets])
+
   useEffect(() => {
     const wrap = wrapRef.current
     const elM = mainRef.current
@@ -291,9 +440,14 @@ export function BtcChartsSuite({
       lastValueVisible: !isPhone,
     })
     registerMainChart({ chart: cMain, series: candle, container: elM })
-    candle.setData(
-      candleBars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })),
-    )
+    const candleData = candleBars.map((b) => ({
+      time: b.time as Time,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+    }))
+    candle.setData([...candleData, ...buildFutureWhitespace(candleBars)])
 
     cMain.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
@@ -331,12 +485,14 @@ export function BtcChartsSuite({
         .map((b, i) => ({ time: b.time as Time, value: vals[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       if (!lineData.length) return
+      const fullTitle = `${ma.type} ${ma.period}`
+      const lbl = indicatorLabel(`ma-${ma.id}`, fullTitle)
       cMain.addSeries(LineSeries, {
         color: ma.color,
-        title: `${ma.type} ${ma.period}`,
+        title: lbl.title,
         lineWidth: ma.lineWidth,
-        priceLineVisible: false,
-        lastValueVisible: !isPhone,
+        priceLineVisible: lbl.priceLineVisible,
+        lastValueVisible: lbl.lastValueVisible,
       }).setData(lineData)
     })
 
@@ -346,12 +502,15 @@ export function BtcChartsSuite({
         .map((b, i) => ({ time: b.time as Time, value: sma200OnChart[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       if (smaLine.length) {
+        const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'sma200')
+        const fullTitle = `SMA 200 (${meta?.timeframeLabel ?? 'Diário'})`
+        const lbl = indicatorLabel('sma200', fullTitle)
         cMain.addSeries(LineSeries, {
           color: s200.color,
-          title: 'SMA 200 (Diário)',
+          title: lbl.title,
           lineWidth: s200.lineWidth,
-          priceLineVisible: false,
-          lastValueVisible: !isPhone,
+          priceLineVisible: lbl.priceLineVisible,
+          lastValueVisible: lbl.lastValueVisible,
         }).setData(smaLine)
       }
     }
@@ -362,12 +521,15 @@ export function BtcChartsSuite({
         .map((b, i) => ({ time: b.time as Time, value: sma50OnChart[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       if (smaLine.length) {
+        const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'sma50w')
+        const fullTitle = `SMA 50 (${meta?.timeframeLabel ?? 'Semanal'})`
+        const lbl = indicatorLabel('sma50w', fullTitle)
         cMain.addSeries(LineSeries, {
           color: s50.color,
-          title: 'SMA 50 (Semanal)',
+          title: lbl.title,
           lineWidth: s50.lineWidth,
-          priceLineVisible: false,
-          lastValueVisible: !isPhone,
+          priceLineVisible: lbl.priceLineVisible,
+          lastValueVisible: lbl.lastValueVisible,
         }).setData(smaLine)
       }
     }
@@ -378,12 +540,13 @@ export function BtcChartsSuite({
         .map((b, i) => ({ time: b.time as Time, value: goldenSma50OnChart[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       if (line50.length) {
+        const lbl = indicatorLabel('goldenSma50', 'SMA 50 (Diário)')
         cMain.addSeries(LineSeries, {
           color: gc.colorSma50,
-          title: 'SMA 50 (Diário)',
+          title: lbl.title,
           lineWidth: gc.lineWidth,
-          priceLineVisible: false,
-          lastValueVisible: !isPhone,
+          priceLineVisible: lbl.priceLineVisible,
+          lastValueVisible: lbl.lastValueVisible,
         }).setData(line50)
       }
     }
@@ -394,23 +557,23 @@ export function BtcChartsSuite({
         .map((b, i) => ({ time: b.time as Time, value: goldenSma200OnChart[i] }))
         .filter((d): d is { time: Time; value: number } => d.value != null)
       if (line200.length) {
+        const lbl = indicatorLabel('goldenSma200', 'SMA 200 (Diário)')
         cMain.addSeries(LineSeries, {
           color: gc.colorSma200,
-          title: 'SMA 200 (Diário)',
+          title: lbl.title,
           lineWidth: gc.lineWidth,
-          priceLineVisible: false,
-          lastValueVisible: !isPhone,
+          priceLineVisible: lbl.priceLineVisible,
+          lastValueVisible: lbl.lastValueVisible,
         }).setData(line200)
       }
     }
 
     if (!focusPrice && bullBandOnChart && bullMarketBand.enabled) {
       const bw = bullMarketBand
-      const bandOpts = {
-        priceLineVisible: false,
-        lastValueVisible: !isPhone,
-        lineWidth: bw.lineWidth,
-      } as const
+      const smaTitle = `BMSB SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`
+      const emaTitle = `BMSB EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`
+      const lblSma = indicatorLabel('bmsb-sma', smaTitle)
+      const lblEma = indicatorLabel('bmsb-ema', emaTitle)
       const fillLineWidth = Math.min(4, bw.lineWidth + 1) as 1 | 2 | 3 | 4
       const fillLine = bars
         .map((b, i) => {
@@ -438,18 +601,20 @@ export function BtcChartsSuite({
       const bandLineWidth = Math.min(4, Math.max(bw.lineWidth, 2)) as 1 | 2 | 3 | 4
       if (smaLine.length) {
         cMain.addSeries(LineSeries, {
-          ...bandOpts,
           color: bw.colorSma,
-          title: `BMSB SMA ${BULL_MARKET_BAND_SMA_WEEKS}w`,
+          title: lblSma.title,
           lineWidth: bandLineWidth,
+          priceLineVisible: lblSma.priceLineVisible,
+          lastValueVisible: lblSma.lastValueVisible,
         }).setData(smaLine)
       }
       if (emaLine.length) {
         cMain.addSeries(LineSeries, {
-          ...bandOpts,
           color: bw.colorEma,
-          title: `BMSB EMA ${BULL_MARKET_BAND_EMA_WEEKS}w`,
+          title: lblEma.title,
           lineWidth: bandLineWidth,
+          priceLineVisible: lblEma.priceLineVisible,
+          lastValueVisible: lblEma.lastValueVisible,
         }).setData(emaLine)
       }
     }
@@ -491,13 +656,15 @@ export function BtcChartsSuite({
       const st = onChain.sthLth
       const sthVals = ema(closes, st.rsiPeriod)
       const lthVals = sma(closes, st.smaPeriod)
+      const lblSth = indicatorLabel('sthLth-sth', 'STH/LTH (STH)')
+      const lblLth = indicatorLabel('sthLth-lth', 'STH/LTH (LTH)')
       cMain
         .addSeries(LineSeries, {
           color: st.colorSth,
+          title: lblSth.title,
           lineWidth: st.lineWidth,
-          /** Linha horizontal no gráfico ao nível do último valor (nível “até onde vai” o STH proxy) */
-          priceLineVisible: !isPhone,
-          lastValueVisible: !isPhone,
+          priceLineVisible: lblSth.priceLineVisible,
+          lastValueVisible: lblSth.lastValueVisible,
         })
         .setData(
           bars
@@ -507,9 +674,10 @@ export function BtcChartsSuite({
       cMain
         .addSeries(LineSeries, {
           color: st.colorLth,
+          title: lblLth.title,
           lineWidth: st.lineWidth,
-          priceLineVisible: !isPhone,
-          lastValueVisible: !isPhone,
+          priceLineVisible: lblLth.priceLineVisible,
+          lastValueVisible: lblLth.lastValueVisible,
         })
         .setData(
           bars
@@ -719,6 +887,7 @@ export function BtcChartsSuite({
     timeframe.id,
     registerMainChart,
     isPhone,
+    chartIndicatorDisplay,
   ])
 
   useEffect(() => {
@@ -767,6 +936,7 @@ export function BtcChartsSuite({
       >
         <div ref={mainRef} className="yieldscan-chart-root absolute inset-0" />
         <DrawingSystemOverlay bars={bars} />
+        <ChartIndicatorHitLayer bars={bars} onOpenSettings={onOpenIndicatorSettings} />
         <ChartDrawingsLegend />
         <ChartIndicatorLegend
           goldenCrossState={goldenCrossState}
