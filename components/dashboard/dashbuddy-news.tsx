@@ -160,24 +160,26 @@ function NewsCard({
     setImgErr(true)
   }
 
+  const dataHora =
+    n.dataPublicacao != null && n.dataPublicacao !== ''
+      ? formatNewsPublishedDateTimePt(n.dataPublicacao, nowMs)
+      : ''
+  const recency = n.dataPublicacao ? recencyLabel(n.dataPublicacao, nowMs) : ''
+
   const meta = (
-    <div className="flex items-center gap-2 border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
+    <div className="relative grid min-h-10 grid-cols-[1fr_auto_1fr] items-center border-t border-border/25 pt-3 text-[10px] text-muted-foreground">
       <span
-        className="min-w-0 flex-1 truncate"
+        className="min-w-0 truncate pr-2 text-left tabular-nums"
         title={
           n.dataPublicacao
             ? formatRelativeNewsTime(n.dataPublicacao, nowMs)
             : undefined
         }
       >
-        {n.fonte}
-        {n.dataPublicacao
-          ? ` · ${formatNewsPublishedDateTimePt(n.dataPublicacao, nowMs)}`
-          : ''}
-        {n.dataPublicacao ? (() => {
-          const label = recencyLabel(n.dataPublicacao, nowMs)
-          return label ? ` · ${label}` : ''
-        })() : ''}
+        {dataHora || '—'}
+        {recency ? (
+          <span className="ml-1 font-medium text-yellow-500/90">{recency}</span>
+        ) : null}
       </span>
       <NewsSpeakButton
         speechId={speechId}
@@ -185,25 +187,27 @@ function NewsCard({
         description={n.resumo}
         heard={ttsHeard}
         autoPlay={autoTts === true}
-        className="h-8 w-8 shrink-0 text-[15px]"
+        className="h-9 w-9 shrink-0 justify-self-center text-[17px]"
       />
-      {hasLink ? (
-        <a
-          href={n.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-muted/40"
-          aria-label="Abrir artigo na fonte"
-          onClick={(e) => {
-            e.stopPropagation()
-            markSeenOnce()
-          }}
-        >
-          <ExternalLink className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />
-        </a>
-      ) : (
-        <span className="h-8 w-8 shrink-0" aria-hidden />
-      )}
+      <div className="flex justify-end pl-2">
+        {hasLink ? (
+          <a
+            href={n.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-muted/40"
+            aria-label="Abrir artigo na fonte"
+            onClick={(e) => {
+              e.stopPropagation()
+              markSeenOnce()
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />
+          </a>
+        ) : (
+          <span className="h-9 w-9 shrink-0" aria-hidden />
+        )}
+      </div>
     </div>
   )
 
