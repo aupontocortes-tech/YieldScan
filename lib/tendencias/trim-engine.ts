@@ -15,7 +15,6 @@ import {
   type RawYieldPool,
 } from '@/lib/tendencias/fetch-defi'
 import { applyRankedNewsMentions } from '@/lib/tendencias/rank-news-mentions'
-import { applyRankedNewsMentions } from '@/lib/tendencias/rank-news-mentions'
 import {
   analyzeTrimNews,
   newsSentimentToLevel,
