@@ -101,7 +101,7 @@ export function BtcDashboard() {
   const [chartFocus, setChartFocus] = useState<'none' | 'goldenCross'>('none')
   const [chartResetKey, setChartResetKey] = useState(0)
   const chartCtx = useChartLandscapeContext()
-  const chartExpanded = chartCtx?.fullscreen ?? chartCtx?.rotateActive ?? false
+  const chartExpanded = chartCtx?.expanded ?? false
   const isPhone = useIsMobile()
 
   const openGoldenCrossFullscreen = () => {
@@ -485,7 +485,10 @@ export function BtcDashboard() {
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen} modal>
         <SheetContent
           side="right"
-          className="z-[100] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg"
+          className={cn(
+            'flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg',
+            chartExpanded ? 'z-[260]' : 'z-[100]',
+          )}
         >
           <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
             <div className="flex items-start justify-between gap-2 pr-8">
@@ -496,11 +499,7 @@ export function BtcDashboard() {
                   Preferências gravadas neste dispositivo (SQLite + localStorage).
                 </SheetDescription>
               </div>
-              <ChartFullscreenButton
-                showLabel={false}
-                className="shrink-0"
-                onClick={() => setDrawerOpen(false)}
-              />
+              <ChartFullscreenButton showLabel={false} className="shrink-0" onEnter={() => setDrawerOpen(false)} />
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-12">
@@ -518,7 +517,10 @@ export function BtcDashboard() {
       <Sheet open={drawingsOpen} onOpenChange={setDrawingsOpen} modal>
         <SheetContent
           side="right"
-          className="z-[100] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg"
+          className={cn(
+            'flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg',
+            chartExpanded ? 'z-[260]' : 'z-[100]',
+          )}
         >
           <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
             <SheetTitle className="flex items-center gap-2 text-base text-white">

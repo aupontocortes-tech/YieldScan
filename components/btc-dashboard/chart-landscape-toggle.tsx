@@ -8,19 +8,20 @@ import { cn } from '@/lib/utils'
 type ChartFullscreenButtonProps = {
   className?: string
   showLabel?: boolean
-  onClick?: () => void
+  /** Só ao entrar em ecrã cheio (ex.: fechar painel lateral). */
+  onEnter?: () => void
 }
 
 /** Ampliar / sair do ecrã cheio — desktop e mobile. */
 export function ChartFullscreenButton({
   className,
   showLabel = true,
-  onClick,
+  onEnter,
 }: ChartFullscreenButtonProps) {
   const ctx = useChartLandscapeContext()
   if (!ctx) return null
 
-  const { fullscreen, toggleFullscreen } = ctx
+  const { expanded, toggleFullscreen, exitExpanded } = ctx
 
   return (
     <Button
@@ -29,25 +30,29 @@ export function ChartFullscreenButton({
       size="sm"
       className={cn(
         'h-8 gap-1 px-2 text-[11px]',
-        fullscreen
+        expanded
           ? 'bg-[#d4af37]/20 text-[#d4af37]'
           : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
         className,
       )}
       onClick={() => {
-        toggleFullscreen()
-        onClick?.()
+        if (expanded) {
+          exitExpanded()
+        } else {
+          toggleFullscreen()
+          onEnter?.()
+        }
       }}
-      aria-pressed={fullscreen}
-      title={fullscreen ? 'Sair do ecrã cheio' : 'Ampliar gráfico'}
+      aria-pressed={expanded}
+      title={expanded ? 'Sair do ecrã cheio' : 'Ampliar gráfico'}
     >
-      {fullscreen ? (
+      {expanded ? (
         <Minimize2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
       ) : (
         <Maximize2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
       )}
       {showLabel ? (
-        <span className="font-medium">{fullscreen ? 'Sair' : 'Ampliar'}</span>
+        <span className="font-medium">{expanded ? 'Sair' : 'Ampliar'}</span>
       ) : null}
     </Button>
   )

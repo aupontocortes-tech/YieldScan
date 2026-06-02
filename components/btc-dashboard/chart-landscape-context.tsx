@@ -30,8 +30,11 @@ type ChartLandscapeContextValue = {
   fullscreen: boolean
   rotated: boolean
   rotateActive: boolean
+  /** Ecrã ampliado ou rotação activa — usar para «Sair». */
+  expanded: boolean
   toggleFullscreen: () => void
   toggleRotated: () => void
+  exitExpanded: () => void
   isMobile: boolean
 }
 
@@ -57,16 +60,19 @@ function useIsPortrait() {
 export function ChartLandscapeProvider({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile()
   const isPortrait = useIsPortrait()
-  const { fullscreen, rotated, toggleFullscreen, toggleRotated } = useChartLandscape()
+  const { fullscreen, rotated, toggleFullscreen, toggleRotated, disable } = useChartLandscape()
 
   const rotateActive = rotated && isPortrait && isMobile
+  const expanded = fullscreen || rotateActive
 
   const value: ChartLandscapeContextValue = {
     fullscreen,
     rotated,
     rotateActive,
+    expanded,
     toggleFullscreen,
     toggleRotated,
+    exitExpanded: disable,
     isMobile,
   }
 

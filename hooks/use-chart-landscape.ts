@@ -45,14 +45,22 @@ export function useChartLandscape() {
   }, [])
 
   const toggleFullscreen = useCallback(() => {
-    const v = viewRef.current
-    setPartial({ fullscreen: !v.fullscreen })
-  }, [setPartial])
+    setView((v) => {
+      const next = { ...v, fullscreen: !v.fullscreen }
+      viewRef.current = next
+      return next
+    })
+    notify()
+  }, [notify])
 
   const toggleRotated = useCallback(() => {
-    const v = viewRef.current
-    setPartial({ rotated: !v.rotated })
-  }, [setPartial])
+    setView((v) => {
+      const next = { ...v, rotated: !v.rotated }
+      viewRef.current = next
+      return next
+    })
+    notify()
+  }, [notify])
 
   useEffect(() => {
     if (!active) return

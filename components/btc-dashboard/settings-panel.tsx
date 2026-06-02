@@ -240,7 +240,7 @@ export function SettingsPanel({
     <div className="space-y-2">
       {embedded ? (
         <div className="flex justify-end pb-1">
-          <ChartFullscreenButton onClick={onChartViewApplied} />
+          <ChartFullscreenButton onEnter={onChartViewApplied} />
         </div>
       ) : null}
       {!embedded && (
