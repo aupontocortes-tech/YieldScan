@@ -115,13 +115,6 @@ function mentionSymbolColor(symbol: string): string {
 
 const NEWS_HEADLINES_DEFAULT = 10
 
-const PERIOD_LABEL: Record<MomentumPeriod, string> = {
-  '24h': '24h',
-  '7d': '7 dias',
-  '30d': '30 dias',
-  '90d': '90 dias',
-}
-
 function fmtMentionChange(pct: number | null | undefined): string {
   if (pct == null || !Number.isFinite(pct)) return ''
   const sign = pct >= 0 ? '+' : ''
