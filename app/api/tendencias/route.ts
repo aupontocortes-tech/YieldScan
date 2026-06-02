@@ -16,9 +16,10 @@ import {
 import { fetchFmpCryptoQuotes, fmpQuotesToRecord } from '@/lib/tendencias/fetch-fmp'
 import { fetchUsEquitiesSnapshot } from '@/lib/tendencias/fetch-us-equities'
 import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
+import { withTimeout } from '@/lib/fetch-timeout'
 import { traduzirArtigosBrutos } from '@/lib/traduzir-artigos-brutos'
 import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
-import type { AnalysisTone, MomentumPeriod } from '@/lib/tendencias/types'
+import type { AnalysisTone, MomentumPeriod, TendenciasApiResponse } from '@/lib/tendencias/types'
 import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
 
 export const maxDuration = 60
@@ -30,27 +31,31 @@ const fetchRaw = unstable_cache(
   async () => {
     const [markets, global, trending, cvNews, coindeskNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
-        fetchTendenciasMarkets(100),
+        fetchTendenciasMarkets(70),
         fetchTendenciasGlobal(),
         fetchTendenciasTrending(),
         fetchCryptoCvAsArticles(),
-        fetchCoindeskAsArticles(80),
+        fetchCoindeskAsArticles(45),
         fetchFmpCryptoQuotes(),
-        fetchUsEquitiesSnapshot(),
+        withTimeout(fetchUsEquitiesSnapshot(), 10_000, null),
         Promise.race([
           fetchDefillamaEmissions(),
           new Promise<{ data: never[]; error: string }>((r) =>
-            setTimeout(() => r({ data: [], error: 'timeout' }), 12_000),
+            setTimeout(() => r({ data: [], error: 'timeout' }), 8_000),
           ),
         ]).catch(() => ({ data: [] as never[], error: 'skip' })),
         fetchDefiChainsTop(8),
-        fetchTopYieldPools(6),
-        fetchTopProtocolFees(40),
+        withTimeout(fetchTopYieldPools(6), 6_000, []),
+        withTimeout(fetchTopProtocolFees(20), 8_000, []),
         fetchGlobalTvlChange7d(),
       ])
 
     const newsArticlesRaw = mergeTrimNewsArticles(coindeskNews, cvNews)
-    const newsArticles = await traduzirArtigosBrutos(newsArticlesRaw, 30)
+    const newsArticles = await withTimeout(
+      traduzirArtigosBrutos(newsArticlesRaw, 12),
+      8_000,
+      newsArticlesRaw,
+    )
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -100,9 +105,20 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v9'],
-  { revalidate: 120 },
+  ['tendencias-trim-v10'],
+  { revalidate: 180 },
 )
+
+function getTrimPayload(period: MomentumPeriod, tone: AnalysisTone): Promise<TendenciasApiResponse> {
+  return unstable_cache(
+    async () => {
+      const raw = await fetchRaw()
+      return buildTrimPayload({ ...raw, period, tone })
+    },
+    ['tendencias-trim-payload', period, tone],
+    { revalidate: 180 },
+  )()
+}
 
 export async function GET(req: NextRequest) {
   const periodParam = req.nextUrl.searchParams.get('period') ?? '7d'
@@ -114,16 +130,12 @@ export async function GET(req: NextRequest) {
   const tone = TONES.has(toneParam as AnalysisTone) ? (toneParam as AnalysisTone) : 'neutro'
 
   try {
-    const raw = await fetchRaw()
-    const payload = buildTrimPayload({
-      ...raw,
-      period,
-      tone,
-    })
+    const payload = await getTrimPayload(period, tone)
 
     return NextResponse.json(payload, {
       headers: {
-        'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
+        'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
+        'X-Tendencias-Cache': 'trim-v10',
       },
     })
   } catch (e) {

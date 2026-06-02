@@ -72,9 +72,9 @@ const montarNoticiasEmCache = unstable_cache(
     }
     const processadas = processarNoticias(results)
     const traduzidas = await Promise.race([
-      traduzirNoticiasRapido(processadas, { maxTraduzir: 40 }),
+      traduzirNoticiasRapido(processadas, { maxTraduzir: 18, loteParalelo: 5 }),
       new Promise<NoticiaProcessada[]>((resolve) =>
-        setTimeout(() => resolve(processadas), 45_000),
+        setTimeout(() => resolve(processadas), 12_000),
       ),
     ])
     const normalizadas = traduzidas.map((n) => ({
@@ -92,7 +92,7 @@ const montarNoticiasEmCache = unstable_cache(
     }
     return { traduzidas: [], aviso: AVISO_SEM_ARTIGOS }
   },
-  ['api-news-montar-v21'],
+  ['api-news-montar-v22'],
   { revalidate: NEWS_SERVER_REVALIDATE_SECONDS, tags: ['news'] }
 )
 

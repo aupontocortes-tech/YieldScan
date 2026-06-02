@@ -1,5 +1,6 @@
 import type { Pool } from './types'
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from './coingecko-static-logos'
+import { readHighlightIconUrl } from './mercado-highlight-icons'
 import { KNOWN_TOKEN_ADDRESSES } from './known-token-addresses'
 
 /** Trust Wallet `blockchains/*` folder names. */
@@ -236,6 +237,9 @@ export function buildAvatarUrlListFromSymbol(
   const trimmedUrl = opts?.iconUrl?.trim()
   if (trimmedUrl && /^https?:\/\//i.test(trimmedUrl)) urls.push(trimmedUrl)
   if (opts?.coingeckoId) {
+    const id = opts.coingeckoId.trim().toLowerCase()
+    const stored = readHighlightIconUrl(id)
+    if (stored) urls.push(stored)
     const cg = coingeckoIdLogoUrl(opts.coingeckoId)
     if (cg) urls.push(cg)
   }

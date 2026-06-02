@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import {
   agregarMercadoCoinGecko,
   mergeHighlightCoinsWithCache,
@@ -6,12 +7,13 @@ import {
   type MarketApiPayload,
   type MercadoCoin,
 } from '@/lib/coingecko-market'
+import { sanitizeMercadoErro } from '@/lib/mercado-erro'
 import { parseHighlightsQueryParam } from '@/lib/mercado-highlight-ids'
 import { fetchMercadoStocksTrending } from '@/lib/tendencias/fetch-us-equities'
 
 export const dynamic = 'force-dynamic'
 
-const TTL_MS = 60_000
+const TTL_MS = 90_000
 
 type CacheEntry = { payload: MarketApiPayload; ts: number }
 
@@ -24,23 +26,32 @@ function applyHighlightIdCache(payload: MarketApiPayload): MarketApiPayload {
   const highlightCoins = mergeHighlightCoinsWithCache(
     payload.highlightIds,
     payload.highlightCoins,
-    highlightByIdCache
+    highlightByIdCache,
   )
   rememberHighlightCoinsInCache(payload.highlightIds, highlightCoins, highlightByIdCache)
   const anyFromCache = highlightCoins.some(
-    (c, i) => c?.price != null && payload.highlightCoins[i]?.price == null
+    (c, i) => c?.price != null && payload.highlightCoins[i]?.price == null,
   )
   return {
     ...payload,
     highlightCoins,
     partial: payload.partial || anyFromCache,
-    erro: anyFromCache
-      ? payload.erro
-        ? `${payload.erro} Alguns valores vêm de cache recente.`
-        : 'Alguns valores vêm de cache recente.'
-      : payload.erro,
+    erro: sanitizeMercadoErro(payload.erro),
   }
 }
+
+const fetchMarketPayloadCached = unstable_cache(
+  async (idsKey: string) => {
+    const highlightIds = idsKey ? idsKey.split(',').filter(Boolean) : parseHighlightsQueryParam(null)
+    const [base, trendingStocks] = await Promise.all([
+      agregarMercadoCoinGecko(highlightIds),
+      fetchMercadoStocksTrending(),
+    ])
+    return { ...base, trendingStocks }
+  },
+  ['market-payload-v2'],
+  { revalidate: 90 },
+)
 
 export async function GET(req: NextRequest) {
   const now = Date.now()
@@ -51,18 +62,15 @@ export async function GET(req: NextRequest) {
   if (hit && now - hit.ts < TTL_MS) {
     return NextResponse.json(applyHighlightIdCache(hit.payload), {
       headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        'Cache-Control': 'public, s-maxage=90, stale-while-revalidate=180',
         'X-Market-Cache': 'hit',
       },
     })
   }
 
   try {
-    const [base, trendingStocks] = await Promise.all([
-      agregarMercadoCoinGecko(highlightIds),
-      fetchMercadoStocksTrending(),
-    ])
-    const fresh = applyHighlightIdCache({ ...base, trendingStocks })
+    const base = await fetchMarketPayloadCached(cacheKey)
+    const fresh = applyHighlightIdCache(base)
 
     const anyHighlight = fresh.highlightCoins.some((c) => c != null && c.price != null)
     const semNada =
@@ -95,7 +103,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(fresh, {
       headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        'Cache-Control': 'public, s-maxage=90, stale-while-revalidate=180',
         'X-Market-Cache': 'miss',
       },
     })

@@ -37,7 +37,7 @@ interface NewsPayload {
 
 /* ── Data ───────────────────────────────────────────────────────────────── */
 async function fetchNoticias(): Promise<NewsPayload> {
-  const res = await fetch('/api/news', { cache: 'no-store' })
+  const res = await fetch('/api/news')
   const json = (await res.json()) as NewsPayload
   if (!res.ok) throw new Error(json.erro ?? 'Erro ao carregar notícias.')
   return json
@@ -308,8 +308,9 @@ export function DashbuddyNews() {
     gcTime: 5 * 60_000,
     refetchInterval: NEWS_CLIENT_REFETCH_MS,
     refetchIntervalInBackground: true,
-    refetchOnMount: true,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
   })
 
   const feed = useMemo((): ItemFeedNoticia[] => {

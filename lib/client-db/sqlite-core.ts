@@ -174,6 +174,13 @@ export function isYieldscanSqliteOpen(): boolean {
   return db != null
 }
 
+/** Espera SQLite/IDB (ou falha silenciosa) antes de ler preferências de destaques. */
+export function whenYieldscanSqliteReady(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
+  if (db) return Promise.resolve()
+  return openYieldscanSqlite().catch(() => undefined)
+}
+
 export function kvGetJson<T>(key: string): T | null {
   if (!db) return null
   let stmt: ReturnType<Database['prepare']> | null = null

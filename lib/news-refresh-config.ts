@@ -2,7 +2,7 @@
  * Ciclo de atualização das notícias — ajustável sem mudar layout.
  *
  * Variáveis de ambiente (opcional):
- * - `NEWS_SERVER_REVALIDATE_SECONDS` — cache Next `unstable_cache` + alinhamento CDN (segundos). Padrão: 10.
+ * - `NEWS_SERVER_REVALIDATE_SECONDS` — cache Next `unstable_cache` + alinhamento CDN (segundos). Padrão: 60.
  * - `NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS` — SWR na edge (segundos). Padrão: 45.
  * - `NEXT_PUBLIC_NEWS_STALE_MS` — TanStack `staleTime` no cliente (ms). Padrão: 8000.
  * - `NEXT_PUBLIC_NEWS_REFETCH_MS` — TanStack `refetchInterval` (ms). Padrão: 10000 (mín. 5000).
@@ -26,9 +26,9 @@ function parseEnvInt(name: string, fallback: number, min?: number, max?: number)
 /** Segundos — só em servidor (route /api/news). */
 export const NEWS_SERVER_REVALIDATE_SECONDS = parseEnvInt(
   'NEWS_SERVER_REVALIDATE_SECONDS',
-  10,
-  5,
-  120
+  60,
+  15,
+  300
 )
 
 export const NEWS_CDN_S_MAXAGE_SECONDS = NEWS_SERVER_REVALIDATE_SECONDS
@@ -43,16 +43,16 @@ export const NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS = parseEnvInt(
 /** Milissegundos — exposto ao cliente (build-time). */
 export const NEWS_CLIENT_STALE_MS = parseEnvInt(
   'NEXT_PUBLIC_NEWS_STALE_MS',
-  8_000,
-  3_000,
+  60_000,
+  10_000,
   300_000
 )
 
 export const NEWS_CLIENT_REFETCH_MS = parseEnvInt(
   'NEXT_PUBLIC_NEWS_REFETCH_MS',
-  10_000,
-  5_000,
-  300_000
+  120_000,
+  30_000,
+  600_000
 )
 
 /** Atualiza o relógio relativo nos cartões ("há X min"). */

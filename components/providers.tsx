@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { PwaInstallPrompt } from '@/components/pwa-install-prompt'
 import { SolanaWalletProviders } from '@/components/solana-wallet-providers'
+import { MarketApiWarm } from '@/components/market-api-warm'
 import { SqliteBootstrap } from '@/components/sqlite-bootstrap'
 import { AppWagmiProvider } from '@/components/wagmi-provider'
 
@@ -30,6 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SolanaWalletProviders>
           <SqliteBootstrap />
+          <MarketApiWarm />
           <AppShell>{children}</AppShell>
           <PwaInstallPrompt />
         </SolanaWalletProviders>

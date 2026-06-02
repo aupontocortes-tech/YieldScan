@@ -17,7 +17,11 @@ export function useTendencias(prefs: TendenciasPrefs) {
   return useQuery({
     queryKey: ['tendencias', prefs],
     queryFn: () => fetchTendencias(prefs),
-    staleTime: 90_000,
-    refetchInterval: 120_000,
+    staleTime: 120_000,
+    gcTime: 300_000,
+    refetchInterval: 180_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
   })
 }

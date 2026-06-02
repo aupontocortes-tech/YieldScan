@@ -6,6 +6,7 @@
 import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
 import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
+import { sanitizeMercadoErro } from '@/lib/mercado-erro'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
 import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 
@@ -444,6 +445,14 @@ function fromSimpleHighlightById(id: string, raw: SimplePriceEntry): MercadoCoin
   }
 }
 
+function coinHasResolvableLogo(coin: MercadoCoin | null): boolean {
+  if (!coin) return false
+  if (coin.image?.trim()) return true
+  if (COINGECKO_LOGO_BY_ID[coin.id]) return true
+  if (SYMBOL_LOGO_URL[coin.symbol.toUpperCase()]) return true
+  return false
+}
+
 function fillHighlightStaticLogo(coin: MercadoCoin | null): MercadoCoin | null {
   if (!coin) return null
   const img = coin.image?.trim()
@@ -453,6 +462,22 @@ function fillHighlightStaticLogo(coin: MercadoCoin | null): MercadoCoin | null {
   const bySym = SYMBOL_LOGO_URL[coin.symbol.toUpperCase()]
   if (bySym) return { ...coin, image: bySym }
   return { ...coin, image: null }
+}
+
+async function fetchHighlightLogosByIds(ids: string[]): Promise<Map<string, MercadoCoin>> {
+  const unique = [...new Set(ids.map((id) => id.trim().toLowerCase()).filter(Boolean))]
+  if (!unique.length) return new Map()
+  const path = `/coins/markets?vs_currency=usd&ids=${unique.map(encodeURIComponent).join(',')}&order=market_cap_desc&per_page=${unique.length}&page=1&sparkline=false`
+  const raw = await fetchJson<unknown[]>(path).catch(() => null)
+  const out = new Map<string, MercadoCoin>()
+  if (!Array.isArray(raw)) return out
+  for (const row of raw) {
+    const r = asRecord(row)
+    if (!r) continue
+    const c = normalizeMarketsRow(r)
+    if (c) out.set(c.id, c)
+  }
+  return out
 }
 
 function mergeSimpleIntoCoin(coin: MercadoCoin, raw: SimplePriceEntry): MercadoCoin {
@@ -570,14 +595,36 @@ export async function agregarMercadoCoinGecko(
     )
   }
 
-  const simpleRaw = await fetchSimplePricesForHighlights(ids)
-  await sleep(BETWEEN_ENDPOINTS_MS)
-  const exchangeRaw = await fetchJson<unknown>(EXCHANGE_RATES_PATH)
-  await sleep(BETWEEN_ENDPOINTS_MS)
-  const [marketsRaw, trendingRaw] = await Promise.all([
-    fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
-    fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
-  ])
+  const hasCgKey = Boolean(
+    process.env.COINGECKO_PRO_API_KEY?.trim() || process.env.COINGECKO_DEMO_API_KEY?.trim(),
+  )
+
+  let simpleRaw: Record<string, SimplePriceEntry>
+  let exchangeRaw: unknown | null
+  let marketsRaw: unknown[] | null
+  let trendingRaw: { coins?: unknown[] } | null
+
+  if (hasCgKey) {
+    const [simple, exchange, markets, trending] = await Promise.all([
+      fetchSimplePricesForHighlights(ids),
+      fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
+      fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
+      fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
+    ])
+    simpleRaw = simple
+    exchangeRaw = exchange
+    marketsRaw = markets
+    trendingRaw = trending
+  } else {
+    simpleRaw = await fetchSimplePricesForHighlights(ids)
+    await sleep(250)
+    exchangeRaw = await fetchJson<unknown>(EXCHANGE_RATES_PATH)
+    await sleep(250)
+    ;[marketsRaw, trendingRaw] = await Promise.all([
+      fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
+      fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
+    ])
+  }
 
   const fx = parseFiatPerUsdFromExchangeRates(exchangeRaw)
   const brlPerUsd = fx?.brlPerUsd ?? 5.5
@@ -597,12 +644,10 @@ export async function agregarMercadoCoinGecko(
   }
   if (top10.length === 0) {
     partial = true
-    erros.push('Lista top 10 indisponível.')
   }
 
   if (!fx) {
     partial = true
-    erros.push('Taxas BRL/EUR indisponíveis; cotações aproximadas.')
   }
 
   const top10Enriched = top10.map((c) => enrichCoinQuotesFromUsd(usdOnlyQuotes(c), brlPerUsd, eurPerUsd))
@@ -635,6 +680,23 @@ export async function agregarMercadoCoinGecko(
     return fillHighlightStaticLogo(coin)
   })
 
+  const needLogos = ids.filter((id, i) => !coinHasResolvableLogo(highlightCoins[i] ?? null))
+  if (needLogos.length > 0) {
+    const logos = await fetchHighlightLogosByIds(needLogos)
+    for (let i = 0; i < highlightCoins.length; i++) {
+      const cur = highlightCoins[i]
+      const id = ids[i]!
+      const fromMarket = logos.get(id)
+      if (!cur || !fromMarket?.image) continue
+      highlightCoins[i] = fillHighlightStaticLogo({
+        ...cur,
+        name: fromMarket.name || cur.name,
+        symbol: fromMarket.symbol || cur.symbol,
+        image: fromMarket.image ?? cur.image,
+      })
+    }
+  }
+
   const missingHighlights = ids.filter((id, i) => {
     const c = highlightCoins[i]
     return !c || c.price == null
@@ -643,10 +705,6 @@ export async function agregarMercadoCoinGecko(
     if (missingHighlights.length === ids.length && Object.keys(simpleRaw).length === 0) {
       erros.push(
         'CoinGecko ocupada (limite da API). Os preços voltam em breve — usa «Actualizar» ou espera ~1 minuto.'
-      )
-    } else {
-      erros.push(
-        `${missingHighlights.length} destaque(s) sem preço agora (${missingHighlights.slice(0, 3).join(', ')}${missingHighlights.length > 3 ? '…' : ''}).`
       )
     }
   }
@@ -663,7 +721,6 @@ export async function agregarMercadoCoinGecko(
   }
   if (trending.length === 0) {
     partial = true
-    erros.push('Trending indisponível.')
   }
 
   const trendingEnriched = trending.map((c) => enrichCoinQuotesFromUsd(usdOnlyQuotes(c), brlPerUsd, eurPerUsd))
@@ -682,11 +739,13 @@ export async function agregarMercadoCoinGecko(
     trendingStocks: [],
     cachedAt: new Date().toISOString(),
     partial: partial || semDados,
-    erro: semDados
-      ? 'CoinGecko temporariamente indisponível. Tenta dentro de instantes.'
-      : erros.length > 0
-        ? erros.join(' ')
-        : null,
+    erro: sanitizeMercadoErro(
+      semDados
+        ? 'CoinGecko temporariamente indisponível. Tenta dentro de instantes.'
+        : erros.length > 0
+          ? erros.join(' ')
+          : null,
+    ),
     fonte: 'coingecko',
   }
 }
