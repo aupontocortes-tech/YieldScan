@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ChartFullscreenButton } from '@/components/btc-dashboard/chart-landscape-toggle'
 import { CycleBottomPanel } from '@/components/btc-dashboard/cycle-bottom-panel'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import type { MaType } from '@/lib/btc/types'
@@ -237,6 +238,11 @@ export function SettingsPanel({
 
   return (
     <div className="space-y-2">
+      {embedded ? (
+        <div className="flex justify-end pb-1">
+          <ChartFullscreenButton onClick={onChartViewApplied} />
+        </div>
+      ) : null}
       {!embedded && (
         <div className="mb-2 flex items-center justify-between">
           <div>

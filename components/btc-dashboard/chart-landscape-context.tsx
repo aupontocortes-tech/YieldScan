@@ -79,7 +79,7 @@ export function ChartLandscapeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ChartLandscapeContext.Provider value={value}>
-      {(fullscreen || rotateActive) && isMobile && (
+      {(fullscreen || rotateActive) && (
         <div className="fixed inset-0 z-[244] bg-[#050505]" aria-hidden />
       )}
       <div className={shellClass} style={rotateActive ? ROTATE_PORTRAIT_STYLE : undefined}>
