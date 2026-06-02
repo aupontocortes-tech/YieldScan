@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NewsSpeakButton } from '@/components/news/news-speak-button'
@@ -22,7 +22,9 @@ import {
   getNewsAgeMinutes,
 } from '@/lib/news-time'
 import type { InsightNoticia, NoticiaProcessada } from '@/lib/newsdata'
+import { fetchNoticiasClient } from '@/lib/fetch-noticias-client'
 import { fallbackImagemPorCategoria } from '@/lib/news-image-fallback'
+import { resolveNewsCardImageSrc } from '@/lib/news-image-src'
 import { cn } from '@/lib/utils'
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -33,14 +35,6 @@ interface NewsPayload {
   noticias: NoticiaProcessada[]
   feed?: ItemFeedNoticia[]
   insights: InsightNoticia[]
-}
-
-/* ── Data ───────────────────────────────────────────────────────────────── */
-async function fetchNoticias(): Promise<NewsPayload> {
-  const res = await fetch('/api/news')
-  const json = (await res.json()) as NewsPayload
-  if (!res.ok) throw new Error(json.erro ?? 'Erro ao carregar notícias.')
-  return json
 }
 
 /* ── Filters ─────────────────────────────────────────────────────────────── */
@@ -135,30 +129,38 @@ function NewsCard({
 }) {
   const ttsHeard = useNewsTtsHeard(speechId)
   const { seen, markSeenOnce, cardRef } = useNewsSeen(speechId)
-  const fallback = fallbackImagemPorCategoria(n.categoria)
-  const [src, setSrc] = useState(n.imagemUrl)
+  const fallbackRaw = fallbackImagemPorCategoria(n.categoria)
+  const primarySrc = resolveNewsCardImageSrc(n.imagemUrl)
+  const fallbackSrc = resolveNewsCardImageSrc(fallbackRaw)
+  const [src, setSrc] = useState(() => primarySrc || fallbackSrc)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const retriedFallback = useRef(false)
 
   useEffect(() => {
-    setSrc(n.imagemUrl)
+    setSrc(primarySrc || fallbackSrc)
     setImgLoaded(false)
     setImgErr(false)
     retriedFallback.current = false
-  }, [n.imagemUrl, n.articleId, n.link])
+  }, [primarySrc, fallbackSrc, n.articleId, n.link])
 
   const hasLink = n.link && n.link !== '#'
 
-  const onImgError = () => {
-    if (!retriedFallback.current && n.imagemUrl !== fallback) {
+  const onImgError = useCallback(() => {
+    if (!retriedFallback.current && fallbackSrc) {
       retriedFallback.current = true
-      setSrc(fallback)
       setImgLoaded(false)
+      setSrc((current) => (current !== fallbackSrc ? fallbackSrc : current))
       return
     }
     setImgErr(true)
-  }
+  }, [fallbackSrc])
+
+  useEffect(() => {
+    if (imgLoaded || imgErr || !src) return
+    const t = window.setTimeout(() => onImgError(), 12_000)
+    return () => window.clearTimeout(t)
+  }, [src, imgLoaded, imgErr, onImgError])
 
   const dataHora =
     n.dataPublicacao != null && n.dataPublicacao !== ''
@@ -261,11 +263,13 @@ function NewsCard({
       >
         <>
           <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted/30">
-            {!imgErr ? (
+            {!imgErr && src ? (
               <img
                 src={src}
                 alt=""
                 loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
                 className={cn(
                   'h-full w-full object-cover transition-opacity duration-500',
                   imgLoaded ? 'opacity-100' : 'opacity-0'
@@ -274,14 +278,16 @@ function NewsCard({
                 onError={onImgError}
               />
             ) : null}
-            {(!imgLoaded || imgErr) && (
+            {(!imgLoaded || imgErr || !src) && (
               <div
                 className={cn(
-                  'absolute inset-0 bg-muted/50',
-                  !imgErr && 'animate-pulse'
+                  'absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-muted/60 to-muted/30',
+                  !imgErr && src && 'animate-pulse'
                 )}
                 aria-hidden
-              />
+              >
+                <Newspaper className={cn('h-10 w-10', imgErr ? 'opacity-25' : 'opacity-15')} />
+              </div>
             )}
           </div>
           <div className="flex flex-1 flex-col p-4 pb-3">{texto}</div>
@@ -294,6 +300,8 @@ function NewsCard({
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 export function DashbuddyNews() {
+  const queryClient = useQueryClient()
+  const forceRefreshRef = useRef(false)
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [filtroHydrated, setFiltroHydrated] = useState(false)
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -318,7 +326,11 @@ export function DashbuddyNews() {
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['dashbuddy-news'],
-    queryFn: fetchNoticias,
+    queryFn: async () => {
+      const refresh = forceRefreshRef.current
+      forceRefreshRef.current = false
+      return (await fetchNoticiasClient({ refresh })) as NewsPayload
+    },
     retry: 2,
     retryDelay: 2_000,
     staleTime: NEWS_CLIENT_STALE_MS,
@@ -329,6 +341,15 @@ export function DashbuddyNews() {
     refetchOnWindowFocus: false,
     placeholderData: (prev) => prev,
   })
+
+  const atualizarNoticias = useCallback(async () => {
+    forceRefreshRef.current = true
+    await queryClient.fetchQuery({
+      queryKey: ['dashbuddy-news'],
+      queryFn: () => fetchNoticiasClient({ refresh: true }) as Promise<NewsPayload>,
+      staleTime: 0,
+    })
+  }, [queryClient])
 
   const feed = useMemo((): ItemFeedNoticia[] => {
     if (data?.feed && data.feed.length > 0) return data.feed
@@ -405,7 +426,7 @@ export function DashbuddyNews() {
           variant="outline"
           size="sm"
           className="gap-2 self-start border-yellow-500/30 hover:border-yellow-400/60"
-          onClick={() => void refetch()}
+          onClick={() => void atualizarNoticias()}
           disabled={isFetching}
         >
           <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
@@ -467,7 +488,7 @@ export function DashbuddyNews() {
           <p className="mt-1.5 text-sm text-muted-foreground">
             {apiErro ?? (error instanceof Error ? error.message : 'Erro desconhecido.')}
           </p>
-          <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => void refetch()}>
+          <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={() => void atualizarNoticias()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Tentar de novo
           </Button>
@@ -493,7 +514,7 @@ export function DashbuddyNews() {
                 : 'Actualiza para tentar de novo.'}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => void refetch()}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => void atualizarNoticias()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Actualizar
           </Button>

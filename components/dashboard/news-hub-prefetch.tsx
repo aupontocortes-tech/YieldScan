@@ -7,6 +7,7 @@ import { readTendenciasPrefs } from '@/lib/tendencias/prefs'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS } from '@/lib/mercado-highlight-ids'
 import { readStoredHighlightIds } from '@/lib/mercado-highlight-ids'
 import { MARKET_PINNED_STOCK_IDS } from '@/lib/us-equities'
+import { fetchNoticiasClient } from '@/lib/fetch-noticias-client'
 import { NEWS_CLIENT_STALE_MS } from '@/lib/news-refresh-config'
 
 function uniqIds(ids: string[]): string {
@@ -27,11 +28,7 @@ export function NewsHubPrefetch() {
 
     void qc.prefetchQuery({
       queryKey: ['dashbuddy-news'],
-      queryFn: async () => {
-        const res = await fetch('/api/news')
-        if (!res.ok) throw new Error('news')
-        return res.json()
-      },
+      queryFn: () => fetchNoticiasClient(),
       staleTime: NEWS_CLIENT_STALE_MS,
     })
 

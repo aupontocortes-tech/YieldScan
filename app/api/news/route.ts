@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache'
+import { revalidateTag, unstable_cache } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
 import { noticiasParaFeed } from '@/lib/market-feed'
 import {
@@ -111,8 +111,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const forceRefresh = req.nextUrl.searchParams.get('refresh') === '1'
+    if (forceRefresh) {
+      revalidateTag('news')
+    }
+
     const { traduzidas, aviso } = await montarNoticiasEmCache()
     const feed = noticiasParaFeed(traduzidas)
+
+    const cacheHeaders = forceRefresh
+      ? { 'Cache-Control': 'private, no-store, max-age=0' }
+      : {
+          'Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
+          'CDN-Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
+          'Vercel-CDN-Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
+        }
 
     return NextResponse.json(
       {
@@ -121,14 +134,11 @@ export async function GET(req: NextRequest) {
         feed,
         insights: paraJsonInsights(traduzidas),
         ...(aviso ? { aviso } : {}),
+        ...(forceRefresh ? { refreshedAt: new Date().toISOString() } : {}),
       },
       {
         status: 200,
-        headers: {
-          'Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
-          'CDN-Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${NEWS_CDN_S_MAXAGE_SECONDS}, stale-while-revalidate=${NEWS_CDN_STALE_WHILE_REVALIDATE_SECONDS}`,
-        },
+        headers: cacheHeaders,
       }
     )
   } catch (e) {
