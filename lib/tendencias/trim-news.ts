@@ -3,6 +3,8 @@ import { pareceIngles } from '@/lib/news-lang'
 import {
   NEGATIVE_WORDS,
   POSITIVE_WORDS,
+  STOCK_NAME_TO_TICKER,
+  STOCK_SYMBOL_FROM_NEWS,
   SYMBOL_FROM_NEWS,
   TRIM_NARRATIVE_RULES,
   type TrimNarrativeId,
@@ -19,6 +21,7 @@ export type TrimNewsArticle = {
   sentiment: 'POSITIVO' | 'NEGATIVO' | 'NEUTRO'
   sentimentScore: number
   symbols: string[]
+  stockSymbols: string[]
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -50,6 +53,24 @@ function extractSymbols(text: string): string[] {
   return [...set]
 }
 
+function extractStockSymbols(text: string): string[] {
+  const set = new Set<string>()
+  for (const m of text.match(STOCK_SYMBOL_FROM_NEWS) ?? []) {
+    set.add(m.toUpperCase())
+  }
+  for (const [pattern, ticker] of STOCK_NAME_TO_TICKER) {
+    if (pattern.test(text)) set.add(ticker)
+  }
+  return [...set]
+}
+
+function topMentionList(map: Map<string, number>, limit = 10) {
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([symbol, count]) => ({ symbol, count }))
+}
+
 export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsArticle[] {
   const out: TrimNewsArticle[] = []
   const seen = new Set<string>()
@@ -72,6 +93,7 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
     const finalScore =
       preset === 'POSITIVO' ? Math.max(score, 65) : preset === 'NEGATIVO' ? Math.min(score, 35) : score
 
+    const bloc = `${title} ${summary}`
     out.push({
       title,
       summary: summary.slice(0, 320),
@@ -81,7 +103,8 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
       text,
       sentiment: finalSentiment,
       sentimentScore: finalScore,
-      symbols: extractSymbols(`${title} ${summary}`),
+      symbols: extractSymbols(bloc),
+      stockSymbols: extractStockSymbols(bloc),
     })
   }
 
@@ -116,7 +139,6 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     else neutro++
 
     for (const sym of a.symbols) {
-      tokenMentions.set(sym, (tokenMentions.get(sym) ?? 0) + 1)
       const prev = tokenNewsScore.get(sym) ?? 50
       tokenNewsScore.set(sym, clamp((prev + a.sentimentScore) / 2, 0, 100))
     }
@@ -143,14 +165,8 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     .filter((n) => n.mentionCount > 0)
     .sort((a, b) => b.mentionCount - a.mentionCount)
 
-  const topMentions = [...tokenMentions.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([symbol, count]) => ({ symbol, count }))
-
   const headlines: TendenciasNewsHeadline[] = articles
     .filter((a) => !pareceIngles(a.title))
-    .slice(0, 40)
     .map((a) => ({
       titulo: a.title,
       impacto: a.sentiment,
@@ -158,17 +174,46 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
       link: a.link,
       sentiment: a.sentiment === 'POSITIVO' ? 'optimista' : a.sentiment === 'NEGATIVO' ? 'pessimista' : 'neutro',
       relevance: clamp(a.sentimentScore, 0, 100),
-      intensity: clamp(a.symbols.length * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0), 0, 100),
-      mentionCount: a.symbols.length,
+      intensity: clamp(
+        (a.symbols.length + a.stockSymbols.length) * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0),
+        0,
+        100,
+      ),
+      mentionCount: a.symbols.length + a.stockSymbols.length,
       symbols: a.symbols,
+      stockSymbols: a.stockSymbols,
     }))
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, 40)
+
+  /** Top 10 cripto e top 10 ações — mesma base das manchetes PT visíveis. */
+  const cryptoMentions = new Map<string, number>()
+  const stockMentions = new Map<string, number>()
+  for (const h of headlines) {
+    for (const sym of h.symbols) {
+      cryptoMentions.set(sym, (cryptoMentions.get(sym) ?? 0) + 1)
+    }
+    for (const sym of h.stockSymbols) {
+      stockMentions.set(sym, (stockMentions.get(sym) ?? 0) + 1)
+    }
+  }
+  const topCryptoMentions = topMentionList(cryptoMentions, 10)
+  const topStockMentions = topMentionList(stockMentions, 10)
+
+  for (const h of headlines) {
+    for (const sym of h.symbols) {
+      tokenMentions.set(sym, (tokenMentions.get(sym) ?? 0) + 1)
+    }
+  }
 
   return {
     insight: {
       positivo,
       neutro,
       negativo,
-      topMentions,
+      topMentions: topCryptoMentions,
+      topCryptoMentions,
+      topStockMentions,
       dominantNarrative: narrativeStats[0]?.label ?? null,
       headlines,
     },

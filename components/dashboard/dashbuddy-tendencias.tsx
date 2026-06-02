@@ -13,6 +13,7 @@ import {
   type TendenciasTokenRow,
 } from '@/lib/tendencias/types'
 import { readTendenciasPrefs, writeTendenciasPrefs } from '@/lib/tendencias/prefs'
+import { TICKER_TO_XSTOCK } from '@/lib/us-equities'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -111,29 +112,70 @@ function mentionSymbolColor(symbol: string): string {
 }
 
 function headlineMatchesSymbol(
-  headline: { titulo: string; symbols?: string[] },
+  headline: { titulo: string; symbols?: string[]; stockSymbols?: string[] },
   symbol: string,
 ): boolean {
   const sym = symbol.toUpperCase()
   if (headline.symbols?.some((s) => s.toUpperCase() === sym)) return true
+  if (headline.stockSymbols?.some((s) => s.toUpperCase() === sym)) return true
   return new RegExp(`\\b${sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(headline.titulo)
 }
 
-const NEWS_TOP_TOKENS = 10
+const NEWS_TOP_MENTIONS = 10
 const NEWS_HEADLINES_DEFAULT = 10
 const NEWS_HEADLINES_FILTERED = 15
 
-function NewsTokenFilterBar({
-  items,
+function NewsMentionChip({
+  symbol,
+  count,
+  active,
+  kind,
+  onToggle,
+}: {
+  symbol: string
+  count: number
+  active: boolean
+  kind: 'crypto' | 'stock'
+  onToggle: () => void
+}) {
+  const sym = symbol.toUpperCase()
+  const xstockId = kind === 'stock' ? TICKER_TO_XSTOCK[sym] : undefined
+  return (
+    <button
+      type="button"
+      title={`${count} menção${count === 1 ? '' : 'ões'} na imprensa`}
+      aria-pressed={active}
+      onClick={onToggle}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors',
+        active
+          ? 'border-yellow-500/60 bg-yellow-500/15'
+          : 'border-border/40 bg-background/40 hover:border-border/70 hover:bg-muted/10',
+      )}
+    >
+      <TokenSymbolAvatar symbol={sym} coingeckoId={xstockId} size={18} />
+      <span className={cn('text-xs font-semibold', mentionSymbolColor(sym))}>{sym}</span>
+      <span className="rounded-full bg-muted/30 px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
+        {count}
+      </span>
+    </button>
+  )
+}
+
+function NewsTopMentionsSection({
+  topCrypto,
+  topStocks,
   activeSymbol,
   onSelectSymbol,
 }: {
-  items: Array<{ symbol: string; count: number }>
+  topCrypto: Array<{ symbol: string; count: number }>
+  topStocks: Array<{ symbol: string; count: number }>
   activeSymbol: string | null
   onSelectSymbol: (symbol: string | null) => void
 }) {
   const [custom, setCustom] = useState('')
-  const top = items.slice(0, NEWS_TOP_TOKENS)
+  const cryptoItems = topCrypto.slice(0, NEWS_TOP_MENTIONS)
+  const stockItems = topStocks.slice(0, NEWS_TOP_MENTIONS)
 
   function applyCustom() {
     const sym = custom.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -142,10 +184,57 @@ function NewsTokenFilterBar({
     setCustom('')
   }
 
+  function toggle(sym: string) {
+    const key = sym.toUpperCase()
+    onSelectSymbol(activeSymbol === key ? null : key)
+  }
+
+  if (!cryptoItems.length && !stockItems.length) return null
+
   return (
-    <div className="space-y-2 rounded-lg border border-border/40 bg-muted/5 px-2.5 py-2">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Filtrar por token</p>
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="space-y-3">
+      {cryptoItems.length > 0 && (
+        <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            10 tokens mais falados
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {cryptoItems.map((m) => (
+              <NewsMentionChip
+                key={`c-${m.symbol}`}
+                symbol={m.symbol}
+                count={m.count}
+                kind="crypto"
+                active={activeSymbol === m.symbol.toUpperCase()}
+                onToggle={() => toggle(m.symbol)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {stockItems.length > 0 && (
+        <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <Building2 className="h-3.5 w-3.5" aria-hidden />
+            10 ações mais faladas
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {stockItems.map((m) => (
+              <NewsMentionChip
+                key={`s-${m.symbol}`}
+                symbol={m.symbol}
+                count={m.count}
+                kind="stock"
+                active={activeSymbol === m.symbol.toUpperCase()}
+                onToggle={() => toggle(m.symbol)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/30 bg-muted/5 px-2.5 py-2">
         <button
           type="button"
           aria-pressed={!activeSymbol}
@@ -157,45 +246,23 @@ function NewsTokenFilterBar({
               : 'text-muted-foreground hover:bg-muted/20',
           )}
         >
-          Todas
+          Todas as manchetes
         </button>
-        {top.map((m) => {
-          const sym = m.symbol.toUpperCase()
-          const active = activeSymbol === sym
-          return (
-            <button
-              key={m.symbol}
-              type="button"
-              title={`${m.count} menções`}
-              aria-pressed={active}
-              onClick={() => onSelectSymbol(active ? null : sym)}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 transition-colors',
-                active
-                  ? 'border-yellow-500/60 bg-yellow-500/15'
-                  : 'border-border/40 hover:border-border/70 hover:bg-muted/10',
-              )}
-            >
-              <TokenSymbolAvatar symbol={m.symbol} size={16} />
-              <span className={cn('text-xs font-semibold', mentionSymbolColor(m.symbol))}>{m.symbol}</span>
-            </button>
-          )
-        })}
-      </div>
-      <div className="flex gap-1.5">
-        <Input
-          value={custom}
-          onChange={(e) => setCustom(e.target.value.toUpperCase())}
-          placeholder="Outro token (ex: DOGE)"
-          className="h-8 flex-1 text-xs"
-          maxLength={12}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') applyCustom()
-          }}
-        />
-        <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 px-2.5 text-xs" onClick={applyCustom}>
-          Filtrar
-        </Button>
+        <div className="flex min-w-[12rem] flex-1 gap-1.5">
+          <Input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value.toUpperCase())}
+            placeholder="Outro ticker (ex: DOGE, NVDA)"
+            className="h-8 flex-1 text-xs"
+            maxLength={12}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyCustom()
+            }}
+          />
+          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 px-2.5 text-xs" onClick={applyCustom}>
+            Filtrar
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -601,7 +668,7 @@ export function DashbuddyTendencias() {
     writeTendenciasPrefs(p)
   }, [])
 
-  const { data, isLoading, isError, refetch, isFetching } = useTendencias(prefs)
+  const { data, isLoading, isError, refetch, isFetching, refreshTendencias } = useTendencias(prefs)
   const period = data?.meta.momentumPeriod ?? prefs.momentumPeriod
 
   const tokenRows = useMemo(() => {
@@ -676,7 +743,7 @@ export function DashbuddyTendencias() {
             size="sm"
             className="gap-1.5"
             disabled={isFetching}
-            onClick={() => refetch()}
+            onClick={() => void refreshTendencias()}
           >
             <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
             Actualizar
@@ -1033,13 +1100,17 @@ export function DashbuddyTendencias() {
                 {news.negativo} negativas
               </Badge>
             </div>
-            {news.topMentions.length > 0 && (
-              <NewsTokenFilterBar
-                items={news.topMentions}
+            {(news.topCryptoMentions?.length ?? news.topMentions.length) > 0 ||
+            (news.topStockMentions?.length ?? 0) > 0 ? (
+              <NewsTopMentionsSection
+                topCrypto={
+                  news.topCryptoMentions?.length ? news.topCryptoMentions : news.topMentions
+                }
+                topStocks={news.topStockMentions ?? []}
                 activeSymbol={newsTokenFilter}
                 onSelectSymbol={setNewsTokenFilter}
               />
-            )}
+            ) : null}
             <ul className="space-y-3">
               {news.headlines.length === 0 ? (
                 <li className="text-lg leading-snug text-muted-foreground">

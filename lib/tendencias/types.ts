@@ -91,13 +91,19 @@ export type TendenciasNewsHeadline = {
   intensity: number
   mentionCount: number
   symbols: string[]
+  stockSymbols: string[]
 }
+
+export type TendenciasNewsMention = { symbol: string; count: number }
 
 export type TendenciasNewsInsight = {
   positivo: number
   neutro: number
   negativo: number
-  topMentions: Array<{ symbol: string; count: number }>
+  /** @deprecated alias de topCryptoMentions */
+  topMentions: TendenciasNewsMention[]
+  topCryptoMentions: TendenciasNewsMention[]
+  topStockMentions: TendenciasNewsMention[]
   dominantNarrative: string | null
   headlines: TendenciasNewsHeadline[]
 }

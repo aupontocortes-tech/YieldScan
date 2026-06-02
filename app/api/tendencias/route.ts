@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { unstable_cache } from 'next/cache'
+import { revalidateTag, unstable_cache } from 'next/cache'
 import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
+import { fetchGnewsAsArticles, fetchGnewsStocksAsArticles } from '@/lib/gnews'
 import { fetchCoindeskAsArticles } from '@/lib/tendencias/fetch-coindesk'
 import {
   fetchDefiChainsTop,
@@ -17,7 +18,10 @@ import { fetchFmpCryptoQuotes, fmpQuotesToRecord } from '@/lib/tendencias/fetch-
 import { fetchUsEquitiesSnapshot } from '@/lib/tendencias/fetch-us-equities'
 import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
 import { withTimeout } from '@/lib/fetch-timeout'
-import { traduzirArtigosBrutos } from '@/lib/traduzir-artigos-brutos'
+import {
+  filtrarArtigosPortuguesParaFeed,
+  traduzirArtigosBrutos,
+} from '@/lib/traduzir-artigos-brutos'
 import { buildTrimPayload } from '@/lib/tendencias/trim-engine'
 import type { AnalysisTone, MomentumPeriod, TendenciasApiResponse } from '@/lib/tendencias/types'
 import { fetchDefillamaEmissions } from '@/services/api/defillama-emissions'
@@ -29,11 +33,13 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, cvNews, coindeskNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
+    const [markets, global, trending, gnewsTrim, gnewsStocks, cvNews, coindeskNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
         fetchTendenciasMarkets(70),
         fetchTendenciasGlobal(),
         fetchTendenciasTrending(),
+        fetchGnewsAsArticles(),
+        fetchGnewsStocksAsArticles(),
         fetchCryptoCvAsArticles(),
         fetchCoindeskAsArticles(45),
         fetchFmpCryptoQuotes(),
@@ -50,12 +56,16 @@ const fetchRaw = unstable_cache(
         fetchGlobalTvlChange7d(),
       ])
 
-    const newsArticlesRaw = mergeTrimNewsArticles(coindeskNews, cvNews)
-    const newsArticles = await withTimeout(
-      traduzirArtigosBrutos(newsArticlesRaw, 12),
-      8_000,
-      newsArticlesRaw,
+    /** GNews PT + bolsa; CoinDesk + cv como reforço cripto. */
+    const newsArticlesRaw = mergeTrimNewsArticles(gnewsTrim, gnewsStocks, coindeskNews, cvNews)
+    const newsArticlesTranslated = await withTimeout(
+      traduzirArtigosBrutos(newsArticlesRaw, 40),
+      28_000,
+      null,
     )
+    /** Só português: traduzidas ou, se timeout, só fontes já PT (ex. GNews). */
+    const newsArticles =
+      newsArticlesTranslated ?? filtrarArtigosPortuguesParaFeed(newsArticlesRaw)
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -105,8 +115,8 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v10'],
-  { revalidate: 180 },
+  ['tendencias-trim-v13'],
+  { revalidate: 180, tags: ['tendencias'] },
 )
 
 function getTrimPayload(period: MomentumPeriod, tone: AnalysisTone): Promise<TendenciasApiResponse> {
@@ -116,7 +126,7 @@ function getTrimPayload(period: MomentumPeriod, tone: AnalysisTone): Promise<Ten
       return buildTrimPayload({ ...raw, period, tone })
     },
     ['tendencias-trim-payload', period, tone],
-    { revalidate: 180 },
+    { revalidate: 180, tags: ['tendencias'] },
   )()
 }
 
@@ -130,14 +140,27 @@ export async function GET(req: NextRequest) {
   const tone = TONES.has(toneParam as AnalysisTone) ? (toneParam as AnalysisTone) : 'neutro'
 
   try {
+    const forceRefresh = req.nextUrl.searchParams.get('refresh') === '1'
+    if (forceRefresh) {
+      revalidateTag('tendencias')
+    }
+
     const payload = await getTrimPayload(period, tone)
 
-    return NextResponse.json(payload, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-        'X-Tendencias-Cache': 'trim-v10',
+    const cacheHeaders = forceRefresh
+      ? { 'Cache-Control': 'private, no-store, max-age=0' }
+      : {
+          'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
+          'X-Tendencias-Cache': 'trim-v13',
+        }
+
+    return NextResponse.json(
+      {
+        ...payload,
+        ...(forceRefresh ? { refreshedAt: new Date().toISOString() } : {}),
       },
-    })
+      { headers: cacheHeaders },
+    )
   } catch (e) {
     if (process.env.NODE_ENV === 'development') console.error('[api/tendencias]', e)
     return NextResponse.json(
@@ -168,6 +191,8 @@ export async function GET(req: NextRequest) {
           neutro: 0,
           negativo: 0,
           topMentions: [],
+          topCryptoMentions: [],
+          topStockMentions: [],
           dominantNarrative: null,
           headlines: [],
         },

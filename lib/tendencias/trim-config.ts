@@ -72,5 +72,31 @@ export const TRIM_NARRATIVE_RULES: Array<{
   { id: 'gaming', label: 'Gaming', keywords: /gaming|gamefi|play-to-earn|metaverse|axie|immutable|ronin/i, related: ['IMX', 'AXS', 'GALA', 'SAND'] },
 ]
 
+/** Case-sensitive: só conta ticker em MAIÚSCULAS no texto (evita "near" → NEAR). */
 export const SYMBOL_FROM_NEWS =
-  /\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|MATIC|POL|UNI|AAVE|ARB|OP|PEPE|SHIB|HYPE|RENDER|FET|TAO|NEAR|USDT|USDC|ONDO|IMX|SUI|APT|INJ|SEI|WIF|BONK)\b/gi
+  /\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|MATIC|POL|UNI|AAVE|ARB|OP|PEPE|SHIB|HYPE|RENDER|FET|TAO|NEAR|USDT|USDC|ONDO|IMX|SUI|APT|INJ|SEI|WIF|BONK)\b/g
+
+/** Tickers de ações US nas manchetes (case-sensitive). */
+export const STOCK_SYMBOL_FROM_NEWS =
+  /\b(NVDA|MSFT|GOOGL|GOOG|META|AMZN|AAPL|AMD|AVGO|TSM|INTC|MU|QCOM|ARM|SMCI|PLTR|CRM|ORCL|ADBE|NFLX|COIN|MSTR|TSLA|SPY|QQQ|JPM|BAC|WMT|DIS|BA|XOM|JNJ|V|MA|HD|PG|UNH|COST|IBM|CSCO|UBER|ABNB|NKE|SBUX|PYPL|SHOP|SQ|SNOW|INTU|NOW|PANW|CRWD)\b/g
+
+/** Nomes de empresa → ticker (menções sem sigla). */
+export const STOCK_NAME_TO_TICKER: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bNVIDIA\b/i, 'NVDA'],
+  [/\bMicrosoft\b/i, 'MSFT'],
+  [/\bApple\b/i, 'AAPL'],
+  [/\bAlphabet\b/i, 'GOOGL'],
+  [/\bGoogle\b/i, 'GOOGL'],
+  [/\bMeta\b/i, 'META'],
+  [/\bAmazon\b/i, 'AMZN'],
+  [/\bTesla\b/i, 'TSLA'],
+  [/\bNetflix\b/i, 'NFLX'],
+  [/\bCoinbase\b/i, 'COIN'],
+  [/\bMicroStrategy\b/i, 'MSTR'],
+  [/\bAMD\b/i, 'AMD'],
+  [/\bIntel\b/i, 'INTC'],
+  [/\bPalantir\b/i, 'PLTR'],
+  [/\bS&P\s*500\b/i, 'SPY'],
+  [/\bNasdaq\b/i, 'QQQ'],
+  [/\bWall Street\b/i, 'SPY'],
+]
