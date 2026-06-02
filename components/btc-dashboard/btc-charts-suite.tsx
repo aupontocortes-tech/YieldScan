@@ -933,6 +933,7 @@ export function BtcChartsSuite({
           isPhone && hasOscillatorStack
             ? 'h-[min(46dvh,340px)] shrink-0'
             : 'min-h-[200px] flex-1 sm:min-h-[240px]',
+          focusPrice && isPhone && 'min-h-0',
         )}
       >
         <div ref={mainRef} className="yieldscan-chart-root absolute inset-0" />
@@ -975,14 +976,24 @@ export function BtcChartsSuite({
           </div>
         )}
         {goldenCrossDaily.enabled && goldenCrossLoading && (
-          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-cyan-500/30 bg-black/80 px-2 py-1 text-[10px] text-cyan-300">
+          <div
+            className={cn(
+              'pointer-events-none absolute left-2 z-10 rounded-md border border-cyan-500/30 bg-black/80 px-2 py-1 text-[10px] text-cyan-300',
+              focusPrice && isPhone ? 'bottom-2 top-auto max-w-[85%]' : 'top-24',
+            )}
+          >
             A carregar Golden / Death Cross (dados diários)…
           </div>
         )}
         {goldenCrossDaily.enabled &&
           !goldenCrossLoading &&
           (!goldenSma50OnChart || !goldenSma200OnChart) && (
-            <div className="pointer-events-none absolute left-2 top-32 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
+            <div
+              className={cn(
+                'pointer-events-none absolute left-2 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90',
+                focusPrice && isPhone ? 'bottom-2 top-auto max-w-[85%]' : 'top-32',
+              )}
+            >
               Sem dados diários suficientes para SMA 50 e 200. Usa Diário ou atualiza.
             </div>
           )}

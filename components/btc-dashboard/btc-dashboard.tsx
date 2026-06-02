@@ -248,37 +248,53 @@ export function BtcDashboard() {
 
   if (chartFocus === 'goldenCross') {
     return (
-      <div className="fixed inset-0 z-[200] flex min-h-0 flex-col bg-[#050505] text-zinc-100">
-        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.06] px-3 py-2">
+      <div className="fixed inset-0 z-[200] flex min-h-0 flex-col bg-[#050505] text-zinc-100 pb-[env(safe-area-inset-bottom)]">
+        <header
+          className={cn(
+            'grid shrink-0 items-center border-b border-white/[0.06] bg-[#050505]',
+            isPhone
+              ? 'grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
+              : 'grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 px-3 py-2',
+          )}
+        >
           <Button
             type="button"
             variant="outline"
-            size="sm"
-            className="h-9 gap-1.5 border-zinc-700 bg-black/60 text-xs text-zinc-200 hover:bg-white/5"
+            size={isPhone ? 'icon' : 'sm'}
+            className={cn(
+              'shrink-0 border-zinc-700 bg-black/60 text-zinc-200 hover:bg-white/5',
+              isPhone ? 'h-8 w-8' : 'h-9 gap-1.5 text-xs',
+            )}
             onClick={backFromChartFocus}
+            aria-label="Voltar aos indicadores"
           >
             <ArrowLeft className="h-4 w-4" />
-            Voltar aos indicadores
+            {!isPhone ? 'Voltar aos indicadores' : null}
           </Button>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-white">Golden Cross · Death Cross</p>
-            <p className="text-[10px] text-zinc-500">
-              {pair.label} · Diário · SMA 50 e SMA 200
+          <div className="min-w-0 px-0.5">
+            <p className="truncate text-xs font-semibold text-white sm:text-sm">
+              {isPhone ? 'Golden / Death Cross' : 'Golden Cross · Death Cross'}
+            </p>
+            <p className="truncate text-[9px] text-zinc-500 sm:text-[10px]">
+              {pair.label} · Diário · SMA 50 + 200
             </p>
           </div>
-          <ChartLandscapeToggle />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-zinc-400"
-            disabled={isFetching}
-            onClick={() => void refetch()}
-          >
-            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-          </Button>
+          <div className="flex shrink-0 items-center gap-0">
+            <ChartLandscapeToggle showLabels={!isPhone} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-zinc-400"
+              disabled={isFetching}
+              aria-label="Atualizar gráfico"
+              onClick={() => void refetch()}
+            >
+              <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+            </Button>
+          </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
+        <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', isPhone ? 'p-1' : 'p-2')}>
           {isError && (
             <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
               Não foi possível carregar as velas.

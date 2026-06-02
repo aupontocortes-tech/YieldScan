@@ -27,9 +27,9 @@ export function ChartFullscreenButton({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
+      size={showLabel ? 'sm' : 'icon'}
       className={cn(
-        'h-8 gap-1 px-2 text-[11px]',
+        showLabel ? 'h-8 gap-1 px-2 text-[11px]' : 'h-8 w-8',
         expanded
           ? 'bg-[#d4af37]/20 text-[#d4af37]'
           : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
@@ -59,7 +59,7 @@ export function ChartFullscreenButton({
 }
 
 /** Ampliar (todos) + Rodar (só mobile). */
-export function ChartLandscapeToggle() {
+export function ChartLandscapeToggle({ showLabels = true }: { showLabels?: boolean }) {
   const ctx = useChartLandscapeContext()
   if (!ctx) return null
 
@@ -67,20 +67,25 @@ export function ChartLandscapeToggle() {
 
   return (
     <div className="flex shrink-0 items-center gap-0.5">
-      <ChartFullscreenButton />
+      <ChartFullscreenButton showLabel={showLabels} />
       {isMobile ? (
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size={showLabels ? 'sm' : 'icon'}
           className={cn(
-            'h-8 gap-1 px-2 text-[11px]',
+            showLabels ? 'h-8 gap-1 px-2 text-[11px]' : 'h-8 w-8',
             rotateActive
               ? 'bg-[#d4af37]/20 text-[#d4af37]'
               : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
           )}
           onClick={toggleRotated}
           aria-pressed={rotateActive}
+          aria-label={
+            rotateActive
+              ? 'Voltar à vertical'
+              : 'Rodar para paisagem (segura o telemóvel na horizontal)'
+          }
           title={
             rotateActive
               ? 'Voltar à vertical'
@@ -91,7 +96,9 @@ export function ChartLandscapeToggle() {
             className={cn('h-3.5 w-3.5 shrink-0', rotateActive ? 'rotate-0' : '-rotate-90')}
             aria-hidden
           />
-          <span className="font-medium">{rotateActive ? 'Vertical' : 'Rodar'}</span>
+          {showLabels ? (
+            <span className="font-medium">{rotateActive ? 'Vertical' : 'Rodar'}</span>
+          ) : null}
         </Button>
       ) : null}
     </div>
