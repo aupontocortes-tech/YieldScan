@@ -14,6 +14,17 @@ import type { DrawingDraft } from '@/lib/drawing-system/types'
 import type { ChartPoint } from '@/lib/drawing-system/types'
 import type { DrawingToolId } from '@/lib/btc/chart-drawings-config'
 import type { OhlcvBar } from '@/lib/btc/types'
+import type { DrawingTransientState } from '@/lib/drawing-system/store/drawing-view-state'
+import { snapPoint } from '@/lib/drawing-system/utils/snap'
+import {
+  clearGesturePreview,
+  getGesturePreview,
+  setGesturePreview,
+} from '@/lib/drawing-system/events/gesture-preview'
+
+/** Distância mínima (px) antes de atualizar preview / pincel — menos trabalho no mobile. */
+const PREVIEW_MOVE_PX = 2
+const FREEHAND_MOVE_PX = 3
 
 type DragState =
   | { kind: 'none' }
@@ -33,6 +44,9 @@ export class PointerEngine {
   private drag: DragState = { kind: 'none' }
   private chartW = 0
   private drawingGesture = false
+  private lastClientX = 0
+  private lastClientY = 0
+  private hasLastClient = false
 
   constructor(
     private mapper: CoordinateMapper,
@@ -55,13 +69,45 @@ export class PointerEngine {
   cancelDraft() {
     this.drawingGesture = false
     this.drag = { kind: 'none' }
+    this.hasLastClient = false
+    clearGesturePreview()
     useDrawingStore.getState().clearTransient()
+  }
+
+  private resetMoveAnchor(clientX: number, clientY: number) {
+    this.lastClientX = clientX
+    this.lastClientY = clientY
+    this.hasLastClient = true
+  }
+
+  private movedEnough(clientX: number, clientY: number, minPx: number): boolean {
+    if (!this.hasLastClient) return true
+    return Math.hypot(clientX - this.lastClientX, clientY - this.lastClientY) >= minPx
+  }
+
+  private snapPt(pt: ChartPoint): ChartPoint {
+    return snapPoint(pt, this.bars, useDrawingStore.getState().prefs.weakMagnet)
+  }
+
+  private activeTransient(): DrawingTransientState {
+    const live = getGesturePreview()
+    if (live) return live
+    const s = useDrawingStore.getState().transient
+    return s
+  }
+
+  private pushGestureDraft(draft: NonNullable<DrawingDraft>) {
+    setGesturePreview({ draft, move: null })
+  }
+
+  private pushGestureMove(move: NonNullable<DrawingTransientState['move']>) {
+    setGesturePreview({ draft: null, move })
   }
 
   /** Conclui polilinha / path (Enter ou duplo clique). */
   commitPolylineDraft() {
     const store = useDrawingStore.getState()
-    const draft = store.transient.draft
+    const draft = getGesturePreview()?.draft ?? store.transient.draft
     if (!draft || draft.requiredPoints !== 99 || draft.points.length < 2) return false
     store.addDrawing(
       createDrawing(draft.type, draft.points, {
@@ -69,6 +115,7 @@ export class PointerEngine {
         style: draft.toolId ? getDefaultStyleForTool(draft.toolId as DrawingToolId) : undefined,
       }),
     )
+    clearGesturePreview()
     store.clearTransient()
     this.drawingGesture = false
     return true
@@ -76,7 +123,7 @@ export class PointerEngine {
 
   private beginDrawDraft(toolId: DrawingToolId, type: DrawingDraft['type'], pt: ChartPoint) {
     const spec = getToolSpec(toolId)!
-    useDrawingStore.getState().setTransientDraft({
+    this.pushGestureDraft({
       type,
       toolId,
       points: [pt],
@@ -123,6 +170,8 @@ export class PointerEngine {
       const spec = getToolSpec(toolId)
       if (!type || !spec) return false
 
+      this.resetMoveAnchor(clientX, clientY)
+
       if (isSingleClickTool(toolId)) {
         let text: string | undefined
         if (spec.renderKind === 'text' || spec.renderKind === 'note' || spec.renderKind === 'callout') {
@@ -141,13 +190,14 @@ export class PointerEngine {
       }
 
       if (isMultiClickTool(toolId)) {
-        const draft = store.transient.draft
+        const draft = store.transient.draft ?? getGesturePreview()?.draft
         if (draft?.toolId === toolId) {
           const last = draft.points[draft.points.length - 1]
           if (last && pointsClose(last, pt) && draft.points.length >= 2 && spec.pointCount >= 99) {
             store.addDrawing(
               createDrawing(type, draft.points, { toolId, style: getDefaultStyleForTool(toolId) }),
             )
+            clearGesturePreview()
             store.clearTransient()
             this.drawingGesture = false
             return true
@@ -157,17 +207,22 @@ export class PointerEngine {
             store.addDrawing(
               createDrawing(type, nextPoints, { toolId, style: getDefaultStyleForTool(toolId) }),
             )
+            clearGesturePreview()
             store.clearTransient()
             this.drawingGesture = false
           } else {
-            store.setTransientDraft({
+            const next = {
               ...draft,
               points: nextPoints,
               preview: pt,
-            })
+            }
+            store.setTransientDraft(next)
+            this.pushGestureDraft(next)
             this.drawingGesture = true
           }
         } else {
+          clearGesturePreview()
+          store.setTransientDraft(null)
           this.beginDrawDraft(toolId, type, pt)
         }
         return true
@@ -197,6 +252,7 @@ export class PointerEngine {
       store.pushHistory()
       store.select(hit.drawingId)
       this.drawingGesture = true
+      this.resetMoveAnchor(clientX, clientY)
       this.drag = {
         kind: 'move',
         id: hit.drawingId,
@@ -204,7 +260,7 @@ export class PointerEngine {
         originPoints: d.points.map((p) => ({ ...p })),
         anchor: pt,
       }
-      store.setTransientMove({ id: hit.drawingId, points: d.points.map((p) => ({ ...p })) })
+      this.pushGestureMove({ id: hit.drawingId, points: d.points.map((p) => ({ ...p })) })
       return true
     }
     if (hit?.kind === 'body' || hit?.kind === 'fib-line') {
@@ -213,6 +269,7 @@ export class PointerEngine {
       store.pushHistory()
       store.select(hit.drawingId)
       this.drawingGesture = true
+      this.resetMoveAnchor(clientX, clientY)
       this.drag = {
         kind: 'move',
         id: hit.drawingId,
@@ -220,7 +277,7 @@ export class PointerEngine {
         originPoints: d.points.map((p) => ({ ...p })),
         anchor: pt,
       }
-      store.setTransientMove({ id: hit.drawingId, points: d.points.map((p) => ({ ...p })) })
+      this.pushGestureMove({ id: hit.drawingId, points: d.points.map((p) => ({ ...p })) })
       return true
     }
 
@@ -233,12 +290,12 @@ export class PointerEngine {
     const rect = container.getBoundingClientRect()
     const x = clientX - rect.left
     const y = clientY - rect.top
-    const pt = this.mapper.fromXY(x, y)
 
-    const gestureDraft = store.transient.draft
-    const gestureMove = store.transient.move
+    const { draft: gestureDraft, move: gestureMove } = this.activeTransient()
 
     if (!gestureDraft && !gestureMove && this.drag.kind === 'none') {
+      const ptHover = this.mapper.fromXY(x, y, { snap: false })
+      if (!ptHover) return
       const drawings = store.getDrawings()
       const hit = hitTestDrawings(
         x,
@@ -251,8 +308,12 @@ export class PointerEngine {
       )
       store.setHovered(hit ? hit.drawingId : null)
       store.setHoveredFibLevel(hit?.kind === 'fib-line' ? hit.levelIndex : null)
+      return
     }
 
+    if (!this.movedEnough(clientX, clientY, PREVIEW_MOVE_PX)) return
+
+    const pt = this.mapper.fromXY(x, y, { snap: false })
     if (!pt) return
 
     if (this.drag.kind === 'move' && gestureMove) {
@@ -267,33 +328,35 @@ export class PointerEngine {
           i === handleIndex ? { time: pt.time, price: pt.price } : { ...p },
         )
       }
-      store.setTransientMove({ id, points: next })
+      this.pushGestureMove({ id, points: next })
+      this.resetMoveAnchor(clientX, clientY)
       return
     }
 
     if (!gestureDraft) return
 
     if (gestureDraft.toolId && isFreehandTool(gestureDraft.toolId)) {
+      if (!this.movedEnough(clientX, clientY, FREEHAND_MOVE_PX)) return
       const last = gestureDraft.points[gestureDraft.points.length - 1]
       if (!last || !pointsClose(last, pt)) {
-        store.setTransientDraft({
+        this.pushGestureDraft({
           ...gestureDraft,
           points: [...gestureDraft.points, pt],
           preview: pt,
         })
+        this.resetMoveAnchor(clientX, clientY)
       }
       return
     }
 
     if (gestureDraft.toolId && isMultiClickTool(gestureDraft.toolId)) {
-      store.setTransientDraft({ ...gestureDraft, preview: pt })
+      this.pushGestureDraft({ ...gestureDraft, preview: pt })
+      this.resetMoveAnchor(clientX, clientY)
       return
     }
 
-    const prev = gestureDraft.preview
-    if (!prev || !pointsClose(prev, pt)) {
-      store.setTransientDraft({ ...gestureDraft, preview: pt })
-    }
+    this.pushGestureDraft({ ...gestureDraft, preview: pt })
+    this.resetMoveAnchor(clientX, clientY)
   }
 
   handlePointerUp(clientX: number, clientY: number, container: HTMLElement) {
@@ -301,12 +364,16 @@ export class PointerEngine {
     const rect = container.getBoundingClientRect()
     const x = clientX - rect.left
     const y = clientY - rect.top
-    const pt = this.mapper.fromXY(x, y)
+    const rawEnd = this.mapper.fromXY(x, y, { snap: false })
+    const pt = rawEnd ? this.snapPt(rawEnd) : null
+
+    this.hasLastClient = false
 
     if (this.drag.kind === 'move') {
-      const move = store.transient.move
+      const move = getGesturePreview()?.move
       this.drag = { kind: 'none' }
       this.drawingGesture = false
+      clearGesturePreview()
       if (move) {
         store.updateDrawing(move.id, (d) => ({ ...d, points: move.points }))
       }
@@ -314,17 +381,21 @@ export class PointerEngine {
       return
     }
 
-    const draft = store.transient.draft
+    const draft = getGesturePreview()?.draft ?? store.transient.draft
     if (!draft || !pt) {
       this.drawingGesture = false
+      clearGesturePreview()
       return
     }
 
     if (draft.toolId && isMultiClickTool(draft.toolId)) {
+      store.setTransientDraft({ ...draft, preview: pt })
+      clearGesturePreview()
       return
     }
 
     this.drawingGesture = false
+    clearGesturePreview()
 
     if (draft.toolId && isFreehandTool(draft.toolId)) {
       if (draft.points.length >= 2) {
@@ -339,7 +410,7 @@ export class PointerEngine {
       return
     }
 
-    const start = draft.points[0]
+    const start = this.snapPt(draft.points[0])
     const end = pt
     const a = this.mapper.toXY(start)
     const b = this.mapper.toXY(end)

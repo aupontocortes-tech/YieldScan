@@ -5,6 +5,7 @@ import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-cont
 import { CoordinateMapper } from '@/lib/drawing-system/core/coordinate-mapper'
 import { DrawingManager } from '@/lib/drawing-system/core/drawing-manager'
 import { PointerEngine } from '@/lib/drawing-system/events/pointer-engine'
+import { getGesturePreview } from '@/lib/drawing-system/events/gesture-preview'
 import { renderCanvas } from '@/lib/drawing-system/renderers/canvas-renderer'
 import { useDrawingStore } from '@/lib/drawing-system/store/drawing-store'
 import { resolveToolMode } from '@/lib/drawing-system/tools/tool-registry'
@@ -51,6 +52,7 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
     if (!ctx) return
 
     const store = useDrawingStore.getState()
+    const livePreview = getGesturePreview()
     engineRef.current?.setChartWidth(w)
 
     renderCanvas(
@@ -64,7 +66,7 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
         byScope: store.byScope,
         prefs: store.prefs,
         draft: store.draft,
-        transient: store.transient,
+        transient: livePreview ?? store.transient,
       },
       store.selectedId,
       store.hoveredId,
@@ -137,6 +139,7 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
     const container = api.container
 
     const onMove = (e: PointerEvent) => {
+      if (capturingRef.current) e.preventDefault()
       engine.handlePointerMove(e.clientX, e.clientY, container)
     }
 
@@ -156,7 +159,7 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
         capturingRef.current = true
         e.preventDefault()
         e.stopPropagation()
-        window.addEventListener('pointermove', onMove, { passive: true })
+        window.addEventListener('pointermove', onMove, { passive: false })
         window.addEventListener('pointerup', onUp)
         window.addEventListener('pointercancel', onUp)
         startCapturePaintLoop()
@@ -275,6 +278,28 @@ export function DrawingSystemOverlay({ bars }: { bars: OhlcvBar[] }) {
   const mode = resolveToolMode(activeToolId)
   const chartCursor =
     mode === 'erase' || mode === 'draw' ? 'crosshair' : selectedId ? 'default' : undefined
+
+  useEffect(() => {
+    const chart = mainChart?.chart
+    const container = mainChart?.container
+    if (!chart || !container) return
+    const block = mode === 'draw' || mode === 'erase'
+    chart.applyOptions({
+      handleScroll: !block,
+      handleScale: !block,
+      kineticScroll: { touch: !block, mouse: !block },
+    })
+    if (block) container.style.touchAction = 'none'
+    else container.style.removeProperty('touch-action')
+    return () => {
+      chart.applyOptions({
+        handleScroll: true,
+        handleScale: true,
+        kineticScroll: { touch: true, mouse: true },
+      })
+      container.style.removeProperty('touch-action')
+    }
+  }, [mainChart, mode])
 
   useEffect(() => {
     const el = mainChart?.container

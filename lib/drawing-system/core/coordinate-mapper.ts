@@ -32,12 +32,14 @@ export class CoordinateMapper {
     return { x, y }
   }
 
-  fromXY(x: number, y: number): ChartPoint | null {
+  fromXY(x: number, y: number, options?: { snap?: boolean }): ChartPoint | null {
     if (!this.api) return null
     const time = this.api.chart.timeScale().coordinateToTime(x)
     const price = this.api.series.coordinateToPrice(y)
     if (time == null || price == null) return null
-    return snapPoint({ time: time as number, price }, this.bars, this.magnet)
+    const raw = { time: time as number, price }
+    if (options?.snap === false) return raw
+    return snapPoint(raw, this.bars, this.magnet)
   }
 
   pointsToXY(points: ChartPoint[]): XY[] {
