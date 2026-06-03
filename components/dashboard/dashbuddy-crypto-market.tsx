@@ -41,11 +41,30 @@ import { isUsEquityXstock, MARKET_PINNED_STOCK_IDS } from '@/lib/us-equities'
 import { cn } from '@/lib/utils'
 import { Building2, Coins, ExternalLink, LineChart, Plus, RefreshCw, TrendingUp } from 'lucide-react'
 
-async function fetchMercado(ids: string[]): Promise<MarketApiPayload> {
-  const q = `?highlights=${encodeURIComponent(ids.join(','))}`
-  const res = await fetch(`/api/market${q}`)
+async function fetchMercado(ids: string[], mode: 'highlights' | 'full' = 'full'): Promise<MarketApiPayload> {
+  const q = new URLSearchParams()
+  q.set('highlights', ids.join(','))
+  if (mode === 'highlights') q.set('mode', 'highlights')
+  const res = await fetch(`/api/market?${q.toString()}`)
   const json = (await res.json()) as MarketApiPayload
   return { ...json, erro: sanitizeMercadoErro(json.erro) }
+}
+
+function mergeMarketPayload(
+  prices: MarketApiPayload | undefined,
+  full: MarketApiPayload | undefined,
+): MarketApiPayload | undefined {
+  if (!prices && !full) return undefined
+  if (!full) return prices
+  if (!prices) return full
+  return {
+    ...full,
+    highlightCoins: prices.highlightCoins,
+    highlightIds: prices.highlightIds,
+    partial: prices.partial || full.partial,
+    erro: prices.erro ?? full.erro,
+    cachedAt: full.cachedAt || prices.cachedAt,
+  }
 }
 
 function coinThumbSrc(coin: MercadoCoin): string | null {
@@ -414,11 +433,16 @@ export function DashbuddyCryptoMarket() {
 
   const marketQueryKey = allMarketIds.join('|')
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
-    queryKey: ['crypto-market', marketQueryKey],
+  const {
+    data: pricesData,
+    isLoading: pricesLoading,
+    isFetching: pricesFetching,
+    refetch: refetchPrices,
+  } = useQuery({
+    queryKey: ['crypto-market-prices', marketQueryKey],
     queryFn: async () => {
-      const payload = await fetchMercado(allMarketIds)
-      writeMercadoSessionCache(marketQueryKey, payload)
+      const payload = await fetchMercado(allMarketIds, 'highlights')
+      writeMercadoSessionCache(`${marketQueryKey}|prices`, payload)
       return payload
     },
     staleTime: 90_000,
@@ -427,18 +451,53 @@ export function DashbuddyCryptoMarket() {
     gcTime: 180_000,
     retry: 3,
     retryDelay: (attempt) => Math.min(12_000, 1_500 * 2 ** attempt),
+    placeholderData: () => readMercadoSessionCache(`${marketQueryKey}|prices`),
+  })
+
+  const {
+    data: listsData,
+    isLoading: listsLoading,
+    isFetching: listsFetching,
+    isError,
+    error,
+    refetch: refetchLists,
+  } = useQuery({
+    queryKey: ['crypto-market-lists', marketQueryKey],
+    queryFn: async () => {
+      const payload = await fetchMercado(allMarketIds, 'full')
+      writeMercadoSessionCache(marketQueryKey, payload)
+      return payload
+    },
+    enabled: Boolean(pricesData) || pricesLoading === false,
+    staleTime: 90_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: true,
+    gcTime: 180_000,
+    retry: 2,
     placeholderData: () => readMercadoSessionCache(marketQueryKey),
   })
 
+  const data = useMemo(
+    () => mergeMarketPayload(pricesData, listsData),
+    [pricesData, listsData],
+  )
+
+  const isLoading = pricesLoading && !pricesData
+  const isFetching = pricesFetching || listsFetching
+
+  const refetch = useCallback(() => {
+    void refetchPrices()
+    void refetchLists()
+  }, [refetchPrices, refetchLists])
+
   useEffect(() => {
-    if (!data || isFetching) return
-    const hasPrice =
-      data.highlightCoins.some((c) => c?.price != null) || data.top10.some((c) => c.price != null)
+    if (!pricesData || pricesFetching) return
+    const hasPrice = pricesData.highlightCoins.some((c) => c?.price != null)
     if (!hasPrice) {
-      const t = window.setTimeout(() => void refetch(), 2_500)
+      const t = window.setTimeout(() => void refetchPrices(), 2_500)
       return () => window.clearTimeout(t)
     }
-  }, [data, isFetching, refetch])
+  }, [pricesData, pricesFetching, refetchPrices])
 
   useEffect(() => {
     if (!data) return
@@ -472,7 +531,8 @@ export function DashbuddyCryptoMarket() {
   const coinById = useMemo(() => {
     const map = new Map<string, MercadoCoin | null>()
     if (!data) return map
-    allMarketIds.forEach((id, i) => {
+    const ids = data.highlightIds ?? allMarketIds
+    ids.forEach((id, i) => {
       map.set(id, data.highlightCoins[i] ?? null)
     })
     return map

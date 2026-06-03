@@ -54,11 +54,15 @@ const MARKETS_PATH =
   '/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1'
 
 const UA = 'yieldscan-market/1'
-/** Evita 429 da API pública quando há muitos destaques + top10 + trending em paralelo. */
-const SIMPLE_PRICE_CHUNK = 3
-const SIMPLE_CHUNK_GAP_MS = 550
-const SIMPLE_RETRY_GAP_MS = 650
-const BETWEEN_ENDPOINTS_MS = 400
+/** Máximo de slugs por pedido à API de mercado (favoritos + ações fixas). */
+export const MAX_MARKET_FETCH_IDS = 24
+
+/** Evita 429 na API pública; com chave Pro/Demo os lotes são maiores. */
+const SIMPLE_PRICE_CHUNK_PUBLIC = 5
+const SIMPLE_PRICE_CHUNK_KEY = 18
+const SIMPLE_CHUNK_GAP_MS_PUBLIC = 280
+const SIMPLE_RETRY_GAP_MS = 400
+const BETWEEN_ENDPOINTS_MS = 200
 const FETCH_MAX_RETRIES = 2
 const HIGHLIGHT_PRICE_CACHE_MS = 10 * 60 * 1000
 
@@ -113,6 +117,9 @@ const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
   'amazon-xstock': { name: 'Amazon', symbol: 'AMZNX' },
   'microstrategy-xstock': { name: 'MicroStrategy', symbol: 'MSTRX' },
   'exxon-mobil-xstock': { name: 'Exxon Mobil', symbol: 'XOMX' },
+  pendle: { name: 'Pendle', symbol: 'PENDLE' },
+  aave: { name: 'Aave', symbol: 'AAVE' },
+  'purr-2': { name: 'Purr', symbol: 'PURR' },
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -197,15 +204,31 @@ async function fetchSimplePriceChunk(ids: string[]): Promise<Record<string, Simp
 }
 
 /** simple/price em lotes + retry por id + cache (RWAs/xStock são sensíveis a 429). */
+function simplePriceChunkSize(): number {
+  const hasCgKey = Boolean(
+    process.env.COINGECKO_PRO_API_KEY?.trim() || process.env.COINGECKO_DEMO_API_KEY?.trim(),
+  )
+  return hasCgKey ? SIMPLE_PRICE_CHUNK_KEY : SIMPLE_PRICE_CHUNK_PUBLIC
+}
+
+function simplePriceChunkGapMs(): number {
+  const hasCgKey = Boolean(
+    process.env.COINGECKO_PRO_API_KEY?.trim() || process.env.COINGECKO_DEMO_API_KEY?.trim(),
+  )
+  return hasCgKey ? 0 : SIMPLE_CHUNK_GAP_MS_PUBLIC
+}
+
 async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntry>> {
   const unique = [...new Set(ids.filter(Boolean))]
   const merged: Record<string, SimplePriceEntry> = {}
+  const chunkSize = simplePriceChunkSize()
+  const gapMs = simplePriceChunkGapMs()
 
-  for (let i = 0; i < unique.length; i += SIMPLE_PRICE_CHUNK) {
-    const chunk = unique.slice(i, i + SIMPLE_PRICE_CHUNK)
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize)
     Object.assign(merged, await fetchSimplePriceChunk(chunk))
-    if (i + SIMPLE_PRICE_CHUNK < unique.length) {
-      await sleep(SIMPLE_CHUNK_GAP_MS)
+    if (gapMs > 0 && i + chunkSize < unique.length) {
+      await sleep(gapMs)
     }
   }
 
@@ -216,10 +239,27 @@ async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<str
   }
 
   const stillMissing = unique.filter((id) => !hasValidUsd(merged[id]))
-  for (const id of stillMissing) {
-    await sleep(SIMPLE_RETRY_GAP_MS)
-    const one = await fetchSimplePriceChunk([id])
-    if (hasValidUsd(one[id])) merged[id] = one[id]
+  if (stillMissing.length > 0) {
+    for (let i = 0; i < stillMissing.length; i += chunkSize) {
+      const chunk = stillMissing.slice(i, i + chunkSize)
+      await sleep(SIMPLE_RETRY_GAP_MS)
+      Object.assign(merged, await fetchSimplePriceChunk(chunk))
+    }
+    const marketsFallback = await fetchHighlightLogosByIds(
+      stillMissing.filter((id) => !hasValidUsd(merged[id])),
+    )
+    for (const id of stillMissing) {
+      if (hasValidUsd(merged[id])) continue
+      const row = marketsFallback.get(id)
+      if (row?.price != null) {
+        merged[id] = {
+          usd: row.price,
+          usd_24h_change: row.change_24h ?? undefined,
+          usd_market_cap: row.market_cap ?? undefined,
+        }
+        rememberHighlightSimple(id, merged[id]!)
+      }
+    }
   }
 
   return merged
@@ -584,9 +624,10 @@ function buildSimplePricePath(ids: string[]): string {
  * @param highlightIds slugs CoinGecko (ex.: bitcoin), até MAX_MARKET_HIGHLIGHTS.
  */
 export async function agregarMercadoCoinGecko(
-  highlightIds: string[] = [...DEFAULT_MARKET_HIGHLIGHT_IDS]
+  highlightIds: string[] = [...DEFAULT_MARKET_HIGHLIGHT_IDS],
+  opts?: { skipLists?: boolean },
 ): Promise<MarketApiPayload> {
-  const ids = [...new Set(highlightIds.filter(Boolean))].slice(0, MAX_MARKET_HIGHLIGHTS)
+  const ids = [...new Set(highlightIds.filter(Boolean))].slice(0, MAX_MARKET_FETCH_IDS)
   if (ids.length === 0) {
     return emptyPayload(
       [...DEFAULT_MARKET_HIGHLIGHT_IDS],
@@ -604,7 +645,14 @@ export async function agregarMercadoCoinGecko(
   let marketsRaw: unknown[] | null
   let trendingRaw: { coins?: unknown[] } | null
 
-  if (hasCgKey) {
+  if (opts?.skipLists) {
+    ;[simpleRaw, exchangeRaw] = await Promise.all([
+      fetchSimplePricesForHighlights(ids),
+      fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
+    ])
+    marketsRaw = null
+    trendingRaw = null
+  } else if (hasCgKey) {
     const [simple, exchange, markets, trending] = await Promise.all([
       fetchSimplePricesForHighlights(ids),
       fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
@@ -617,10 +665,9 @@ export async function agregarMercadoCoinGecko(
     trendingRaw = trending
   } else {
     simpleRaw = await fetchSimplePricesForHighlights(ids)
-    await sleep(250)
-    exchangeRaw = await fetchJson<unknown>(EXCHANGE_RATES_PATH)
-    await sleep(250)
-    ;[marketsRaw, trendingRaw] = await Promise.all([
+    await sleep(BETWEEN_ENDPOINTS_MS)
+    ;[exchangeRaw, marketsRaw, trendingRaw] = await Promise.all([
+      fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
       fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
       fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
     ])
@@ -634,7 +681,9 @@ export async function agregarMercadoCoinGecko(
   const erros: string[] = []
 
   const top10: MercadoCoin[] = []
-  if (Array.isArray(marketsRaw)) {
+  if (opts?.skipLists) {
+    /* listas carregadas num segundo pedido (cliente) */
+  } else if (Array.isArray(marketsRaw)) {
     for (const row of marketsRaw.slice(0, 10)) {
       const r = asRecord(row)
       if (!r) continue
@@ -710,7 +759,7 @@ export async function agregarMercadoCoinGecko(
   }
 
   const trending: MercadoCoin[] = []
-  const coins = trendingRaw?.coins
+  const coins = opts?.skipLists ? null : trendingRaw?.coins
   if (Array.isArray(coins)) {
     for (const entry of coins) {
       const wrap = asRecord(entry)

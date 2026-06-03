@@ -49,7 +49,7 @@ const fetchMarketPayloadCached = unstable_cache(
     ])
     return { ...base, trendingStocks }
   },
-  ['market-payload-v2'],
+  ['market-payload-v3'],
   { revalidate: 90 },
 )
 
@@ -68,9 +68,16 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  const mode = req.nextUrl.searchParams.get('mode') === 'highlights' ? 'highlights' : 'full'
+
   try {
-    const base = await fetchMarketPayloadCached(cacheKey)
-    const fresh = applyHighlightIdCache(base)
+    const base =
+      mode === 'highlights'
+        ? await agregarMercadoCoinGecko(highlightIds, { skipLists: true })
+        : await fetchMarketPayloadCached(cacheKey)
+    const fresh = applyHighlightIdCache(
+      mode === 'highlights' ? { ...base, trendingStocks: [] } : base,
+    )
 
     const anyHighlight = fresh.highlightCoins.some((c) => c != null && c.price != null)
     const semNada =
