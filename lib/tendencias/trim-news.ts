@@ -165,8 +165,9 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     .filter((n) => n.mentionCount > 0)
     .sort((a, b) => b.mentionCount - a.mentionCount)
 
-  const headlines: TendenciasNewsHeadline[] = articles
-    .filter((a) => !pareceIngles(a.title))
+  const ptArticles = articles.filter((a) => !pareceIngles(a.title))
+
+  const headlines: TendenciasNewsHeadline[] = ptArticles
     .map((a) => ({
       titulo: a.title,
       impacto: a.sentiment,
@@ -186,19 +187,19 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     .sort((a, b) => b.relevance - a.relevance)
     .slice(0, 40)
 
-  /** Top 10 cripto e top 10 ações — mesma base das manchetes PT visíveis. */
+  /** Top cripto e ações — todas as manchetes PT (até expandir para 20 na UI). */
   const cryptoMentions = new Map<string, number>()
   const stockMentions = new Map<string, number>()
-  for (const h of headlines) {
-    for (const sym of h.symbols) {
+  for (const a of ptArticles) {
+    for (const sym of a.symbols) {
       cryptoMentions.set(sym, (cryptoMentions.get(sym) ?? 0) + 1)
     }
-    for (const sym of h.stockSymbols) {
+    for (const sym of a.stockSymbols) {
       stockMentions.set(sym, (stockMentions.get(sym) ?? 0) + 1)
     }
   }
-  const topCryptoMentions = topMentionList(cryptoMentions, 10)
-  const topStockMentions = topMentionList(stockMentions, 10)
+  const topCryptoMentions = topMentionList(cryptoMentions, 20)
+  const topStockMentions = topMentionList(stockMentions, 20)
 
   for (const h of headlines) {
     for (const sym of h.symbols) {

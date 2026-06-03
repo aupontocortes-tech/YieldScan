@@ -9,6 +9,7 @@ import {
   type SentimentLevel,
   type TendenciasAlert,
   type TendenciasEquityRow,
+  type TendenciasNewsHeadline,
   type TendenciasNewsMention,
   type TendenciasPrefs,
   type TendenciasTokenRow,
@@ -51,8 +52,19 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  X,
   Zap,
 } from 'lucide-react'
+
+type NewsMentionFilter = { kind: 'crypto' | 'stock'; symbol: string }
+
+function headlineMatchesMention(h: TendenciasNewsHeadline, filter: NewsMentionFilter): boolean {
+  const sym = filter.symbol.toUpperCase()
+  if (filter.kind === 'crypto') {
+    return h.symbols.some((s) => s.toUpperCase() === sym)
+  }
+  return (h.stockSymbols ?? []).some((s) => s.toUpperCase() === sym)
+}
 import Link from 'next/link'
 
 const PERIOD_LABEL: Record<MomentumPeriod, string> = {
@@ -121,30 +133,61 @@ function fmtMentionChange(pct: number | null | undefined): string {
   return `${sign}${pct.toFixed(1)}%`
 }
 
-function NewsMentionChip({
+function NewsMentionRow({
   item,
   kind,
+  rank,
+  selected,
+  onSelect,
 }: {
   item: TendenciasNewsMention
   kind: 'crypto' | 'stock'
+  rank: number
+  selected: boolean
+  onSelect: () => void
 }) {
   const sym = item.symbol.toUpperCase()
   const xstockId = kind === 'stock' ? TICKER_TO_XSTOCK[sym] : undefined
   const ch = fmtMentionChange(item.changePct)
+  const changeUp = item.changePct != null && item.changePct > 0
+  const changeDown = item.changePct != null && item.changePct < 0
   return (
-    <div
-      title={`${item.count} menção${item.count === 1 ? '' : 'ões'} · preço ${ch || '—'} no período`}
-      className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-background/40 px-2.5 py-1"
+    <button
+      type="button"
+      title={`${item.count} menção${item.count === 1 ? '' : 'ões'}${ch ? ` · preço ${ch} no período` : ''}`}
+      onClick={onSelect}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors',
+        selected
+          ? 'border-yellow-500/50 bg-yellow-500/10 ring-1 ring-yellow-500/30'
+          : 'border-border/40 bg-background/40 hover:border-border/60 hover:bg-muted/20',
+      )}
     >
-      <TokenSymbolAvatar symbol={sym} coingeckoId={xstockId} size={18} />
-      <span className={cn('text-xs font-semibold', mentionSymbolColor(sym))}>{sym}</span>
-      <span className="rounded-full bg-muted/30 px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
+      <span className="w-5 shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+        {rank}
+      </span>
+      <TokenSymbolAvatar symbol={sym} coingeckoId={xstockId} size={22} />
+      <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', mentionSymbolColor(sym))}>
+        {sym}
+      </span>
+      <span className="shrink-0 rounded-full bg-muted/30 px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground">
         {item.count}
       </span>
       {ch ? (
-        <span className="text-[10px] font-medium tabular-nums text-emerald-400">{ch}</span>
-      ) : null}
-    </div>
+        <span
+          className={cn(
+            'shrink-0 text-[10px] font-medium tabular-nums',
+            changeUp && 'text-emerald-400',
+            changeDown && 'text-red-400',
+            !changeUp && !changeDown && 'text-muted-foreground',
+          )}
+        >
+          {ch}
+        </span>
+      ) : (
+        <span className="shrink-0 text-[10px] text-muted-foreground">—</span>
+      )}
+    </button>
   )
 }
 
@@ -195,10 +238,14 @@ function NewsTopMentionsSection({
   topCrypto,
   topStocks,
   period,
+  mentionFilter,
+  onMentionFilter,
 }: {
   topCrypto: TendenciasNewsMention[]
   topStocks: TendenciasNewsMention[]
   period: MomentumPeriod
+  mentionFilter: NewsMentionFilter | null
+  onMentionFilter: (next: NewsMentionFilter | null) => void
 }) {
   const [cryptoLimit, setCryptoLimit] = useState<10 | 15 | 20>(10)
   const [stockLimit, setStockLimit] = useState<10 | 15 | 20>(10)
@@ -206,49 +253,90 @@ function NewsTopMentionsSection({
   const cryptoVisible = topCrypto.slice(0, cryptoLimit)
   const stockVisible = topStocks.slice(0, stockLimit)
 
-  if (!cryptoVisible.length && !stockVisible.length) {
-    return (
-      <p className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5 text-xs text-muted-foreground">
-        Nenhum token ou ação cumpre os critérios agora (menções em notícias + preço a subir em{' '}
-        {PERIOD_LABEL[period]}).
-      </p>
-    )
+  const toggleFilter = (kind: 'crypto' | 'stock', symbol: string) => {
+    const sym = symbol.toUpperCase()
+    if (mentionFilter?.kind === kind && mentionFilter.symbol === sym) {
+      onMentionFilter(null)
+    } else {
+      onMentionFilter({ kind, symbol: sym })
+    }
   }
 
   return (
     <div className="space-y-3">
       <p className="text-[10px] leading-relaxed text-muted-foreground">
-        {NEWS_MENTIONS_RANKING_HINT} Período do preço: <span className="text-foreground">{PERIOD_LABEL[period]}</span>.
+        {NEWS_MENTIONS_RANKING_HINT} Período do preço:{' '}
+        <span className="text-foreground">{PERIOD_LABEL[period]}</span>.
       </p>
 
-      {cryptoVisible.length > 0 ? (
-        <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Tokens mais falados (preço a subir)
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {cryptoVisible.map((m) => (
-              <NewsMentionChip key={`c-${m.symbol}`} item={m} kind="crypto" />
-            ))}
-          </div>
-          <NewsMentionExpand total={topCrypto.length} visible={cryptoLimit} onExpand={setCryptoLimit} />
-        </section>
-      ) : null}
+      {mentionFilter ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2">
+          <span className="text-xs text-foreground">
+            A mostrar notícias de{' '}
+            <span className="font-semibold text-yellow-500">{mentionFilter.symbol}</span>
+            {mentionFilter.kind === 'stock' ? ' (ação)' : ' (cripto)'}
+          </span>
+          <button
+            type="button"
+            onClick={() => onMentionFilter(null)}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+          >
+            <X className="h-3 w-3" aria-hidden />
+            Limpar filtro
+          </button>
+        </div>
+      ) : (
+        <p className="text-[10px] text-muted-foreground">Clica num ativo para filtrar as manchetes abaixo.</p>
+      )}
 
-      {stockVisible.length > 0 ? (
-        <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5" aria-hidden />
-            Ações mais faladas (preço a subir)
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {stockVisible.map((m) => (
-              <NewsMentionChip key={`s-${m.symbol}`} item={m} kind="stock" />
+      <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Top {cryptoLimit} cripto — mais falados
+        </p>
+        {cryptoVisible.length > 0 ? (
+          <ol className="grid gap-1.5 sm:grid-cols-2">
+            {cryptoVisible.map((m, i) => (
+              <li key={`c-${m.symbol}`}>
+                <NewsMentionRow
+                  item={m}
+                  kind="crypto"
+                  rank={i + 1}
+                  selected={mentionFilter?.kind === 'crypto' && mentionFilter.symbol === m.symbol.toUpperCase()}
+                  onSelect={() => toggleFilter('crypto', m.symbol)}
+                />
+              </li>
             ))}
-          </div>
-          <NewsMentionExpand total={topStocks.length} visible={stockLimit} onExpand={setStockLimit} />
-        </section>
-      ) : null}
+          </ol>
+        ) : (
+          <p className="text-xs text-muted-foreground">Sem menções a tokens nas manchetes PT agora.</p>
+        )}
+        <NewsMentionExpand total={topCrypto.length} visible={cryptoLimit} onExpand={setCryptoLimit} />
+      </section>
+
+      <section className="rounded-lg border border-border/40 bg-muted/5 px-3 py-2.5">
+        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Top {stockLimit} ações US — mais faladas
+        </p>
+        {stockVisible.length > 0 ? (
+          <ol className="grid gap-1.5 sm:grid-cols-2">
+            {stockVisible.map((m, i) => (
+              <li key={`s-${m.symbol}`}>
+                <NewsMentionRow
+                  item={m}
+                  kind="stock"
+                  rank={i + 1}
+                  selected={mentionFilter?.kind === 'stock' && mentionFilter.symbol === m.symbol.toUpperCase()}
+                  onSelect={() => toggleFilter('stock', m.symbol)}
+                />
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-xs text-muted-foreground">Sem menções a ações nas manchetes PT agora.</p>
+        )}
+        <NewsMentionExpand total={topStocks.length} visible={stockLimit} onExpand={setStockLimit} />
+      </section>
     </div>
   )
 }
@@ -637,10 +725,15 @@ export function DashbuddyTendencias() {
   const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<TabId>('visao')
   const [tokenFilter, setTokenFilter] = useState<TokenFilter>('destaques')
+  const [mentionFilter, setMentionFilter] = useState<NewsMentionFilter | null>(null)
   useEffect(() => {
     setPrefs(readTendenciasPrefs())
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (tab !== 'noticias') setMentionFilter(null)
+  }, [tab])
 
   const savePrefs = useCallback((p: TendenciasPrefs) => {
     setPrefs(p)
@@ -669,10 +762,13 @@ export function DashbuddyTendencias() {
     }
   }, [data, tokenFilter])
 
-  const displayedNewsHeadlines = useMemo(
-    () => (data?.news.headlines ?? []).slice(0, NEWS_HEADLINES_DEFAULT),
-    [data?.news.headlines],
-  )
+  const displayedNewsHeadlines = useMemo(() => {
+    const all = data?.news.headlines ?? []
+    if (mentionFilter) {
+      return all.filter((h) => headlineMatchesMention(h, mentionFilter))
+    }
+    return all.slice(0, NEWS_HEADLINES_DEFAULT)
+  }, [data?.news.headlines, mentionFilter])
 
   if (!mounted || isLoading) {
     return (
@@ -1079,11 +1175,24 @@ export function DashbuddyTendencias() {
               }
               topStocks={news.topStockMentions ?? []}
               period={news.rankingPeriod ?? period}
+              mentionFilter={mentionFilter}
+              onMentionFilter={setMentionFilter}
             />
             <ul className="space-y-3">
               {news.headlines.length === 0 ? (
                 <li className="text-lg leading-snug text-muted-foreground">
                   Sem manchetes em português no momento. Clica em Actualizar ou aguarda ~1 minuto.
+                </li>
+              ) : displayedNewsHeadlines.length === 0 && mentionFilter ? (
+                <li className="rounded-lg border border-border/30 bg-muted/5 px-3 py-3 text-sm text-muted-foreground">
+                  Nenhuma manchete menciona {mentionFilter.symbol} neste conjunto.{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-yellow-500 hover:underline"
+                    onClick={() => setMentionFilter(null)}
+                  >
+                    Ver todas
+                  </button>
                 </li>
               ) : (
                 displayedNewsHeadlines.map((h) => (
@@ -1111,14 +1220,15 @@ export function DashbuddyTendencias() {
                 ))
               )}
             </ul>
-            {(data?.news.headlines.length ?? 0) > displayedNewsHeadlines.length && (
-              <p className="text-[11px] text-muted-foreground">
-                +{(data?.news.headlines.length ?? 0) - displayedNewsHeadlines.length} manchetes —{' '}
-                <Link href="/news/noticias" className="text-yellow-500 hover:underline">
-                  ver todas
-                </Link>
-              </p>
-            )}
+            {!mentionFilter &&
+              (data?.news.headlines.length ?? 0) > displayedNewsHeadlines.length && (
+                <p className="text-[11px] text-muted-foreground">
+                  +{(data?.news.headlines.length ?? 0) - displayedNewsHeadlines.length} manchetes —{' '}
+                  <Link href="/news/noticias" className="text-yellow-500 hover:underline">
+                    ver todas
+                  </Link>
+                </p>
+              )}
             <Link
               href="/news/noticias"
               className="text-sm font-medium text-yellow-500 hover:underline"

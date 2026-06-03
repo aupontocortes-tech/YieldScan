@@ -33,39 +33,34 @@ function rankCryptoMentions(
   for (const m of raw) {
     const sym = m.symbol.toUpperCase()
     const row = bySym.get(sym)
-    if (!row) continue
-    const changePct = tokenChangePct(row)
-    if (changePct <= 0) continue
+    const changePct = row != null ? tokenChangePct(row) : null
     out.push({ symbol: sym, count: m.count, changePct })
   }
 
-  return out
-    .sort((a, b) => b.count - a.count || (b.changePct ?? 0) - (a.changePct ?? 0))
-    .slice(0, MAX_POOL)
+  return out.sort((a, b) => b.count - a.count || a.symbol.localeCompare(b.symbol)).slice(0, MAX_POOL)
 }
 
 function rankStockMentions(
   raw: TendenciasNewsMention[],
   equities: TendenciasEquitiesPanel | null,
 ): TendenciasNewsMention[] {
-  if (!equities) return []
-  const bySym = equityMap(equities)
+  const bySym = equities ? equityMap(equities) : new Map<string, { changePct: number }>()
   const out: TendenciasNewsMention[] = []
 
   for (const m of raw) {
     const sym = m.symbol.toUpperCase()
     const eq = bySym.get(sym)
-    if (!eq) continue
-    if (eq.changePct <= 0) continue
-    out.push({ symbol: sym, count: m.count, changePct: eq.changePct })
+    out.push({
+      symbol: sym,
+      count: m.count,
+      changePct: eq != null ? eq.changePct : null,
+    })
   }
 
-  return out
-    .sort((a, b) => b.count - a.count || (b.changePct ?? 0) - (a.changePct ?? 0))
-    .slice(0, MAX_POOL)
+  return out.sort((a, b) => b.count - a.count || a.symbol.localeCompare(b.symbol)).slice(0, MAX_POOL)
 }
 
-/** Top falados = menções em notícias PT + preço em alta (período de momentum). Não usa TVL/volume no ranking. */
+/** Top falados = menções em notícias PT; variação de preço é informativa (positiva ou negativa). */
 export function applyRankedNewsMentions(
   insight: TendenciasNewsInsight,
   opts: {
@@ -90,4 +85,4 @@ export function applyRankedNewsMentions(
 }
 
 export const NEWS_MENTIONS_RANKING_HINT =
-  'Menções nas manchetes (últimas 24h) entre ativos com preço a subir no período que escolheste em Definições. Não entra TVL nem volume neste top.'
+  'Ranking por menções nas manchetes em português (últimas 24h). A variação de preço é só referência do período em Definições — não filtra quem entra no top. Clica num ativo para ver só as notícias dele.'
