@@ -144,22 +144,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <Link href="/">
-                  <div className="relative aspect-square size-8 overflow-hidden rounded-lg border border-sidebar-primary/35 bg-black">
+                  <div className="relative aspect-square size-10 shrink-0 overflow-hidden rounded-lg border border-sidebar-primary/35 bg-black">
                     <Image
                       src="/icon-192.png"
                       alt="YieldScan"
-                      width={32}
-                      height={32}
+                      width={40}
+                      height={40}
                       className="size-full object-cover"
                       priority
                     />
                   </div>
-                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">
+                  <div className="min-w-0 flex-1 text-left">
+                    <span className="truncate text-base font-bold tracking-tight">
                       Yield<span className="text-sidebar-primary">Scan</span>
-                    </span>
-                    <span className="truncate text-xs text-sidebar-foreground/65">
-                      Rendimentos e liquidez em DeFi
                     </span>
                   </div>
                 </Link>

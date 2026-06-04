@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { StatCard } from '@/components/stat-card'
 import { TopPoolsTable } from '@/components/dashboard/top-pools-table'
 import { TokenPoolsSearch } from '@/components/dashboard/token-pools-search'
+import { DashboardHub } from '@/components/dashboard/dashboard-hub'
 import {
   DASHBOARD_POOLS_MIN_TVL,
   fetchAllChainsTvl,
@@ -103,7 +104,8 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Stats Grid */}
+        <DashboardHub />
+
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="TVL Total"
@@ -139,7 +141,6 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Top Pools Tables */}
         <div className="mb-8 grid gap-8 lg:grid-cols-2">
           <TopPoolsTable
             pools={topPoolsByApy}
@@ -155,17 +156,14 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Top Gainers by Time Period */}
         <div className="mb-8">
           <TopGainers />
         </div>
 
-        {/* Token Pools Search */}
         <div className="mb-8">
           <TokenPoolsSearch />
         </div>
 
-        {/* TVL Chart */}
         <TvlChart />
       </main>
     </div>
