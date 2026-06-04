@@ -32,15 +32,24 @@ export async function GET(req: Request) {
   }
 
   try {
-    const lRes = await fetch('https://api.llama.fi/v2/historical/global', {
+    const lRes = await fetch('https://api.llama.fi/v2/historicalChainTvl', {
       headers: { Accept: 'application/json' },
       next: { revalidate: 0 },
       signal: AbortSignal.timeout(12_000),
     })
     if (lRes.ok) {
-      const arr = (await lRes.json()) as { totalLiquidityUSD?: number }[]
+      const arr = (await lRes.json()) as { tvl?: number | Record<string, number> }[]
       const last = Array.isArray(arr) && arr.length > 0 ? arr[arr.length - 1] : null
-      if (last?.totalLiquidityUSD != null) out.defiTvlUsd = last.totalLiquidityUSD
+      const raw = last?.tvl
+      if (typeof raw === 'number' && Number.isFinite(raw)) {
+        out.defiTvlUsd = raw
+      } else if (raw && typeof raw === 'object') {
+        const sum = Object.values(raw).reduce(
+          (a, v) => a + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
+          0,
+        )
+        if (sum > 0) out.defiTvlUsd = sum
+      }
     } else out.errors.push(`llama ${lRes.status}`)
   } catch {
     out.errors.push('defillama fetch')

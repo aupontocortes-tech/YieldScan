@@ -15,7 +15,7 @@ import type {
   TendenciasTokenRow,
 } from '@/lib/tendencias/types'
 import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fetch-data'
-import type { RawChainTvl, RawYieldPool } from '@/lib/tendencias/fetch-defi'
+import { enrichTvlGlobalFromChains, type RawChainTvl, type RawYieldPool } from '@/lib/tendencias/fetch-defi'
 
 const NARRATIVE_RULES: Array<{
   id: TendenciasNarrativeId
@@ -312,8 +312,9 @@ function buildMarketPanel(
 function buildDefiPanel(
   chains: RawChainTvl[],
   pools: RawYieldPool[],
-  tvlGlobal: { current: number | null; changePct: number | null }
+  tvlGlobalIn: { current: number | null; changePct: number | null }
 ): TendenciasDefiPanel {
+  const tvlGlobal = enrichTvlGlobalFromChains(tvlGlobalIn, chains)
   const topProtocols = pools.map((p) => {
     const tvl = p.tvlUsd ?? null
     const apy = p.apy ?? null

@@ -9,6 +9,7 @@ import {
 import { TRIM_CLASS_LABEL, SCORE_TENDENCIA_NOME, sentimentFromScore } from '@/lib/tendencias/trim-config'
 import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fetch-data'
 import {
+  enrichTvlGlobalFromChains,
   indexProtocolFees,
   type RawChainTvl,
   type RawProtocolFees,
@@ -171,8 +172,9 @@ function buildDefiPanel(
   chains: RawChainTvl[],
   pools: RawYieldPool[],
   fees: RawProtocolFees[],
-  tvlGlobal: { current: number | null; changePct: number | null },
+  tvlGlobalIn: { current: number | null; changePct: number | null },
 ): TendenciasDefiPanel {
+  const tvlGlobal = enrichTvlGlobalFromChains(tvlGlobalIn, chains)
   const topProtocols = pools.slice(0, 6).map((p) => {
     const feeMatch = fees.find(
       (f) => f.name.toLowerCase() === (p.project ?? '').toLowerCase(),

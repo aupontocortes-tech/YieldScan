@@ -1,6 +1,6 @@
 export type RawChainTvl = { name: string; tvl: number }
 
-export type RawGlobalTvlPoint = { date: number; totalLiquidityUSD: number }
+export type RawGlobalTvlPoint = { date: number; tvl: number | Record<string, number> }
 
 export type RawYieldPool = {
   project?: string
@@ -89,20 +89,45 @@ export async function fetchDefiChainsTop(limit = 8): Promise<RawChainTvl[]> {
   }
 }
 
+/** Valor TVL num ponto histórico (número agregado ou mapa por chain). */
+export function tvlFromHistoricalPoint(point: RawGlobalTvlPoint | undefined): number | null {
+  if (!point) return null
+  const raw = point.tvl
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (raw && typeof raw === 'object') {
+    const sum = Object.values(raw).reduce(
+      (acc, v) => acc + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
+      0,
+    )
+    return sum > 0 ? sum : null
+  }
+  return null
+}
+
+export function enrichTvlGlobalFromChains(
+  tvlGlobal: { current: number | null; changePct: number | null },
+  chains: RawChainTvl[],
+): { current: number | null; changePct: number | null } {
+  if (tvlGlobal.current != null) return tvlGlobal
+  const sum = chains.reduce((acc, c) => acc + (Number.isFinite(c.tvl) ? c.tvl : 0), 0)
+  if (sum <= 0) return tvlGlobal
+  return { current: sum, changePct: tvlGlobal.changePct }
+}
+
 export async function fetchGlobalTvlChange7d(): Promise<{
   current: number | null
   changePct: number | null
 }> {
   try {
-    const res = await fetch('https://api.llama.fi/v2/historical/global', {
+    const res = await fetch('https://api.llama.fi/v2/historicalChainTvl', {
       next: { revalidate: 300 },
       signal: AbortSignal.timeout(14_000),
     })
     if (!res.ok) return { current: null, changePct: null }
     const points = (await res.json()) as RawGlobalTvlPoint[]
     if (points.length < 8) return { current: null, changePct: null }
-    const current = points[points.length - 1]?.totalLiquidityUSD ?? null
-    const weekAgo = points[Math.max(0, points.length - 8)]?.totalLiquidityUSD ?? null
+    const current = tvlFromHistoricalPoint(points[points.length - 1])
+    const weekAgo = tvlFromHistoricalPoint(points[Math.max(0, points.length - 8)])
     if (current == null || weekAgo == null || weekAgo <= 0) {
       return { current, changePct: null }
     }

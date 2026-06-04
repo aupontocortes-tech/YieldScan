@@ -66,6 +66,7 @@ function headlineMatchesMention(h: TendenciasNewsHeadline, filter: NewsMentionFi
   return (h.stockSymbols ?? []).some((s) => s.toUpperCase() === sym)
 }
 import Link from 'next/link'
+import { DefiTendenciasPanel } from '@/components/dashboard/defi-tendencias-panel'
 
 const PERIOD_LABEL: Record<MomentumPeriod, string> = {
   '24h': '24 horas',
@@ -1242,37 +1243,8 @@ export function DashbuddyTendencias() {
       {/* Tab: DeFi */}
       {tab === 'defi' && (
         <Card className="border-border/50 bg-card/40">
-          <CardContent className="space-y-4 pt-4">
-            <p className="text-sm leading-relaxed text-muted-foreground">{defi.summary}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <KpiCard label="TVL DeFi" value={fmtUsd(defi.totalTvlUsd, true)} />
-              <KpiCard
-                label="TVL 7d"
-                value={fmtPct(defi.tvlChange7dPct)}
-                accent={(defi.tvlChange7dPct ?? 0) >= 0 ? 'up' : 'down'}
-              />
-            </div>
-            {defi.topChains.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {defi.topChains.map((c) => (
-                  <Badge key={c.name} variant="outline" className="font-mono text-[10px]">
-                    {c.name}: {fmtUsd(c.tvlUsd, true)}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {defi.topProtocols.map((p, i) => (
-              <div key={i} className="rounded-lg border border-border/30 bg-muted/5 px-3 py-2">
-                <div className="flex flex-wrap justify-between gap-2 text-sm">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {p.chain}
-                    {p.tvlUsd != null ? ` · ${fmtUsd(p.tvlUsd, true)}` : ''}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">{p.interpretation}</p>
-              </div>
-            ))}
+          <CardContent className="pt-4">
+            <DefiTendenciasPanel defi={defi} />
           </CardContent>
         </Card>
       )}
