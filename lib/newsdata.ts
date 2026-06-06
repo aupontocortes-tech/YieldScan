@@ -142,7 +142,8 @@ const RE_SCORE_MACRO =
   /\b(\bfed\b|federal reserve|interest rate|taxa de juros|inflation|inflação|inflacao|central bank|banco central|recession|recessao|recessão|\bgdp\b|\bpib\b|unemployment|desemprego)\b/i
 const RE_SCORE_CRIPTO =
   /\b(\betf\b|bitcoin|\bbtc\b|\bsec\b|ethereum|\beth\b|aave|binance|crypto|cripto|blackrock)\b/i
-const RE_SCORE_IA = /\b(openai|nvidia|chatgpt|\bai\b)\b/i
+const RE_SCORE_IA =
+  /\b(openai|chatgpt|anthropic|claude|gemini|machine learning|artificial intelligence|large language model|\bllm\b|generative ai)\b/i
 const RE_SCORE_ACOES =
   /\b(nasdaq|nyse|earnings|wall street|nvidia|apple|microsoft|tesla|stock market|s&p|semiconductor)\b/i
 
@@ -152,7 +153,7 @@ function pontuarPalavrasChaveNoticia(full: string): number {
   if (RE_SCORE_CRITICO.test(full)) score += 5
   if (RE_SCORE_MACRO.test(full)) score += 4
   if (RE_SCORE_CRIPTO.test(full)) score += 3
-  if (RE_SCORE_IA.test(full)) score += 2
+  if (RE_SCORE_IA.test(full)) score += 3
   if (RE_SCORE_ACOES.test(full)) score += 3
   return score
 }
@@ -185,29 +186,43 @@ function dedupeArtigosPorTitulo(articles: NewsDataArticle[]): NewsDataArticle[] 
 }
 
 /**
- * Uma categoria principal. Prioridade se várias combinam: Geopolítica > Macroeconomia > Cripto > IA.
+ * Uma categoria principal. Feeds dedicados (cripto/ações/IA) têm prioridade sobre keywords soltas.
  */
 function classificarAutomatica(full: string, article: NewsDataArticle): InsightNoticia['categoria'] {
-  const geo = RE_CLASS_GEO.test(full)
-  const macro = RE_CLASS_MACRO.test(full)
-  const criptoKw = RE_CLASS_CRIPTO.test(full)
-  const iaKw = RE_CLASS_IA.test(full)
+  const geo = RE_GEOPOLITICA.test(full) || RE_CLASS_GEO.test(full)
+  if (geo) return 'GEOPOLÍTICA'
+
+  const iaEstrita = textoIndicaFocoInteligenciaArtificial(full)
   const fromDedicatedCrypto =
     article._yieldscanCryptoQuery === true ||
     (typeof article.article_id === 'string' &&
-      (article.article_id.startsWith('cryptopanic-') || article.article_id.startsWith('cryptocv-')))
+      (article.article_id.startsWith('cryptopanic-') ||
+        article.article_id.startsWith('cryptocv-') ||
+        article.article_id.startsWith('coindesk-')))
   const fromDedicatedStocks =
     article._yieldscanStocksQuery === true ||
     (typeof article.article_id === 'string' && article.article_id.startsWith('gnews-stocks-'))
-  const iaMarcada =
-    iaKw || (article._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(full))
+  const fromDedicatedAi =
+    article._yieldscanAiQuery === true && iaEstrita
 
-  if (geo) return 'GEOPOLÍTICA'
+  if (fromDedicatedCrypto && !fromDedicatedAi) return 'CRIPTO'
+  if (fromDedicatedAi && !fromDedicatedCrypto) return 'IA'
+  if (fromDedicatedStocks && !fromDedicatedCrypto && !fromDedicatedAi) return 'ACOES'
+
+  const criptoKw = RE_CLASS_CRIPTO.test(full) || RE_CRYPTO.test(full)
   const acoesKw = RE_CLASS_ACOES.test(full)
-  if ((fromDedicatedStocks || acoesKw) && !criptoKw && !fromDedicatedCrypto) return 'ACOES'
-  if (macro) return 'MACRO'
-  if (criptoKw || fromDedicatedCrypto) return 'CRIPTO'
-  if (iaMarcada) return 'IA'
+  const macroKw =
+    RE_CLASS_MACRO.test(full) || RE_MACRO.test(full) || RE_POLITICA.test(full) || RE_MACRO_MERCADOS.test(full)
+  const iaKw = iaEstrita
+
+  if (criptoKw && !macroKw && !acoesKw && !iaKw) return 'CRIPTO'
+  if (iaKw && !criptoKw && !macroKw) return 'IA'
+  if (acoesKw && !criptoKw && !iaKw) return 'ACOES'
+  if (macroKw && !criptoKw && !iaKw) return 'MACRO'
+  if (criptoKw) return 'CRIPTO'
+  if (iaKw) return 'IA'
+  if (acoesKw) return 'ACOES'
+  if (macroKw) return 'MACRO'
 
   return classificarCategoria(full, article.category ?? null)
 }
@@ -381,6 +396,7 @@ function classificarCategoria(full: string, catsApi: string[] | null | undefined
   if (geo) return 'GEOPOLÍTICA'
   if (RE_CLASS_ACOES.test(blob) && !cry) return 'ACOES'
   if (policyMacro || pol || gov || mercados) return 'MACRO'
+  if (textoIndicaFocoInteligenciaArtificial(full)) return 'IA'
   return 'MACRO'
 }
 
@@ -598,7 +614,10 @@ function enrichYieldscanCryptoFlag(results: NewsDataArticle[], cryptoArticles: N
 }
 
 /** NewsData + RSS IA (fallback). CryptoPanic e GNews ficam em `pegarTodasNoticias`. */
-async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
+async function fetchNewsdataComRss(ndKey: string): Promise<{
+  articles: NewsDataArticle[]
+  aiPool: NewsDataArticle[]
+}> {
   const [
     newsdataGeral,
     newsdataCripto,
@@ -637,7 +656,7 @@ async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
 
   const newsdataAiMarcados: NewsDataArticle[] = newsdataAiMerged.map((a) => ({
     ...a,
-    _yieldscanAiQuery: false,
+    _yieldscanAiQuery: textoIndicaFocoInteligenciaArtificial(textoParaAnalise(a)),
   }))
 
   const mergedNd = mergeArticlesDedupe(newsdataGeral, newsdataCriptoMarcados)
@@ -646,7 +665,7 @@ async function fetchNewsdataComRss(ndKey: string): Promise<NewsDataArticle[]> {
   enrichYieldscanCryptoFlag(mergedNdComIa, newsdataCriptoMarcados)
   enrichYieldscanStocksFlag(mergedNdComIa, newsdataStocksMarcados)
   enrichYieldscanAiFlag(mergedNdComIa, newsdataAiMerged)
-  return mergedNdComIa
+  return { articles: mergedNdComIa, aiPool: newsdataAiMerged }
 }
 
 /**
@@ -658,16 +677,22 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
 }> {
   const ndKey = (apiKey ?? process.env.NEWSDATA_API_KEY)?.trim() || ''
 
-  const [ndBundle, coindesk, gnews, gnewsStocks, cryptoCv, cryptopanicResults] = await Promise.all([
+  const [ndResult, coindesk, gnews, gnewsStocks, cryptoCv, cryptopanicResults] = await Promise.all([
     ndKey
       ? fetchNewsdataComRss(ndKey)
-      : fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }),
+      : fetchAiNewsFromRssFeeds({ maxPerFeed: 20, timeoutMs: 12_000 }).then((rss) => ({
+          articles: rss,
+          aiPool: rss,
+        })),
     fetchCoindeskAsArticles(60),
     fetchGnewsAsArticles(),
     fetchGnewsStocksAsArticles(),
     fetchCryptoCvAsArticles(),
     fetchCryptopanicAsNewsDataArticles(),
   ])
+
+  const ndBundle = Array.isArray(ndResult) ? ndResult : ndResult.articles
+  const aiPool = Array.isArray(ndResult) ? ndResult : ndResult.aiPool
 
   const coindeskMarcados: NewsDataArticle[] = coindesk.map((a) => ({
     ...a,
@@ -686,6 +711,7 @@ export async function pegarTodasNoticias(apiKey?: string | null): Promise<{
   merged = mergeArticlesDedupe(merged, ndBundle)
   enrichYieldscanCryptoFlag(merged, [...cryptoCv, ...coindeskMarcados])
   enrichYieldscanStocksFlag(merged, gnewsStocksMarcados)
+  enrichYieldscanAiFlag(merged, aiPool)
   merged = dedupeArtigosPorTitulo(merged)
 
   const temChave =
@@ -771,7 +797,12 @@ export function processarNoticias(articles: NewsDataArticle[]): NoticiaProcessad
     if (RE_RASO_OU_LOCAL.test(fullNorm)) continue
     if (!passaFiltroPalavrasChave(fullNorm, a)) continue
 
-    const keywordScore = pontuarPalavrasChaveNoticia(fullNorm)
+    let keywordScore = pontuarPalavrasChaveNoticia(fullNorm)
+    const dedicatedBypass =
+      a._yieldscanCryptoQuery === true ||
+      a._yieldscanStocksQuery === true ||
+      (a._yieldscanAiQuery === true && textoIndicaFocoInteligenciaArtificial(fullNorm))
+    if (dedicatedBypass && keywordScore < MIN_SCORE_NOTICIA) keywordScore = MIN_SCORE_NOTICIA
     if (keywordScore < MIN_SCORE_NOTICIA) continue
 
     const recencyBoost = boostRecencia(a.pubDate)

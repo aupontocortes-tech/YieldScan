@@ -242,12 +242,12 @@ function NewsCard({
       onClick={!hasLink ? () => markSeenOnce() : undefined}
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-xl border bg-card/85',
-        'transition-[border-color,opacity,box-shadow] duration-300 ease-out',
+        'transition-[border-color,box-shadow] duration-300 ease-out',
         ttsHeard
-          ? 'border-emerald-500/30 opacity-[0.92]'
+          ? 'border-emerald-500/30'
           : seen
-            ? 'border-emerald-500/20 opacity-80'
-            : 'border-border/50 opacity-100',
+            ? 'border-emerald-500/20'
+            : 'border-border/50',
         'hover:border-yellow-500/35 hover:shadow-lg'
       )}
     >
@@ -257,7 +257,8 @@ function NewsCard({
         rel={hasLink ? 'noopener noreferrer' : undefined}
         onClick={hasLink ? () => markSeenOnce() : undefined}
         className={cn(
-          'flex min-h-0 flex-1 flex-col outline-none',
+          'flex min-h-0 flex-1 flex-col outline-none transition-opacity duration-300',
+          ttsHeard ? 'opacity-[0.92]' : seen ? 'opacity-80' : 'opacity-100',
           hasLink ? 'cursor-pointer' : 'cursor-default'
         )}
       >
@@ -415,8 +416,8 @@ export function DashbuddyNews() {
             <h2 className="text-2xl font-bold tracking-tight">Notícias</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cada filtro mostra só o tema do rótulo: cripto, geopolítica, macroeconomia e IA.
-            Em «Todos» vês todas as notícias misturadas com o ícone certo por notícia.
+            Cada aba mostra só o seu tema — cripto, ações americanas, geopolítica, macroeconomia ou IA.
+            Em «Todos» aparecem todas juntas, cada uma com o rótulo correto.
           </p>
           {data?.aviso && !isError && (
             <p className="mt-2 text-xs text-amber-500/90">{data.aviso}</p>

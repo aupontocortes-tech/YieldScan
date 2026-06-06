@@ -126,8 +126,7 @@ export async function fetchAiNewsFromRssFeeds(opts?: { maxPerFeed?: number; time
         language: 'en',
         keywords: null,
         image_url: null,
-        /* Flag aplicado em enrichYieldscanAiFlag só se o texto passar o critério estrito. */
-        _yieldscanAiQuery: false,
+        _yieldscanAiQuery: true,
       })
     }
   }

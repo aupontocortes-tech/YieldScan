@@ -56,9 +56,14 @@ export function NewsSpeakButton({ speechId, title, description, heard, className
   if (!mounted) {
     return (
       <span
-        className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center', className)}
+        className={cn(
+          'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted/30',
+          className,
+        )}
         aria-hidden
-      />
+      >
+        <Volume2 className="h-4 w-4 text-yellow-500/80" strokeWidth={2.25} />
+      </span>
     )
   }
 
@@ -72,15 +77,15 @@ export function NewsSpeakButton({ speechId, title, description, heard, className
         toggleNewsSpeech(speechId, title, description)
       }}
       className={cn(
-        'pointer-events-auto z-20 flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-        'transition-colors transition-opacity duration-300 ease-out',
-        'bg-black/25 backdrop-blur-[2px] hover:bg-black/40',
+        'pointer-events-auto z-20 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border',
+        'transition-colors duration-200',
+        'border-border/50 bg-muted/30 hover:border-yellow-500/40 hover:bg-yellow-500/10',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-500/60',
         heard &&
           !playing &&
-          'text-emerald-400 opacity-90 shadow-[0_0_10px_rgba(52,211,153,0.25)] hover:text-emerald-300',
-        (!heard || playing) && 'text-white opacity-70 hover:opacity-100',
-        playing && 'ring-1 ring-white/40 opacity-100 shadow-none',
+          'border-emerald-500/35 bg-emerald-500/10 text-emerald-400 hover:text-emerald-300',
+        (!heard || playing) && 'text-yellow-500 hover:text-yellow-400',
+        playing && 'border-yellow-500/50 bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/30',
         className
       )}
       title={
