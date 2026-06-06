@@ -33,14 +33,14 @@ export function NewsHubHeader() {
   const pathname = usePathname()
 
   return (
-    <header className="mb-8 border-b border-border/40 pb-8">
+    <header className="mb-5 border-b border-border/40 pb-5 sm:mb-8 sm:pb-8">
       <h1 className="text-3xl font-bold tracking-tight text-foreground">Cripto e mercado global</h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Preços (cripto e ações US), notícias e análise inteligente — escolhe a secção abaixo.
       </p>
 
       <nav
-        className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3"
+        className="mt-4 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-3"
         aria-label="Secções cripto"
       >
         {LINKS.map(({ href, label, shortLabel, description, icon: Icon }) => {
@@ -49,21 +49,29 @@ export function NewsHubHeader() {
             <Link
               key={href}
               href={href}
+              title={description}
               className={cn(
-                'flex min-h-[88px] flex-col justify-center gap-1 rounded-xl border px-4 py-3.5 text-left transition-all',
+                'flex flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition-all',
+                'sm:min-h-[88px] sm:items-start sm:justify-center sm:gap-1 sm:px-4 sm:py-3.5 sm:text-left',
                 active
                   ? 'border-yellow-500 bg-yellow-500 text-black shadow-md'
                   : 'border-border/60 bg-card/50 text-foreground hover:border-yellow-500/40 hover:bg-card',
               )}
             >
-              <span className="flex items-center gap-2 font-semibold">
-                <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-black' : 'text-yellow-500')} />
-                <span className="sm:hidden">{shortLabel}</span>
-                <span className="hidden sm:inline">{label}</span>
+              <Icon
+                className={cn(
+                  'h-5 w-5 shrink-0 sm:h-4 sm:w-4',
+                  active ? 'text-black' : 'text-yellow-500',
+                )}
+                aria-hidden
+              />
+              <span className="text-[10px] font-semibold leading-tight sm:hidden">{shortLabel}</span>
+              <span className="hidden items-center gap-2 font-semibold sm:flex">
+                <span>{label}</span>
               </span>
               <span
                 className={cn(
-                  'line-clamp-2 text-xs leading-snug',
+                  'hidden text-xs leading-snug sm:line-clamp-2',
                   active ? 'text-black/75' : 'text-muted-foreground',
                 )}
               >
