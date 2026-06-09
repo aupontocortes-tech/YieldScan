@@ -25,14 +25,14 @@ const cfg: Record<
       'bg-gradient-to-r from-amber-500 to-amber-600 shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500',
   },
   rebalance: {
-    label: 'Rebalancear agora',
-    hint: 'Demo — em produção abriria sua carteira',
+    label: 'Rebalancear 50/50',
+    hint: 'Recentrar faixa com dois tokens — demo',
     icon: RefreshCw,
     className: 'bg-gradient-to-r from-sky-600 to-violet-600 shadow-sky-500/25 hover:from-sky-500 hover:to-violet-500',
   },
   single_token_entry: {
-    label: 'Entrar com 1 token',
-    hint: 'Reforço só de um lado — menos risco com vol alta',
+    label: 'Entrar só com 1 token',
+    hint: 'Depositar só o ativo que você já tem — demo',
     icon: Shield,
     className:
       'bg-gradient-to-r from-violet-600 to-fuchsia-600 shadow-violet-500/25 hover:from-violet-500 hover:to-fuchsia-500',

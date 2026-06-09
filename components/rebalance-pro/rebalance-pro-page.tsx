@@ -7,9 +7,15 @@ import { SeletorDePar } from '@/components/rebalance-pro/seletor-de-par'
 import { InputsDePosicao } from '@/components/rebalance-pro/inputs-de-posicao'
 import { CardDeDecisao } from '@/components/rebalance-pro/card-de-decisao'
 import { BotoesDeAcao } from '@/components/rebalance-pro/botoes-de-acao'
+import { ModoDeEntrada } from '@/components/rebalance-pro/modo-de-entrada'
 import { PainelDeDetalhes } from '@/components/rebalance-pro/painel-de-detalhes'
 import { DEFAULT_TOKENS, type TokenOption } from '@/components/rebalance-pro/token-selector'
-import { computeRebalance } from '@/lib/rebalance-pro/compute'
+import {
+  computeRebalance,
+  inferDepositTokenWhenOutOfRange,
+  type DepositMode,
+  type DepositToken,
+} from '@/lib/rebalance-pro/compute'
 import {
   analyzeTrendFromChart,
   decideLiquidityAction,
@@ -111,6 +117,8 @@ export function RebalanceProPage() {
 
   const [rangeMode, setRangeMode] = React.useState<'simples' | 'dinamico'>('simples')
   const [percentualFrac, setPercentualFrac] = React.useState(0.1)
+  const [depositMode, setDepositMode] = React.useState<DepositMode>('dual')
+  const [depositTokenOverride, setDepositTokenOverride] = React.useState<DepositToken | null>(null)
 
   const [notice, setNotice] = React.useState<string | null>(null)
   const marketAbortRef = React.useRef<AbortController | null>(null)
@@ -196,6 +204,13 @@ export function RebalanceProPage() {
   const capitalN = parseNum(capital)
   const hasValidCapital = Number.isFinite(capitalN) && capitalN > 0
 
+  const inferredDepositToken = React.useMemo(() => {
+    if (invalidRange || effectivePrice <= 0) return null
+    return inferDepositTokenWhenOutOfRange(effectivePrice, pMinN, pMaxN)
+  }, [effectivePrice, pMinN, pMaxN, invalidRange])
+
+  const activeDepositToken = depositTokenOverride ?? inferredDepositToken
+
   const rangeResult = React.useMemo(() => {
     if (invalidRange || effectivePrice <= 0) return null
     return computeRebalance({
@@ -205,8 +220,21 @@ export function RebalanceProPage() {
       modo: rangeMode,
       percentual: rangeMode === 'dinamico' ? percentualFrac : undefined,
       valorTotal: hasValidCapital ? capitalN : undefined,
+      depositMode,
+      depositToken: depositMode === 'single' ? activeDepositToken ?? undefined : undefined,
     })
-  }, [effectivePrice, pMinN, pMaxN, rangeMode, percentualFrac, hasValidCapital, capitalN, invalidRange])
+  }, [
+    effectivePrice,
+    pMinN,
+    pMaxN,
+    rangeMode,
+    percentualFrac,
+    hasValidCapital,
+    capitalN,
+    invalidRange,
+    depositMode,
+    activeDepositToken,
+  ])
 
   const inRange = rangeResult ? rangeResult.inRange : false
   const hasEnoughData = rangeResult != null
@@ -231,8 +259,32 @@ export function RebalanceProPage() {
       volatilityPct,
       trendAnalysis,
       invalidRange: false,
+      price: effectivePrice,
+      pMin: pMinN,
+      pMax: pMaxN,
+      tokenASymbol: tokenA.symbol,
+      tokenBSymbol: tokenB.symbol,
     })
-  }, [rangeResult, invalidRange, inRange, volatilityPct, trendAnalysis])
+  }, [
+    rangeResult,
+    invalidRange,
+    inRange,
+    volatilityPct,
+    trendAnalysis,
+    effectivePrice,
+    pMinN,
+    pMaxN,
+    tokenA.symbol,
+    tokenB.symbol,
+  ])
+
+  const displayAction = React.useMemo(() => {
+    if (!decision) return null
+    if (decision.action === 'hold') return 'hold'
+    if (inRange) return decision.action
+    if (depositMode === 'single') return 'single_token_entry' as const
+    return 'rebalance' as const
+  }, [decision, inRange, depositMode])
 
   const marketError = [priceError, chartError].filter(Boolean).join(' — ') || null
   const marketRefreshing = priceLoading || chartLoading
@@ -241,15 +293,18 @@ export function RebalanceProPage() {
   const safeDisplayPrice = displayPriceForPanel != null ? Math.max(0, displayPriceForPanel) : null
 
   const onPrimaryAction = () => {
-    const act = decision?.action ?? 'wait'
+    const act = displayAction ?? 'wait'
     if (act === 'hold') {
       setNotice('Está tudo dentro da faixa — não precisa fazer nada por agora.')
     } else if (act === 'wait') {
       setNotice('Fique de olho no mercado. Volte quando o preço ou a volatilidade mudarem.')
     } else if (act === 'rebalance') {
-      setNotice('Demo: em produção isso abriria a carteira e a transação no pool.')
+      setNotice('Demo: rebalance 50/50 — em produção abriria a carteira no pool.')
     } else {
-      setNotice('Demo: em produção o app guiaria um reforço só em um dos tokens.')
+      const tk =
+        decision?.dominantTokenLabel ??
+        (activeDepositToken === 'token_a' ? tokenA.symbol : tokenB.symbol)
+      setNotice(`Demo: entrada só com ${tk} — faixa ${rangeResult?.singleSidedPlacement === 'above' ? 'acima' : 'abaixo'} do preço.`)
     }
     window.setTimeout(() => setNotice(null), 4500)
   }
@@ -318,10 +373,21 @@ export function RebalanceProPage() {
               onCapital={setCapital}
               invalidRange={invalidRange}
             />
+            <ModoDeEntrada
+              depositMode={depositMode}
+              onDepositModeChange={setDepositMode}
+              outOfRangeSide={rangeResult?.outOfRangeSide ?? 'in'}
+              inferredToken={inferredDepositToken}
+              depositToken={activeDepositToken}
+              onDepositTokenChange={setDepositTokenOverride}
+              tokenASymbol={tokenA.symbol}
+              tokenBSymbol={tokenB.symbol}
+            />
             <PainelDeDetalhes
               open={detailsOpen}
               onOpenChange={setDetailsOpen}
               pairLabel={pairLabel}
+              chartTokenSymbol={tokenA.symbol}
               priceSymbol={tokenA.symbol}
               quoteSymbol={tokenB.symbol}
               marketProps={{
@@ -350,6 +416,10 @@ export function RebalanceProPage() {
               tokenBUsd={rangeResult?.tokenB ?? null}
               rangeShiftPct={rangeResult?.rangeShiftPct ?? null}
               impermanentLossHintPct={rangeResult?.impermanentLossHintPct ?? null}
+              depositMode={rangeResult?.depositMode}
+              depositToken={rangeResult?.depositToken ?? null}
+              singleSidedPlacement={rangeResult?.singleSidedPlacement ?? null}
+              ilNoteKey={rangeResult?.ilNoteKey ?? null}
               showRangeSuggestion={hasEnoughData}
             />
           </div>
@@ -367,14 +437,17 @@ export function RebalanceProPage() {
               decision={decision}
             />
             <BotoesDeAcao
-              action={decision?.action ?? null}
+              action={displayAction}
               disabled={invalidRange || decision == null}
               onPress={onPrimaryAction}
             />
 
             {capital.trim() && hasValidCapital && (
               <p className="text-center text-[11px] text-muted-foreground">
-                Montagem 50/50 em valor no painel &quot;Detalhes&quot; usando{' '}
+                {depositMode === 'single'
+                  ? 'Montagem 1 token no painel «Detalhes»'
+                  : 'Montagem 50/50 no painel «Detalhes»'}{' '}
+                usando{' '}
                 <span className="font-mono text-foreground/90">
                   ${capitalN.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                 </span>{' '}

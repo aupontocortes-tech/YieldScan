@@ -8,13 +8,13 @@ import { SliderControl } from '@/components/rebalance-pro/slider-control'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import type { MarketTrend } from '@/lib/rebalance-pro/decision-engine'
-import type { RangeMode } from '@/lib/rebalance-pro/compute'
+import type { DepositMode, DepositToken, RangeMode, RebalanceResult } from '@/lib/rebalance-pro/compute'
 
 export type PainelDeDetalhesProps = {
   open: boolean
   onOpenChange: (v: boolean) => void
   pairLabel: string
-  chartTokenSymbol: string
+  chartTokenSymbol?: string
   priceSymbol: string
   quoteSymbol: string
   marketProps: {
@@ -43,6 +43,10 @@ export type PainelDeDetalhesProps = {
   tokenBUsd: number | null
   rangeShiftPct: number | null
   impermanentLossHintPct: number | null
+  depositMode?: DepositMode
+  depositToken?: DepositToken | null
+  singleSidedPlacement?: 'above' | 'below' | null
+  ilNoteKey?: RebalanceResult['ilNoteKey'] | null
   showRangeSuggestion: boolean
   className?: string
 }
@@ -71,9 +75,22 @@ export function PainelDeDetalhes({
   tokenBUsd,
   rangeShiftPct,
   impermanentLossHintPct,
+  depositMode = 'dual',
+  depositToken,
+  singleSidedPlacement,
+  ilNoteKey,
   showRangeSuggestion,
   className,
 }: PainelDeDetalhesProps) {
+  const ilNote = (() => {
+    if (ilNoteKey === 'single_waiting') {
+      return 'IL indicativo baixo enquanto o preço não entra na faixa (posição tipo ordem limite).'
+    }
+    if (ilNoteKey === 'single_in_range_unavailable') {
+      return 'Dentro da faixa: entrada single-sided não se aplica — use dois tokens ou escolha o ativo manualmente.'
+    }
+    return 'IL indicativo com faixa ativa nos dois lados do preço.'
+  })()
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className={cn('w-full', className)}>
       <CollapsibleTrigger asChild>
@@ -168,25 +185,46 @@ export function PainelDeDetalhes({
                     </p>
                   </div>
                 )}
-                {tokenAQty != null && tokenBUsd != null && Number.isFinite(tokenAQty) && Number.isFinite(tokenBUsd) && (
-                  <div className="col-span-full rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                {depositMode === 'single' && singleSidedPlacement && (
+                  <p className="col-span-full text-xs text-violet-200/90">
+                    Faixa {singleSidedPlacement === 'above' ? 'acima' : 'abaixo'} do preço — depósito só em{' '}
+                    {depositToken === 'token_a' ? priceSymbol : quoteSymbol}.
+                  </p>
+                )}
+                {tokenAQty != null &&
+                  tokenBUsd != null &&
+                  Number.isFinite(tokenAQty) &&
+                  Number.isFinite(tokenBUsd) &&
+                  (tokenAQty > 0 || tokenBUsd > 0) && (
+                  <div
+                    className={cn(
+                      'col-span-full rounded-xl border p-4',
+                      depositMode === 'single'
+                        ? 'border-violet-500/20 bg-violet-500/[0.06]'
+                        : 'border-emerald-500/20 bg-emerald-500/[0.06]',
+                    )}
+                  >
                     <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-200/90">
-                      Montagem 50/50 (valor)
+                      {depositMode === 'single' ? 'Montagem 1 token' : 'Montagem 50/50 (valor)'}
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Metade do capital em cada lado: {priceSymbol} ≈ qty abaixo; {quoteSymbol} ≈ USD na cotação.
+                      {depositMode === 'single'
+                        ? `Todo o capital em ${depositToken === 'token_a' ? priceSymbol : quoteSymbol} — sem swap para o outro ativo.`
+                        : `Metade do capital em cada lado: ${priceSymbol} ≈ qty abaixo; ${quoteSymbol} ≈ USD na cotação.`}
                     </p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div>
                         <Label className="text-[10px] uppercase text-muted-foreground">{priceSymbol} (qty)</Label>
                         <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-foreground">
-                          {tokenAQty.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
+                          {tokenAQty > 0
+                            ? tokenAQty.toLocaleString('pt-BR', { maximumFractionDigits: 8 })
+                            : '—'}
                         </p>
                       </div>
                       <div>
                         <Label className="text-[10px] uppercase text-muted-foreground">{quoteSymbol} (≈ USD)</Label>
                         <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-foreground">
-                          {fmtUsd(tokenBUsd)}
+                          {tokenBUsd > 0 ? fmtUsd(tokenBUsd) : '—'}
                         </p>
                       </div>
                     </div>
@@ -200,7 +238,7 @@ export function PainelDeDetalhes({
                 )}
                 {impermanentLossHintPct != null && Number.isFinite(impermanentLossHintPct) && (
                   <p className="col-span-full text-xs text-amber-200/85">
-                    Estimativa de IL (indicativa): ~{impermanentLossHintPct.toFixed(1)}%
+                    Estimativa de IL (indicativa): ~{impermanentLossHintPct.toFixed(1)}%. {ilNote}
                   </p>
                 )}
               </div>
