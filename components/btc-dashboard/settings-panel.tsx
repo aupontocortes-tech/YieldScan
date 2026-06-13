@@ -12,7 +12,7 @@ import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import {
   CHART_LABEL_MODE_LABELS,
 } from '@/lib/btc/chart-indicator-display'
-import type { ChartIndicatorLabelMode, ChartIndicatorTapAction } from '@/lib/btc/types'
+import type { ChartIndicatorLabelMode, ChartIndicatorTapAction, MaType } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -238,6 +238,8 @@ export function SettingsPanel({
     setOnChain,
     chartIndicatorDisplay,
     setChartIndicatorDisplay,
+    trendRadar,
+    setTrendRadar,
     resetDefaults,
   } = useBtcSettings()
 
@@ -315,6 +317,42 @@ export function SettingsPanel({
               ))}
             </div>
           </div>
+        </div>
+      </IndicatorSection>
+
+      <IndicatorSection
+        title="Radar de Tendência"
+        subtitle="Sinais BUY/SELL · ativa aqui ou pelo botão «Radar» no gráfico"
+        helpText="Analisa RSI, ADX, MACD, EMA, Volume, HTF e POC. Desenha setas BUY/SELL no gráfico e painel com score, TP e SL."
+        enabled={trendRadar.enabled}
+        onToggle={(v) => setTrendRadar({ ...trendRadar, enabled: v })}
+        defaultOpen
+      >
+        <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
+            <Label className="text-[10px] text-zinc-400">Painel lateral no gráfico</Label>
+            <Switch
+              checked={trendRadar.showPanel}
+              onCheckedChange={(c) => setTrendRadar({ ...trendRadar, showPanel: c })}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
+            <Label className="text-[10px] text-zinc-400">Setas BUY / SELL</Label>
+            <Switch
+              checked={trendRadar.showMarkers}
+              onCheckedChange={(c) => setTrendRadar({ ...trendRadar, showMarkers: c })}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
+            <Label className="text-[10px] text-zinc-400">Linha POC (volume)</Label>
+            <Switch
+              checked={trendRadar.showPocLine}
+              onCheckedChange={(c) => setTrendRadar({ ...trendRadar, showPocLine: c })}
+            />
+          </div>
+          <p className="text-[10px] leading-relaxed text-zinc-500">
+            Score ≥ 90 muito forte · 75–89 forte · 60–74 moderado · abaixo de 60 não operar.
+          </p>
         </div>
       </IndicatorSection>
 

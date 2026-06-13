@@ -172,6 +172,21 @@ export type GoldenCrossDailySettings = {
   colorSma200: string
 }
 
+/** Radar de Tendência — sinais BUY/SELL compostos no gráfico BTC. */
+export type TrendRadarSettings = {
+  enabled: boolean
+  showPanel: boolean
+  showMarkers: boolean
+  showPocLine: boolean
+}
+
+export const DEFAULT_TREND_RADAR: TrendRadarSettings = {
+  enabled: false,
+  showPanel: true,
+  showMarkers: true,
+  showPocLine: true,
+}
+
 /** Rótulo do indicador no eixo direito do gráfico. */
 export type ChartIndicatorLabelMode = 'full' | 'compact' | 'hidden'
 

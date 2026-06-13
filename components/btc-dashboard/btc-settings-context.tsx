@@ -32,13 +32,18 @@ import type {
   ZonesSettings,
   ChartIndicatorDisplaySettings,
   ChartIndicatorLabelMode,
+  TrendRadarSettings,
+} from '@/lib/btc/types'
+import {
+  DEFAULT_CHART_INDICATOR_DISPLAY,
+  DEFAULT_TREND_RADAR,
+  TIMEFRAME_PRESETS,
 } from '@/lib/btc/types'
 import {
   getDefaultIndicatorPair,
   getIndicatorPair,
   type IndicatorPair,
 } from '@/lib/btc/indicator-pairs'
-import { DEFAULT_CHART_INDICATOR_DISPLAY, TIMEFRAME_PRESETS } from '@/lib/btc/types'
 
 /** Intervalo inicial do gráfico de indicadores (antes da hidratação e após “Repor tudo”). */
 const DEFAULT_TIMEFRAME_ID = '1d'
@@ -211,6 +216,7 @@ type BtcPersistV2 = {
   sma200Daily?: Sma200DailySettings
   sma50Weekly?: Sma50WeeklySettings
   goldenCrossDaily?: GoldenCrossDailySettings
+  trendRadar?: TrendRadarSettings
   chartIndicatorDisplay?: ChartIndicatorDisplaySettings
   /** Legado: migrado para sma50Weekly se estiver ligado. */
   cycleBottomAlerts?: { enabled?: boolean }
@@ -362,6 +368,8 @@ type Ctx = {
   setSma50Weekly: (s: Sma50WeeklySettings) => void
   goldenCrossDaily: GoldenCrossDailySettings
   setGoldenCrossDaily: (g: GoldenCrossDailySettings) => void
+  trendRadar: TrendRadarSettings
+  setTrendRadar: (t: TrendRadarSettings) => void
   chartIndicatorDisplay: ChartIndicatorDisplaySettings
   setChartIndicatorDisplay: (c: ChartIndicatorDisplaySettings) => void
   setIndicatorLabelMode: (id: string, mode: ChartIndicatorLabelMode) => void
@@ -397,6 +405,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [goldenCrossDaily, setGoldenCrossDaily] = useState<GoldenCrossDailySettings>(() => ({
     ...DEFAULT_GOLDEN_CROSS,
   }))
+  const [trendRadar, setTrendRadar] = useState<TrendRadarSettings>(() => ({ ...DEFAULT_TREND_RADAR }))
   const [chartIndicatorDisplay, setChartIndicatorDisplay] = useState<ChartIndicatorDisplaySettings>(
     () => ({ ...DEFAULT_CHART_INDICATOR_DISPLAY }),
   )
@@ -424,6 +433,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     sma200Daily,
     sma50Weekly,
     goldenCrossDaily,
+    trendRadar,
     chartIndicatorDisplay,
   }
 
@@ -488,6 +498,9 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
           ...g,
           lineWidth: g.lineWidth === 1 || g.lineWidth === 3 ? g.lineWidth : 2,
         })
+      }
+      if (v2.trendRadar && typeof v2.trendRadar === 'object') {
+        setTrendRadar({ ...DEFAULT_TREND_RADAR, ...v2.trendRadar })
       }
       setChartIndicatorDisplay(mergeChartIndicatorDisplay(v2.chartIndicatorDisplay))
     }
@@ -580,6 +593,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     sma200Daily,
     sma50Weekly,
     goldenCrossDaily,
+    trendRadar,
+    chartIndicatorDisplay,
   ])
 
   useEffect(() => {
@@ -634,6 +649,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setSma200Daily({ ...DEFAULT_SMA_200_DAILY })
     setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY })
     setGoldenCrossDaily({ ...DEFAULT_GOLDEN_CROSS })
+    setTrendRadar({ ...DEFAULT_TREND_RADAR })
     setChartIndicatorDisplay({ ...DEFAULT_CHART_INDICATOR_DISPLAY })
     try {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(LS_MIRROR)
@@ -675,6 +691,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setSma50Weekly,
       goldenCrossDaily,
       setGoldenCrossDaily,
+      trendRadar,
+      setTrendRadar,
       chartIndicatorDisplay,
       setChartIndicatorDisplay,
       setIndicatorLabelMode,
@@ -695,6 +713,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       sma200Daily,
       sma50Weekly,
       goldenCrossDaily,
+      trendRadar,
       chartIndicatorDisplay,
       addMa,
       updateMa,

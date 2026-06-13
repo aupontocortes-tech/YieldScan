@@ -9,6 +9,7 @@ import { MarketCard } from '@/components/btc-dashboard/market-card'
 import { useBtcSettings } from '@/components/btc-dashboard/btc-settings-context'
 import { evaluateGoldenCrossState } from '@/lib/btc/cycle-bottom'
 import { fetchIndicatorKlines, fetchPairKlinesByInterval } from '@/lib/btc/klines-client'
+import { getHigherTimeframeId } from '@/lib/btc/trend-radar'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -34,6 +35,7 @@ import {
   RefreshCw,
   RotateCcw,
   SlidersHorizontal,
+  Radar,
 } from 'lucide-react'
 import { ChartDrawingActiveBanner } from '@/components/btc-dashboard/chart-drawing-active-banner'
 import type { ChartLegendSettingsFocus } from '@/components/btc-dashboard/chart-indicator-legend'
@@ -95,6 +97,8 @@ export function BtcDashboard() {
     sma50Weekly,
     goldenCrossDaily,
     setGoldenCrossDaily,
+    trendRadar,
+    setTrendRadar,
   } = useBtcSettings()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawingsOpen, setDrawingsOpen] = useState(false)
@@ -192,6 +196,24 @@ export function BtcDashboard() {
     return weeklyBarsResolved
   }, [sma50Weekly.enabled, weeklyBarsResolved])
 
+  const htfPreset = useMemo(() => {
+    const id = getHigherTimeframeId(timeframe.id)
+    return TIMEFRAME_PRESETS.find((t) => t.id === id) ?? TIMEFRAME_PRESETS.find((t) => t.id === '1d')!
+  }, [timeframe.id])
+
+  const { data: htfBarsForTrendRadar = [] } = useQuery({
+    queryKey: ['indicator-htf-radar', pair.id, htfPreset.id],
+    queryFn: () => fetchIndicatorKlines(pair, htfPreset),
+    enabled: trendRadar.enabled && htfPreset.id !== timeframe.id,
+    staleTime: 120_000,
+  })
+
+  const htfBarsResolved = useMemo(() => {
+    if (!trendRadar.enabled) return []
+    if (htfPreset.id === timeframe.id) return bars
+    return htfBarsForTrendRadar
+  }, [trendRadar.enabled, htfPreset.id, timeframe.id, bars, htfBarsForTrendRadar])
+
   const signalResult = useMemo(() => {
     if (bars.length < 30) return null
     return runSignalEngine({
@@ -240,6 +262,7 @@ export function BtcDashboard() {
         (timeframe.interval !== '1w' || bars.length < 50)
       }
       goldenCrossState={goldenCrossState}
+      htfBarsForTrendRadar={htfBarsResolved}
       onOpenIndicatorSettings={openIndicatorSettings}
       priceOnlyFocus={chartFocus === 'goldenCross'}
       resetKey={chartResetKey}
@@ -358,6 +381,24 @@ export function BtcDashboard() {
           <ChartLandscapeToggle />
           {!chartExpanded && (
             <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                  trendRadar.enabled
+                    ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
+                )}
+                onClick={() => {
+                  setTrendRadar({ ...trendRadar, enabled: !trendRadar.enabled })
+                }}
+                title="Radar de Tendência — sinais BUY/SELL no gráfico"
+              >
+                <Radar className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Radar</span>
+              </Button>
               <Button
                 type="button"
                 variant="ghost"

@@ -22,6 +22,7 @@ export type ChartLegendSettingsFocus =
   | 'rsi'
   | 'macd'
   | 'stoch'
+  | 'trend-radar'
 
 type LegendRow = {
   id: string
@@ -138,6 +139,8 @@ export function ChartIndicatorLegend({
     setMacd,
     stoch,
     setStoch,
+    trendRadar,
+    setTrendRadar,
   } = useBtcSettings()
 
   const rows = useMemo(() => {
@@ -328,6 +331,16 @@ export function ChartIndicatorLegend({
       })
     }
 
+    if (trendRadar.enabled) {
+      list.push({
+        id: 'trendRadar',
+        label: 'Radar de Tendência',
+        colors: ['#d4af37'],
+        onRemove: () => setTrendRadar({ ...trendRadar, enabled: false }),
+        settingsFocus: 'trend-radar',
+      })
+    }
+
     return list
   }, [
     goldenCrossState,
@@ -351,6 +364,8 @@ export function ChartIndicatorLegend({
     setMacd,
     stoch,
     setStoch,
+    trendRadar,
+    setTrendRadar,
   ])
 
   if (rows.length === 0) return null

@@ -40,6 +40,8 @@ import {
 } from '@/lib/btc/chart-indicator-display'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
+import { computeTrendRadar, type TrendRadarAnalysis } from '@/lib/btc/trend-radar'
+import { TrendRadarOverlay } from '@/components/btc-dashboard/trend-radar-overlay'
 import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
 import {
   computeBullMarketBandOnChart,
@@ -115,6 +117,7 @@ type BtcChartsSuiteProps = {
   dailyBarsForGoldenCross?: OhlcvBar[]
   goldenCrossLoading?: boolean
   goldenCrossState?: GoldenCrossState
+  htfBarsForTrendRadar?: OhlcvBar[]
   onOpenIndicatorSettings?: (focus: ChartLegendSettingsFocus) => void
   /** Só preço + indicadores de ciclo (modo ecrã inteiro). */
   priceOnlyFocus?: boolean
@@ -132,6 +135,7 @@ export function BtcChartsSuite({
   dailyBarsForGoldenCross = [],
   goldenCrossLoading = false,
   goldenCrossState,
+  htfBarsForTrendRadar = [],
   onOpenIndicatorSettings,
   priceOnlyFocus = false,
   resetKey = 0,
@@ -155,6 +159,7 @@ export function BtcChartsSuite({
     setSma50Weekly,
     goldenCrossDaily,
     setGoldenCrossDaily,
+    trendRadar,
     chartIndicatorDisplay,
     timeframe,
   } = useBtcSettings()
@@ -183,6 +188,11 @@ export function BtcChartsSuite({
   )
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
   const lows = useMemo(() => bars.map((b) => b.low), [bars])
+
+  const trendRadarAnalysis = useMemo((): TrendRadarAnalysis | null => {
+    if (!trendRadar.enabled || bars.length < 55) return null
+    return computeTrendRadar(bars, htfBarsForTrendRadar.length >= 25 ? htfBarsForTrendRadar : undefined)
+  }, [trendRadar.enabled, bars, htfBarsForTrendRadar])
 
   const rsiSeries = useMemo(
     () => (rsiCfg.enabled ? rsi(closes, rsiCfg.period) : null),
@@ -938,6 +948,7 @@ export function BtcChartsSuite({
       >
         <div ref={mainRef} className="yieldscan-chart-root absolute inset-0" />
         <DrawingSystemOverlay bars={bars} />
+        <TrendRadarOverlay analysis={trendRadarAnalysis} settings={trendRadar} bars={bars} barsCount={bars.length} />
         <ChartIndicatorHitLayer bars={bars} onOpenSettings={onOpenIndicatorSettings} />
         <ChartDrawingsLegend />
         <ChartIndicatorLegend
