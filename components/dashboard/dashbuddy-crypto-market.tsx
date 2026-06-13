@@ -445,10 +445,11 @@ export function DashbuddyCryptoMarket() {
       writeMercadoSessionCache(`${marketQueryKey}|prices`, payload)
       return payload
     },
-    staleTime: 90_000,
-    refetchInterval: 120_000,
-    refetchIntervalInBackground: true,
-    gcTime: 180_000,
+    staleTime: 120_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    gcTime: 300_000,
     retry: 3,
     retryDelay: (attempt) => Math.min(12_000, 1_500 * 2 ** attempt),
     placeholderData: () => readMercadoSessionCache(`${marketQueryKey}|prices`),
@@ -468,12 +469,14 @@ export function DashbuddyCryptoMarket() {
       writeMercadoSessionCache(marketQueryKey, payload)
       return payload
     },
-    enabled: Boolean(pricesData) || pricesLoading === false,
-    staleTime: 90_000,
-    refetchInterval: 120_000,
-    refetchIntervalInBackground: true,
-    gcTime: 180_000,
+    enabled: Boolean(pricesData) && !pricesFetching,
+    staleTime: 120_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    gcTime: 300_000,
     retry: 2,
+    retryDelay: (attempt) => Math.min(12_000, 2_000 * 2 ** attempt),
     placeholderData: () => readMercadoSessionCache(marketQueryKey),
   })
 

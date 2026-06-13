@@ -4,6 +4,15 @@
  */
 
 import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import {
+  fetchBinanceSpotQuotes,
+  STABLE_COINGECKO_IDS,
+  syntheticStableQuote,
+} from '@/lib/coingecko-binance-fallback'
+import {
+  fetchCoingeckoSimplePrices,
+  type SimplePriceEntry,
+} from '@/lib/coingecko-simple-price-server'
 import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-logos'
 import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { sanitizeMercadoErro } from '@/lib/mercado-erro'
@@ -60,25 +69,16 @@ export const MAX_MARKET_FETCH_IDS = 24
 /** Evita 429 na API pública; com chave Pro/Demo os lotes são maiores. */
 const SIMPLE_PRICE_CHUNK_PUBLIC = 5
 const SIMPLE_PRICE_CHUNK_KEY = 18
-const SIMPLE_CHUNK_GAP_MS_PUBLIC = 280
-const SIMPLE_RETRY_GAP_MS = 400
-const BETWEEN_ENDPOINTS_MS = 200
-const FETCH_MAX_RETRIES = 2
+const SIMPLE_CHUNK_GAP_MS_PUBLIC = 400
+const SIMPLE_RETRY_GAP_MS = 600
+const BETWEEN_ENDPOINTS_MS = 350
+const FETCH_MAX_RETRIES = 3
 const HIGHLIGHT_PRICE_CACHE_MS = 10 * 60 * 1000
+const HIGHLIGHT_PRICE_STALE_MS = 24 * 60 * 60 * 1000
 
-type SimplePriceEntry = {
-  usd?: number
-  brl?: number
-  eur?: number
-  usd_24h_change?: number
-  brl_24h_change?: number
-  eur_24h_change?: number
-  usd_market_cap?: number
-  brl_market_cap?: number
-  eur_market_cap?: number
-}
+type SimplePriceEntryLocal = SimplePriceEntry
 
-const highlightSimpleCache = new Map<string, { at: number; entry: SimplePriceEntry }>()
+const highlightSimpleCache = new Map<string, { at: number; entry: SimplePriceEntryLocal }>()
 
 /** Nomes conhecidos para slugs frequentes (resto = título a partir do id). */
 const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
@@ -172,35 +172,58 @@ async function fetchJson<T>(pathOrUrl: string, timeoutMs = 12_000): Promise<T | 
   return null
 }
 
-function rememberHighlightSimple(id: string, entry: SimplePriceEntry): void {
+function rememberHighlightSimple(id: string, entry: SimplePriceEntryLocal): void {
   if (typeof entry.usd !== 'number' || !Number.isFinite(entry.usd)) return
   highlightSimpleCache.set(id, { at: Date.now(), entry })
 }
 
-function cachedHighlightSimple(id: string): SimplePriceEntry | null {
+function cachedHighlightSimple(id: string, allowStale = false): SimplePriceEntryLocal | null {
   const hit = highlightSimpleCache.get(id)
-  if (!hit || Date.now() - hit.at > HIGHLIGHT_PRICE_CACHE_MS) return null
-  return hit.entry
+  if (!hit) return null
+  const age = Date.now() - hit.at
+  if (age <= HIGHLIGHT_PRICE_CACHE_MS) return hit.entry
+  if (allowStale && age <= HIGHLIGHT_PRICE_STALE_MS) return hit.entry
+  return null
 }
 
-function hasValidUsd(entry: SimplePriceEntry | undefined): boolean {
+function hasValidUsd(entry: SimplePriceEntryLocal | undefined): boolean {
   return typeof entry?.usd === 'number' && Number.isFinite(entry.usd)
 }
 
-async function fetchSimplePriceChunk(ids: string[]): Promise<Record<string, SimplePriceEntry>> {
+async function fetchSimplePriceChunk(ids: string[]): Promise<Record<string, SimplePriceEntryLocal>> {
   if (ids.length === 0) return {}
-  const path = buildSimplePricePath(ids)
-  const batch = await fetchJson<Record<string, SimplePriceEntry>>(path)
-  const out: Record<string, SimplePriceEntry> = {}
-  if (batch && typeof batch === 'object') {
-    for (const [id, entry] of Object.entries(batch)) {
-      if (entry && typeof entry === 'object' && hasValidUsd(entry)) {
-        out[id] = entry
-        rememberHighlightSimple(id, entry)
-      }
+  const { data } = await fetchCoingeckoSimplePrices(ids, {
+    vsCurrencies: 'usd,brl,eur',
+    include24hrChange: true,
+    includeMarketCap: true,
+    allowStale: true,
+  })
+  const out: Record<string, SimplePriceEntryLocal> = {}
+  for (const [id, entry] of Object.entries(data)) {
+    if (entry && typeof entry === 'object' && hasValidUsd(entry)) {
+      out[id] = entry
+      rememberHighlightSimple(id, entry)
     }
   }
   return out
+}
+
+function applyBinanceFallbackToMerged(
+  merged: Record<string, SimplePriceEntryLocal>,
+  ids: string[],
+  quotes: Map<string, { price: number; change_24h: number }>,
+): void {
+  for (const id of ids) {
+    if (hasValidUsd(merged[id])) continue
+    const q = quotes.get(id)
+    if (!q) continue
+    const entry: SimplePriceEntryLocal = {
+      usd: q.price,
+      usd_24h_change: q.change_24h,
+    }
+    merged[id] = entry
+    rememberHighlightSimple(id, entry)
+  }
 }
 
 /** simple/price em lotes + retry por id + cache (RWAs/xStock são sensíveis a 429). */
@@ -218,9 +241,9 @@ function simplePriceChunkGapMs(): number {
   return hasCgKey ? 0 : SIMPLE_CHUNK_GAP_MS_PUBLIC
 }
 
-async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntry>> {
+async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntryLocal>> {
   const unique = [...new Set(ids.filter(Boolean))]
-  const merged: Record<string, SimplePriceEntry> = {}
+  const merged: Record<string, SimplePriceEntryLocal> = {}
   const chunkSize = simplePriceChunkSize()
   const gapMs = simplePriceChunkGapMs()
 
@@ -234,7 +257,7 @@ async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<str
 
   for (const id of unique) {
     if (hasValidUsd(merged[id])) continue
-    const cached = cachedHighlightSimple(id)
+    const cached = cachedHighlightSimple(id, true)
     if (cached && hasValidUsd(cached)) merged[id] = cached
   }
 
@@ -245,10 +268,29 @@ async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<str
       await sleep(SIMPLE_RETRY_GAP_MS)
       Object.assign(merged, await fetchSimplePriceChunk(chunk))
     }
+
+    const missingAfterRetry = unique.filter((id) => !hasValidUsd(merged[id]))
+    if (missingAfterRetry.length > 0) {
+      const binance = await fetchBinanceSpotQuotes(missingAfterRetry)
+      applyBinanceFallbackToMerged(merged, missingAfterRetry, binance)
+    }
+
+    const stillNoPrice = unique.filter((id) => !hasValidUsd(merged[id]))
+    for (const id of stillNoPrice) {
+      if (!STABLE_COINGECKO_IDS.has(id)) continue
+      const stable = syntheticStableQuote()
+      const entry: SimplePriceEntryLocal = {
+        usd: stable.price,
+        usd_24h_change: stable.change_24h,
+      }
+      merged[id] = entry
+      rememberHighlightSimple(id, entry)
+    }
+
     const marketsFallback = await fetchHighlightLogosByIds(
-      stillMissing.filter((id) => !hasValidUsd(merged[id])),
+      unique.filter((id) => !hasValidUsd(merged[id])),
     )
-    for (const id of stillMissing) {
+    for (const id of unique) {
       if (hasValidUsd(merged[id])) continue
       const row = marketsFallback.get(id)
       if (row?.price != null) {
@@ -281,7 +323,7 @@ export function mergeHighlightCoinsWithCache(
     if (cur?.price != null) return cur
     const cached = byIdCache.get(id)
     if (cached?.price != null) return fillHighlightStaticLogo(cached)
-    const simple = cachedHighlightSimple(id)
+    const simple = cachedHighlightSimple(id, true)
     if (simple) {
       const fromSimple = fromSimpleHighlightById(id, simple)
       if (fromSimple?.price != null) return fillHighlightStaticLogo(fromSimple)
@@ -611,12 +653,6 @@ function emptyPayload(
     erro,
     fonte: 'coingecko',
   }
-}
-
-function buildSimplePricePath(ids: string[]): string {
-  const unique = [...new Set(ids)].filter(Boolean)
-  const joined = unique.map((id) => encodeURIComponent(id)).join(',')
-  return `/simple/price?ids=${joined}&vs_currencies=usd,brl,eur&include_24hr_change=true&include_market_cap=true`
 }
 
 /**

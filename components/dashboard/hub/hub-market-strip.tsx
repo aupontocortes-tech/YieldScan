@@ -103,13 +103,17 @@ export function HubMarketStrip() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['hub-market', HUB_MARKET_IDS.join(',')],
     queryFn: fetchHubMarket,
-    staleTime: 90_000,
-    refetchInterval: 120_000,
+    staleTime: 120_000,
+    refetchInterval: 180_000,
+    refetchOnWindowFocus: false,
+    refetchIntervalInBackground: false,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(10_000, 1_500 * 2 ** attempt),
   })
 
   const coins = useMemo(() => {
     if (!data?.highlightCoins) return []
-    return data.highlightCoins.filter((c): c is MercadoCoin => c != null)
+    return data.highlightCoins.filter((c): c is MercadoCoin => c != null && c.price != null)
   }, [data])
 
   return (
