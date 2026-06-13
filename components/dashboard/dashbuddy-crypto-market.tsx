@@ -8,10 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { whenYieldscanSqliteReady } from '@/lib/client-db/sqlite-core'
-import {
-  readMercadoSessionCache,
-  writeMercadoSessionCache,
-} from '@/lib/mercado-session-cache'
 import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
 import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 import { syntheticHighlightCoin, withDisplayQuotes } from '@/lib/coingecko-market'
@@ -19,6 +15,15 @@ import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import { readHighlightIconUrl, writeHighlightIconUrl } from '@/lib/mercado-highlight-icons'
 import { sanitizeMercadoErro } from '@/lib/mercado-erro'
+import {
+  fetchAndCacheMercadoFull,
+  fetchAndCacheMercadoPrices,
+  MERCADO_LISTS_QUERY_PREFIX,
+  MERCADO_PRICES_QUERY_PREFIX,
+  mercadoQueryKey,
+  readMercadoFullPlaceholder,
+  readMercadoPricesPlaceholder,
+} from '@/lib/fetch-mercado-client'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import {
   effectiveDisplayFiatForCoin,
@@ -40,15 +45,6 @@ import {
 import { isUsEquityXstock, MARKET_PINNED_STOCK_IDS } from '@/lib/us-equities'
 import { cn } from '@/lib/utils'
 import { Building2, Coins, ExternalLink, LineChart, Plus, RefreshCw, TrendingUp } from 'lucide-react'
-
-async function fetchMercado(ids: string[], mode: 'highlights' | 'full' = 'full'): Promise<MarketApiPayload> {
-  const q = new URLSearchParams()
-  q.set('highlights', ids.join(','))
-  if (mode === 'highlights') q.set('mode', 'highlights')
-  const res = await fetch(`/api/market?${q.toString()}`)
-  const json = (await res.json()) as MarketApiPayload
-  return { ...json, erro: sanitizeMercadoErro(json.erro) }
-}
 
 function mergeMarketPayload(
   prices: MarketApiPayload | undefined,
@@ -431,7 +427,7 @@ export function DashbuddyCryptoMarket() {
     return out
   }, [highlightIds])
 
-  const marketQueryKey = allMarketIds.join('|')
+  const marketQueryKey = mercadoQueryKey(allMarketIds)
 
   const {
     data: pricesData,
@@ -439,12 +435,8 @@ export function DashbuddyCryptoMarket() {
     isFetching: pricesFetching,
     refetch: refetchPrices,
   } = useQuery({
-    queryKey: ['crypto-market-prices', marketQueryKey],
-    queryFn: async () => {
-      const payload = await fetchMercado(allMarketIds, 'highlights')
-      writeMercadoSessionCache(`${marketQueryKey}|prices`, payload)
-      return payload
-    },
+    queryKey: [MERCADO_PRICES_QUERY_PREFIX, marketQueryKey],
+    queryFn: () => fetchAndCacheMercadoPrices(allMarketIds),
     staleTime: 120_000,
     refetchInterval: 180_000,
     refetchIntervalInBackground: false,
@@ -452,7 +444,7 @@ export function DashbuddyCryptoMarket() {
     gcTime: 300_000,
     retry: 3,
     retryDelay: (attempt) => Math.min(12_000, 1_500 * 2 ** attempt),
-    placeholderData: () => readMercadoSessionCache(`${marketQueryKey}|prices`),
+    placeholderData: () => readMercadoPricesPlaceholder(allMarketIds),
   })
 
   const {
@@ -463,12 +455,8 @@ export function DashbuddyCryptoMarket() {
     error,
     refetch: refetchLists,
   } = useQuery({
-    queryKey: ['crypto-market-lists', marketQueryKey],
-    queryFn: async () => {
-      const payload = await fetchMercado(allMarketIds, 'full')
-      writeMercadoSessionCache(marketQueryKey, payload)
-      return payload
-    },
+    queryKey: [MERCADO_LISTS_QUERY_PREFIX, marketQueryKey],
+    queryFn: () => fetchAndCacheMercadoFull(allMarketIds),
     enabled: Boolean(pricesData) && !pricesFetching,
     staleTime: 120_000,
     refetchInterval: 180_000,
@@ -477,7 +465,7 @@ export function DashbuddyCryptoMarket() {
     gcTime: 300_000,
     retry: 2,
     retryDelay: (attempt) => Math.min(12_000, 2_000 * 2 ** attempt),
-    placeholderData: () => readMercadoSessionCache(marketQueryKey),
+    placeholderData: () => readMercadoFullPlaceholder(allMarketIds),
   })
 
   const data = useMemo(

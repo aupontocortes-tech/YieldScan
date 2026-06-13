@@ -6,8 +6,8 @@ import { TrendingUp } from 'lucide-react'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import { HubPanel } from '@/components/dashboard/hub/hub-panel'
 import type { MarketApiPayload, MercadoCoin } from '@/lib/coingecko-market'
+import { fetchMercadoClient } from '@/lib/fetch-mercado-client'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
-import { sanitizeMercadoErro } from '@/lib/mercado-erro'
 import {
   effectiveDisplayFiatForCoin,
   formatMercadoFiatAmount,
@@ -30,13 +30,7 @@ const HUB_MARKET_IDS = [
 ] as const
 
 async function fetchHubMarket(): Promise<MarketApiPayload> {
-  const q = new URLSearchParams({
-    highlights: HUB_MARKET_IDS.join(','),
-    mode: 'highlights',
-  })
-  const res = await fetch(`/api/market?${q}`)
-  const json = (await res.json()) as MarketApiPayload
-  return { ...json, erro: sanitizeMercadoErro(json.erro) }
+  return fetchMercadoClient([...HUB_MARKET_IDS], 'highlights')
 }
 
 function MarketTile({ coin, prefs }: { coin: MercadoCoin; prefs: MercadoDisplayPrefs }) {
