@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { BtcChartsSuite } from '@/components/btc-dashboard/btc-charts-suite'
 import { IndicatorPairSelector } from '@/components/btc-dashboard/indicator-pair-selector'
 import { MarketCard } from '@/components/btc-dashboard/market-card'
@@ -83,6 +83,14 @@ const TF_PRESETS: TimeframePreset[] = INDICATOR_TOOLBAR_TIMEFRAMES.map((id) =>
   TIMEFRAME_PRESETS.find((t) => t.id === id),
 ).filter((x): x is TimeframePreset => x != null)
 
+const KLINES_QUERY_OPTIONS = {
+  retry: 3,
+  retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8000),
+  refetchOnWindowFocus: false,
+  refetchIntervalInBackground: false,
+  placeholderData: keepPreviousData,
+} as const
+
 export function BtcDashboard() {
   const {
     pair,
@@ -138,7 +146,11 @@ export function BtcDashboard() {
     queryFn: () => fetchIndicatorKlines(pair, timeframe),
     staleTime: fullHistoryChart ? 300_000 : 30_000,
     refetchInterval: fullHistoryChart ? 300_000 : 60_000,
+    ...KLINES_QUERY_OPTIONS,
   })
+
+  const showKlinesLoading = isLoading && bars.length === 0
+  const showKlinesError = isError && bars.length === 0
 
   const needWeekly = bullMarketBand.enabled || sma50Weekly.enabled
   const needDailySupplement =
@@ -149,6 +161,7 @@ export function BtcDashboard() {
     queryFn: () => fetchPairKlinesByInterval(pair, '1d', 0),
     enabled: needDailySupplement,
     staleTime: 300_000,
+    ...KLINES_QUERY_OPTIONS,
   })
 
   const dailyBarsResolved = useMemo(() => {
@@ -177,6 +190,7 @@ export function BtcDashboard() {
     queryFn: () => fetchPairKlinesByInterval(pair, '1w', 0),
     enabled: needWeekly && timeframe.interval !== '1w',
     staleTime: 300_000,
+    ...KLINES_QUERY_OPTIONS,
   })
 
   /** Séries semanais: no gráfico 1w reutiliza as velas já carregadas. */
@@ -205,7 +219,8 @@ export function BtcDashboard() {
     queryKey: ['indicator-htf-radar', pair.id, htfPreset.id],
     queryFn: () => fetchIndicatorKlines(pair, htfPreset),
     enabled: trendRadar.enabled && htfPreset.id !== timeframe.id,
-    staleTime: 120_000,
+    staleTime: 300_000,
+    ...KLINES_QUERY_OPTIONS,
   })
 
   const htfBarsResolved = useMemo(() => {
@@ -318,12 +333,12 @@ export function BtcDashboard() {
           </div>
         </header>
         <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', isPhone ? 'p-1' : 'p-2')}>
-          {isError && (
+          {showKlinesError && (
             <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
               Não foi possível carregar as velas.
             </div>
           )}
-          {isLoading ? (
+          {showKlinesLoading ? (
             <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">
               A carregar {pair.label}…
             </div>
@@ -521,7 +536,7 @@ export function BtcDashboard() {
           chartExpanded ? 'p-1' : 'min-h-[240px] p-1.5 sm:p-2 md:p-3',
         )}
       >
-        {isError && (
+        {showKlinesError && (
           <div className="mb-2 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-200">
             Não foi possível carregar as velas. Tenta outro intervalo ou atualiza.
             {error instanceof Error && error.message ? (
@@ -530,13 +545,13 @@ export function BtcDashboard() {
           </div>
         )}
 
-        {isLoading && (
+        {showKlinesLoading && (
           <div className="flex min-h-[40vh] flex-1 items-center justify-center rounded-lg border border-white/[0.06] bg-[#050505] text-sm text-zinc-500">
             A carregar {pair.label}…
           </div>
         )}
 
-        {!isLoading && !isError && (
+        {!showKlinesLoading && !showKlinesError && (
           <div className="flex min-h-0 flex-1 flex-col">
             <ChartDrawingActiveBanner />
             {chartSuite}

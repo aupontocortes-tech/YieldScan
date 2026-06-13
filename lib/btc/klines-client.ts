@@ -2,6 +2,36 @@ import type { IndicatorPair } from '@/lib/btc/indicator-pairs'
 import type { BinanceInterval, OhlcvBar, TimeframePreset } from '@/lib/btc/types'
 import { parseBinanceKlines } from '@/lib/btc/binance'
 
+/** Slug CoinGecko → par Binance equivalente (fallback quando CG limita pedidos). */
+const COINGECKO_BINANCE_FALLBACK: Record<string, string> = {
+  bitcoin: 'BTCUSDT',
+  ethereum: 'ETHUSDT',
+  solana: 'SOLUSDT',
+  binancecoin: 'BNBUSDT',
+  ripple: 'XRPUSDT',
+  cardano: 'ADAUSDT',
+  chainlink: 'LINKUSDT',
+  'avalanche-2': 'AVAXUSDT',
+  dogecoin: 'DOGEUSDT',
+  polkadot: 'DOTUSDT',
+  litecoin: 'LTCUSDT',
+  tron: 'TRXUSDT',
+  cosmos: 'ATOMUSDT',
+  near: 'NEARUSDT',
+  arbitrum: 'ARBUSDT',
+  optimism: 'OPUSDT',
+  sui: 'SUIUSDT',
+  aptos: 'APTUSDT',
+  'injective-protocol': 'INJUSDT',
+  pepe: 'PEPEUSDT',
+  shiba: 'SHIBUSDT',
+  dogwifcoin: 'WIFUSDT',
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms))
+}
+
 async function fetchKlinesFromApi(
   path: string,
   params: Record<string, string>,
@@ -101,16 +131,43 @@ export async function fetchCoingeckoPairOhlc(
   days: CoingeckoOhlcDays,
 ): Promise<OhlcvBar[]> {
   const id = coingeckoId.trim().toLowerCase()
-  const res = await fetch(
-    `/api/coingecko/ohlc?id=${encodeURIComponent(id)}&days=${days}`,
-    { cache: 'no-store' },
-  )
-  const body = (await res.json()) as { ohlc?: unknown[]; error?: string }
-  if (!res.ok) {
-    throw new Error(body.error ?? `CoinGecko OHLC (${res.status})`)
+  let lastErr = 'CoinGecko indisponível'
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(800 * attempt)
+    const res = await fetch(
+      `/api/coingecko/ohlc?id=${encodeURIComponent(id)}&days=${days}`,
+      { cache: 'no-store' },
+    )
+    const body = (await res.json()) as { ohlc?: unknown[]; error?: string; stale?: boolean }
+    if (res.ok && Array.isArray(body.ohlc)) {
+      return parseCoingeckoOhlc(body.ohlc)
+    }
+    lastErr = body.error ?? `CoinGecko OHLC (${res.status})`
+    if (res.status !== 429) break
   }
-  if (!Array.isArray(body.ohlc)) return []
-  return parseCoingeckoOhlc(body.ohlc)
+
+  throw new Error(lastErr)
+}
+
+function tryBinanceFallback(
+  coingeckoId: string,
+  timeframe: TimeframePreset,
+  limit: number,
+): Promise<OhlcvBar[]> | null {
+  const sym = COINGECKO_BINANCE_FALLBACK[coingeckoId.trim().toLowerCase()]
+  if (!sym) return null
+  return fetchBinancePairKlines(sym, timeframe.interval, limit)
+}
+
+function tryBinanceFallbackByInterval(
+  coingeckoId: string,
+  interval: BinanceInterval,
+  limit: number,
+): Promise<OhlcvBar[]> | null {
+  const sym = COINGECKO_BINANCE_FALLBACK[coingeckoId.trim().toLowerCase()]
+  if (!sym) return null
+  return fetchBinancePairKlines(sym, interval, limit)
 }
 
 export async function fetchIndicatorKlines(
@@ -123,11 +180,21 @@ export async function fetchIndicatorKlines(
   }
   if (pair.source === 'coingecko' && pair.coingeckoId) {
     const days = coingeckoOhlcDaysForTimeframe(timeframe)
-    const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
-    if (limit > 0 && bars.length > limit) {
-      return bars.slice(-limit)
+    try {
+      const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
+      if (limit > 0 && bars.length > limit) return bars.slice(-limit)
+      return bars
+    } catch (err) {
+      const fb = tryBinanceFallback(pair.coingeckoId, timeframe, limit)
+      if (fb) {
+        try {
+          return await fb
+        } catch {
+          /* mantém erro original */
+        }
+      }
+      throw err
     }
-    return bars
   }
   throw new Error('Par sem fonte de dados configurada.')
 }
@@ -150,8 +217,14 @@ export async function fetchPairKlinesByInterval(
         : interval === '1d'
           ? 90
           : 30
-    const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
-    return !fullHistory && bars.length > limit ? bars.slice(-limit) : bars
+    try {
+      const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
+      return !fullHistory && bars.length > limit ? bars.slice(-limit) : bars
+    } catch {
+      const fb = tryBinanceFallbackByInterval(pair.coingeckoId, interval, fullHistory ? 0 : limit)
+      if (fb) return fb
+      return []
+    }
   }
   return []
 }
