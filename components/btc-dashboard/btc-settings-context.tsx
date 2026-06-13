@@ -47,6 +47,11 @@ import {
 
 /** Intervalo inicial do gráfico de indicadores (antes da hidratação e após “Repor tudo”). */
 const DEFAULT_TIMEFRAME_ID = '1d'
+const WEEKLY_TIMEFRAME_ID = '1w'
+
+function timeframeById(id: string): TimeframePreset {
+  return TIMEFRAME_PRESETS.find((t) => t.id === id) ?? TIMEFRAME_PRESETS[3]!
+}
 
 const DEFAULT_MAS: MaConfig[] = []
 
@@ -386,8 +391,10 @@ function newMaId() {
 
 export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   const [pair, setPair] = useState<IndicatorPair>(() => getDefaultIndicatorPair())
-  const [timeframe, setTimeframe] = useState<TimeframePreset>(
-    () => TIMEFRAME_PRESETS.find((t) => t.id === DEFAULT_TIMEFRAME_ID) ?? TIMEFRAME_PRESETS[3],
+  const [timeframe, setTimeframe] = useState<TimeframePreset>(() =>
+    DEFAULT_TREND_RADAR.preferWeeklyTimeframe
+      ? timeframeById(WEEKLY_TIMEFRAME_ID)
+      : timeframeById(DEFAULT_TIMEFRAME_ID),
   )
   const [mas, setMas] = useState<MaConfig[]>(() => [])
   const [rsi, setRsi] = useState<RsiSettings>(() => ({ ...DEFAULT_RSI }))
@@ -500,7 +507,11 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
         })
       }
       if (v2.trendRadar && typeof v2.trendRadar === 'object') {
-        setTrendRadar({ ...DEFAULT_TREND_RADAR, ...v2.trendRadar })
+        const tr = { ...DEFAULT_TREND_RADAR, ...v2.trendRadar }
+        setTrendRadar(tr)
+        if (tr.preferWeeklyTimeframe) {
+          setTimeframe(timeframeById(WEEKLY_TIMEFRAME_ID))
+        }
       }
       setChartIndicatorDisplay(mergeChartIndicatorDisplay(v2.chartIndicatorDisplay))
     }
@@ -636,7 +647,11 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
 
   const resetDefaults = useCallback(() => {
     setPair(getDefaultIndicatorPair())
-    setTimeframe(TIMEFRAME_PRESETS.find((t) => t.id === DEFAULT_TIMEFRAME_ID) ?? TIMEFRAME_PRESETS[3])
+    setTimeframe(
+      DEFAULT_TREND_RADAR.preferWeeklyTimeframe
+        ? timeframeById(WEEKLY_TIMEFRAME_ID)
+        : timeframeById(DEFAULT_TIMEFRAME_ID),
+    )
     setMas(DEFAULT_MAS.map((m) => ({ ...m })))
     setRsi({ ...DEFAULT_RSI })
     setMacd({ ...DEFAULT_MACD })

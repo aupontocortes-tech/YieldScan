@@ -392,7 +392,12 @@ export function BtcDashboard() {
                     : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
                 )}
                 onClick={() => {
-                  setTrendRadar({ ...trendRadar, enabled: !trendRadar.enabled })
+                  const next = !trendRadar.enabled
+                  setTrendRadar({ ...trendRadar, enabled: next })
+                  if (next && trendRadar.preferWeeklyTimeframe) {
+                    const w = TIMEFRAME_PRESETS.find((t) => t.id === '1w')
+                    if (w) setTimeframe(w)
+                  }
                 }}
                 title="Radar de Tendência — sinais BUY/SELL no gráfico"
               >

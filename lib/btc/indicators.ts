@@ -211,3 +211,59 @@ export function bollingerBands(
   }
   return { upper, middle, lower }
 }
+
+/** ATR Wilder (14 por defeito). */
+export function atr(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  period = 14,
+): (number | null)[] {
+  const n = closes.length
+  const out: (number | null)[] = Array(n).fill(null)
+  if (n < period + 1) return out
+
+  const tr: number[] = [highs[0]! - lows[0]!]
+  for (let i = 1; i < n; i++) {
+    tr.push(
+      Math.max(
+        highs[i]! - lows[i]!,
+        Math.abs(highs[i]! - closes[i - 1]!),
+        Math.abs(lows[i]! - closes[i - 1]!),
+      ),
+    )
+  }
+
+  let sum = 0
+  for (let i = 1; i <= period; i++) sum += tr[i]!
+  let prev = sum / period
+  out[period] = prev
+
+  for (let i = period + 1; i < n; i++) {
+    prev = (prev * (period - 1) + tr[i]!) / period
+    out[i] = prev
+  }
+  return out
+}
+
+/** VWAP rolante — preço médio ponderado por volume (janela N velas). */
+export function rollingVwap(bars: OhlcvBar[], lookback = 50): (number | null)[] {
+  const n = bars.length
+  const out: (number | null)[] = Array(n).fill(null)
+  if (n === 0) return out
+
+  for (let i = 0; i < n; i++) {
+    const start = Math.max(0, i - lookback + 1)
+    let pv = 0
+    let vv = 0
+    for (let j = start; j <= i; j++) {
+      const b = bars[j]!
+      const tp = (b.high + b.low + b.close) / 3
+      const vol = b.volume > 0 ? b.volume : 1
+      pv += tp * vol
+      vv += vol
+    }
+    if (vv > 0) out[i] = pv / vv
+  }
+  return out
+}

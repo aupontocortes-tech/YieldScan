@@ -178,13 +178,19 @@ export type TrendRadarSettings = {
   showPanel: boolean
   showMarkers: boolean
   showPocLine: boolean
+  /** Linhas EMA/ribbon no canvas — desligado por defeito para gráfico limpo. */
+  showChartLines: boolean
+  /** Ao abrir o indicador / ativar Radar, mudar automaticamente para semanal (1w). */
+  preferWeeklyTimeframe: boolean
 }
 
 export const DEFAULT_TREND_RADAR: TrendRadarSettings = {
   enabled: false,
   showPanel: true,
   showMarkers: true,
-  showPocLine: true,
+  showPocLine: false,
+  showChartLines: false,
+  preferWeeklyTimeframe: true,
 }
 
 /** Rótulo do indicador no eixo direito do gráfico. */

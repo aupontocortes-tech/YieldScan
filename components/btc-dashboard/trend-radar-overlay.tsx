@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { MainChartApi } from '@/lib/btc/chart-drawing-types'
 import { ema } from '@/lib/btc/indicators'
 import type { TrendRadarAnalysis } from '@/lib/btc/trend-radar'
 import type { OhlcvBar, TrendRadarSettings } from '@/lib/btc/types'
 import { cn } from '@/lib/utils'
-import { Brain, Radar } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Radar, TrendingDown, TrendingUp, X } from 'lucide-react'
 
 type Props = {
   analysis: TrendRadarAnalysis | null
@@ -16,117 +16,229 @@ type Props = {
   barsCount?: number
 }
 
-
-function fmtPoc(v: number | null): string {
+function fmtPrice(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return '—'
-  return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  return v >= 1000
+    ? v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })
+    : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 }
 
-type Tone = 'bull' | 'bear' | 'neutral' | 'warn'
-
-function toneClass(tone: Tone): string {
-  if (tone === 'bull') return 'text-emerald-400'
-  if (tone === 'bear') return 'text-red-400'
-  if (tone === 'warn') return 'text-amber-400'
-  return 'text-zinc-300'
+function signalLabel(analysis: TrendRadarAnalysis): string {
+  if (analysis.signal === 'buy') return 'BUY'
+  if (analysis.signal === 'sell') return 'SELL'
+  return 'AGUARDAR'
 }
 
-function displayTone(key: keyof TrendRadarAnalysis['display'], value: string): Tone {
-  if (value === '—') return 'neutral'
-  if (key === 'volume') {
-    if (value === 'FORTE') return 'bull'
-    if (value === 'FRACO') return 'bear'
-    return 'neutral'
-  }
-  if (key === 'macd') {
-    if (value === 'ALTA') return 'bull'
-    if (value === 'BAIXA') return 'bear'
-    return 'neutral'
-  }
-  if (key === 'htf') {
-    if (value === 'ALTA') return 'bull'
-    if (value === 'QUEDA') return 'bear'
-    return 'neutral'
-  }
-  if (key === 'rsi') {
-    if (value === 'SOBREVENDA') return 'bull'
-    if (value === 'SOBRECOMPRA') return 'bear'
-    return 'neutral'
-  }
-  return 'neutral'
+function signalTone(analysis: TrendRadarAnalysis): 'buy' | 'sell' | 'wait' {
+  if (analysis.signal === 'buy') return 'buy'
+  if (analysis.signal === 'sell') return 'sell'
+  return 'wait'
 }
 
-function qualityTone(label: string): Tone {
-  if (label === 'MUITO FORTE' || label === 'FORTE') return 'bull'
-  if (label === 'MODERADO') return 'warn'
-  return 'bear'
-}
-
-function InstRow({ label, value, tone }: { label: string; value: string; tone: Tone }) {
+function IndicatorRow({
+  label,
+  value,
+  ok,
+}: {
+  label: string
+  value: string
+  ok: boolean
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] py-[5px] last:border-0">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{label}</span>
-      <span className={cn('font-mono text-[11px] font-semibold tabular-nums', toneClass(tone))}>{value}</span>
+    <div className="flex items-center gap-1.5 border-b border-white/[0.06] py-[3px] last:border-0">
+      <span
+        className={cn(
+          'flex h-3 w-3 shrink-0 items-center justify-center rounded-full',
+          ok ? 'bg-emerald-500/25 text-emerald-400' : 'bg-red-500/20 text-red-400',
+        )}
+        aria-hidden
+      >
+        {ok ? <Check className="h-2 w-2" strokeWidth={3} /> : <X className="h-2 w-2" strokeWidth={3} />}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[8px] font-medium uppercase tracking-wide text-zinc-500">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'shrink-0 font-mono text-[9px] font-semibold tabular-nums',
+          ok ? 'text-emerald-300' : 'text-red-300',
+        )}
+      >
+        {value}
+      </span>
     </div>
   )
 }
 
 export function TrendRadarPanel({ analysis, settings }: Props) {
+  const [expanded, setExpanded] = useState(false)
+
   if (!settings.enabled || !settings.showPanel || !analysis) return null
 
-  const decision =
-    analysis.signal === 'buy' ? 'BUY' : analysis.signal === 'sell' ? 'SELL' : 'AGUARDAR'
+  const tone = signalTone(analysis)
+  const label = signalLabel(analysis)
+  const { backtest, checklist } = analysis
 
-  const decisionBg =
-    analysis.signal === 'buy'
-      ? 'bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-700'
-      : analysis.signal === 'sell'
-        ? 'bg-gradient-to-r from-red-800 via-red-600 to-red-800'
-        : 'bg-gradient-to-r from-zinc-800 via-zinc-700 to-zinc-800'
+  const compactBg =
+    tone === 'buy'
+      ? 'border-emerald-500/35 bg-emerald-950/90'
+      : tone === 'sell'
+        ? 'border-red-500/35 bg-red-950/90'
+        : 'border-zinc-600/35 bg-zinc-900/92'
+
+  const signalColor =
+    tone === 'buy' ? 'text-emerald-300' : tone === 'sell' ? 'text-red-300' : 'text-zinc-400'
+
+  const trendLabel =
+    analysis.emaTrend === 'alta' ? 'ALTA' : analysis.emaTrend === 'baixa' ? 'BAIXA' : 'LATERAL'
 
   return (
     <div
-      className="pointer-events-none absolute right-2 top-12 z-20 w-[min(100%,12.75rem)] overflow-hidden rounded-lg border border-white/12 bg-[#0a0a0a]/92 shadow-[0_8px_32px_rgba(0,0,0,0.65)] backdrop-blur-sm sm:right-3 sm:top-14 sm:w-[13.25rem]"
-      aria-label="Painel Radar IA"
+      className={cn(
+        'absolute bottom-14 right-2 z-20 overflow-hidden rounded-lg border shadow-[0_8px_32px_rgba(0,0,0,0.65)] backdrop-blur-md sm:bottom-16 sm:right-3',
+        expanded ? 'w-[13.5rem]' : 'w-[9.5rem]',
+        compactBg,
+      )}
     >
-      <div className="px-3 pt-2.5 pb-1">
-        <InstRow
-          label="Qualidade do Sinal"
-          value={analysis.qualityLabel}
-          tone={qualityTone(analysis.qualityLabel)}
-        />
-        <InstRow
-          label="ADX"
-          value={analysis.adx != null ? analysis.adx.toFixed(1) : '—'}
-          tone={analysis.criteria.adx ? 'bull' : 'neutral'}
-        />
-        <InstRow label="RSI" value={analysis.display.rsi} tone={displayTone('rsi', analysis.display.rsi)} />
-        <InstRow
-          label="Volume"
-          value={analysis.display.volume}
-          tone={displayTone('volume', analysis.display.volume)}
-        />
-        <InstRow label="HTF" value={analysis.display.htf} tone={displayTone('htf', analysis.display.htf)} />
-        <InstRow label="MACD" value={analysis.display.macd} tone={displayTone('macd', analysis.display.macd)} />
-        <InstRow
-          label="POC"
-          value={fmtPoc(analysis.poc)}
-          tone={analysis.criteria.poc ? 'bull' : analysis.pocRelation === 'below' ? 'bear' : 'neutral'}
-        />
-      </div>
-
-      <div
-        className={cn(
-          'mt-1 flex items-center justify-between gap-2 border-t border-white/10 px-3 py-2.5',
-          decisionBg,
-        )}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04]"
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Recolher painel de sinais' : 'Expandir painel de sinais'}
       >
-        <div className="flex items-center gap-1.5">
-          <Brain className="h-3.5 w-3.5 text-white/90" aria-hidden />
-          <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/90">Decisão IA</span>
+        {tone === 'buy' ? (
+          <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden />
+        ) : tone === 'sell' ? (
+          <TrendingDown className="h-3.5 w-3.5 shrink-0 text-red-400" aria-hidden />
+        ) : (
+          <Radar className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className={cn('text-sm font-black uppercase leading-none tracking-wider', signalColor)}>
+            {label}
+          </p>
+          <p className="mt-0.5 text-[9px] text-zinc-400">
+            {analysis.probabilityPct}% prob.
+            {label === 'AGUARDAR' && analysis.marketBias !== 'lateral' ? (
+              <span className="text-zinc-500"> · viés {analysis.marketBias === 'baixa' ? 'venda' : 'compra'}</span>
+            ) : null}
+          </p>
         </div>
-        <span className="text-sm font-black uppercase tracking-wider text-white drop-shadow-sm">{decision}</span>
-      </div>
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-500" aria-hidden />
+        ) : (
+          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-zinc-500" aria-hidden />
+        )}
+      </button>
+
+      {expanded ? (
+        <div className="max-h-[min(52vh,22rem)] space-y-2 overflow-y-auto border-t border-white/10 px-2.5 py-2 text-[9px]">
+          <div
+            className={cn(
+              'rounded border px-2 py-1 text-center',
+              analysis.emaTrend === 'baixa'
+                ? 'border-red-500/25 bg-red-950/40'
+                : analysis.emaTrend === 'alta'
+                  ? 'border-emerald-500/25 bg-emerald-950/35'
+                  : 'border-zinc-600/25 bg-zinc-900/40',
+            )}
+          >
+            <p className="text-[8px] uppercase tracking-wider text-zinc-500">Tendência</p>
+            <p
+              className={cn(
+                'text-xs font-black uppercase',
+                analysis.emaTrend === 'baixa'
+                  ? 'text-red-300'
+                  : analysis.emaTrend === 'alta'
+                    ? 'text-emerald-300'
+                    : 'text-zinc-400',
+              )}
+            >
+              {trendLabel}
+            </p>
+            <p className="text-[7px] text-zinc-500">EMA9 {analysis.emaTrend === 'alta' ? '>' : '≤'} EMA21</p>
+          </div>
+
+          <div>
+            <p className="mb-1 text-[8px] font-bold uppercase tracking-wider text-zinc-500">
+              Indicadores · {checklist.confirmed}/{checklist.total}
+            </p>
+            {checklist.items.map((item) => (
+              <IndicatorRow key={item.id} label={item.label} value={item.value} ok={item.ok} />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+            <div>
+              <span className="text-zinc-500">Força</span>
+              <p className="font-mono font-bold text-violet-300">{Math.round(analysis.trendForcePct)}%</p>
+            </div>
+            <div className="text-right">
+              <span className="text-zinc-500">Confluência</span>
+              <p className="font-mono font-bold text-amber-300">
+                {checklist.confirmed}/{checklist.total}
+              </p>
+            </div>
+            <div>
+              <span className="text-zinc-500">TP</span>
+              <p className="font-mono font-semibold text-emerald-400">{fmtPrice(analysis.takeProfit)}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-zinc-500">SL</span>
+              <p className="font-mono font-semibold text-red-400">{fmtPrice(analysis.stopLoss)}</p>
+            </div>
+          </div>
+
+          <div className="rounded border border-cyan-500/20 bg-cyan-950/30 px-2 py-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-cyan-400/90">Taxa de acerto</span>
+              <span
+                className={cn(
+                  'font-mono text-xs font-black',
+                  backtest.winRatePct >= 68
+                    ? 'text-emerald-400'
+                    : backtest.winRatePct >= 50
+                      ? 'text-amber-400'
+                      : 'text-red-400',
+                )}
+              >
+                {backtest.winRatePct}%
+              </span>
+            </div>
+            <p className="mt-0.5 text-[8px] text-zinc-500">
+              {backtest.total > 0
+                ? `${backtest.wins}W / ${backtest.losses}L · ${backtest.total} ops · líq. de taxas`
+                : 'Sem operações válidas'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 text-[8px]">
+            <div>
+              <span className="text-zinc-500">Lucro acum.</span>
+              <p
+                className={cn(
+                  'font-mono font-bold',
+                  backtest.cumulativeProfitPct >= 0 ? 'text-emerald-400' : 'text-red-400',
+                )}
+              >
+                {backtest.cumulativeProfitPct >= 0 ? '+' : ''}
+                {backtest.cumulativeProfitPct}%
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-zinc-500">Drawdown máx.</span>
+              <p className="font-mono font-bold text-red-300">{backtest.maxDrawdownPct}%</p>
+            </div>
+          </div>
+
+          <p className="text-center text-[7px] leading-snug text-zinc-600">
+            {analysis.backtest.total < 10
+              ? 'Amostra pequena — número pouco fiável; não é garantia futura'
+              : 'Acerto histórico líq. de taxas · não é garantia futura'}
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -159,16 +271,16 @@ function drawSignalBadge(
   anchorY: number,
   isBuy: boolean,
 ) {
-  const color = isBuy ? '#16a34a' : '#dc2626'
+  const color = isBuy ? '#22c55e' : '#ef4444'
   const label = isBuy ? 'BUY' : 'SELL'
-  const badgeOffset = isBuy ? 42 : -42
+  const badgeOffset = isBuy ? 40 : -40
   const badgeCenterY = anchorY + badgeOffset
   const ph = 18
   const badgeTop = badgeCenterY - ph / 2
 
   ctx.save()
   ctx.strokeStyle = color
-  ctx.lineWidth = 1.25
+  ctx.lineWidth = 1.2
   ctx.beginPath()
   ctx.moveTo(x, anchorY)
   ctx.lineTo(x, isBuy ? badgeTop : badgeTop + ph)
@@ -182,9 +294,6 @@ function drawSignalBadge(
   roundRect(ctx, px, badgeTop, pw, ph, 3)
   ctx.fillStyle = color
   ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)'
-  ctx.lineWidth = 1
-  ctx.stroke()
 
   ctx.fillStyle = '#ffffff'
   ctx.textAlign = 'center'
@@ -193,53 +302,31 @@ function drawSignalBadge(
   ctx.restore()
 }
 
-function drawEmaRibbon(
+function drawIndicatorLines(
   ctx: CanvasRenderingContext2D,
   api: MainChartApi,
   bars: OhlcvBar[],
 ) {
-  if (bars.length < 55) return
+  if (bars.length < 30) return
 
   const closes = bars.map((b) => b.close)
   const ema20S = ema(closes, 20)
   const ema50S = ema(closes, 50)
+  const ema200S = ema(closes, 200)
   const ts = api.chart.timeScale()
   const series = api.series
 
-  const top: { x: number; y: number }[] = []
-  const bot: { x: number; y: number }[] = []
-
-  for (let i = 0; i < bars.length; i++) {
-    const e20 = ema20S[i]
-    const e50 = ema50S[i]
-    if (e20 == null || e50 == null) continue
-
-    const x = ts.timeToCoordinate(bars[i].time as never)
-    const y20 = series.priceToCoordinate(e20)
-    const y50 = series.priceToCoordinate(e50)
-    if (x == null || y20 == null || y50 == null) continue
-
-    if (e20 >= e50) {
-      top.push({ x, y: y20 })
-      bot.push({ x, y: y50 })
-    } else {
-      top.push({ x, y: y50 })
-      bot.push({ x, y: y20 })
+  const strokeLine = (values: (number | null)[], color: string, width: number) => {
+    const pts: { x: number; y: number }[] = []
+    for (let i = 0; i < bars.length; i++) {
+      const v = values[i]
+      if (v == null) continue
+      const x = ts.timeToCoordinate(bars[i].time as never)
+      const y = series.priceToCoordinate(v)
+      if (x == null || y == null) continue
+      pts.push({ x, y })
     }
-  }
-
-  if (top.length < 2) return
-
-  ctx.save()
-  ctx.beginPath()
-  ctx.moveTo(top[0].x, top[0].y)
-  for (let i = 1; i < top.length; i++) ctx.lineTo(top[i].x, top[i].y)
-  for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i].x, bot[i].y)
-  ctx.closePath()
-  ctx.fillStyle = 'rgba(180, 83, 9, 0.22)'
-  ctx.fill()
-
-  const strokeLine = (pts: { x: number; y: number }[], color: string, width: number) => {
+    if (pts.length < 2) return
     ctx.beginPath()
     ctx.moveTo(pts[0].x, pts[0].y)
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
@@ -248,23 +335,9 @@ function drawEmaRibbon(
     ctx.stroke()
   }
 
-  const line20: { x: number; y: number }[] = []
-  const line50: { x: number; y: number }[] = []
-  for (let i = 0; i < bars.length; i++) {
-    const e20 = ema20S[i]
-    const e50 = ema50S[i]
-    if (e20 == null || e50 == null) continue
-    const x = ts.timeToCoordinate(bars[i].time as never)
-    const y20 = series.priceToCoordinate(e20)
-    const y50 = series.priceToCoordinate(e50)
-    if (x == null || y20 == null || y50 == null) continue
-    line20.push({ x, y: y20 })
-    line50.push({ x, y: y50 })
-  }
-
-  strokeLine(line20, 'rgba(59, 130, 246, 0.85)', 1.25)
-  strokeLine(line50, 'rgba(245, 158, 11, 0.9)', 1.25)
-  ctx.restore()
+  strokeLine(ema200S, 'rgba(250, 204, 21, 0.55)', 2)
+  strokeLine(ema20S, 'rgba(34, 197, 94, 0.35)', 1)
+  strokeLine(ema50S, 'rgba(96, 165, 250, 0.35)', 1)
 }
 
 export function TrendRadarMarkers({ analysis, settings, bars = [] }: Props) {
@@ -298,26 +371,21 @@ export function TrendRadarMarkers({ analysis, settings, bars = [] }: Props) {
     const ts = api.chart.timeScale()
     const series = api.series
 
-    if (bars.length >= 55) {
-      drawEmaRibbon(ctx, api, bars)
+    if (settings.showChartLines && bars.length >= 30) {
+      drawIndicatorLines(ctx, api, bars)
     }
 
     if (settings.showPocLine && analysis.poc != null) {
       const yPoc = series.priceToCoordinate(analysis.poc)
       if (yPoc != null) {
         ctx.save()
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)'
-        ctx.setLineDash([])
-        ctx.lineWidth = 1.5
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.5)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 4])
         ctx.beginPath()
         ctx.moveTo(0, yPoc)
         ctx.lineTo(w, yPoc)
         ctx.stroke()
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.95)'
-        ctx.font = 'bold 10px Inter, system-ui, sans-serif'
-        ctx.textAlign = 'left'
-        ctx.textBaseline = 'bottom'
-        ctx.fillText(`POC ${fmtPoc(analysis.poc)}`, 6, yPoc - 3)
         ctx.restore()
       }
     }
@@ -369,10 +437,10 @@ export function TrendRadarOverlay({ analysis, settings, bars = [], barsCount = 0
 
   if (!analysis) {
     return (
-      <div className="pointer-events-none absolute right-2 top-12 z-20 rounded-lg border border-white/15 bg-black/88 px-3 py-2 text-[11px] text-zinc-300 shadow-lg sm:right-3 sm:top-14">
+      <div className="absolute bottom-14 right-2 z-20 rounded-lg border border-white/15 bg-black/88 px-3 py-2 text-[11px] text-zinc-300 shadow-lg sm:bottom-16 sm:right-3">
         <span className="flex items-center gap-2">
           <Radar className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
-          Radar ativo — {barsCount < 55 ? 'a carregar velas…' : 'a analisar mercado…'}
+          {barsCount < 55 ? 'A carregar…' : 'A otimizar sinais…'}
         </span>
       </div>
     )

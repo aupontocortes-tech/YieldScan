@@ -40,7 +40,8 @@ import {
 } from '@/lib/btc/chart-indicator-display'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
-import { computeTrendRadar, type TrendRadarAnalysis } from '@/lib/btc/trend-radar'
+import { computeOptimizedBtcSignals } from '@/lib/btc/signal-system'
+import { getHigherTimeframeId, type TrendRadarAnalysis } from '@/lib/btc/trend-radar'
 import { TrendRadarOverlay } from '@/components/btc-dashboard/trend-radar-overlay'
 import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
 import {
@@ -54,6 +55,7 @@ import {
   BULL_MARKET_BAND_EMA_WEEKS,
   BULL_MARKET_BAND_SMA_WEEKS,
   type OhlcvBar,
+  TIMEFRAME_PRESETS,
 } from '@/lib/btc/types'
 
 const BG = '#050505'
@@ -191,8 +193,14 @@ export function BtcChartsSuite({
 
   const trendRadarAnalysis = useMemo((): TrendRadarAnalysis | null => {
     if (!trendRadar.enabled || bars.length < 55) return null
-    return computeTrendRadar(bars, htfBarsForTrendRadar.length >= 25 ? htfBarsForTrendRadar : undefined)
-  }, [trendRadar.enabled, bars, htfBarsForTrendRadar])
+    const htfId = getHigherTimeframeId(timeframe.id)
+    const htfLabel = TIMEFRAME_PRESETS.find((t) => t.id === htfId)?.label ?? htfId
+    return computeOptimizedBtcSignals(
+      bars,
+      htfBarsForTrendRadar.length >= 25 ? htfBarsForTrendRadar : undefined,
+      { chartLabel: timeframe.label, htfLabel, optimize: bars.length >= 80 },
+    )
+  }, [trendRadar.enabled, bars, htfBarsForTrendRadar, timeframe.id, timeframe.label])
 
   const rsiSeries = useMemo(
     () => (rsiCfg.enabled ? rsi(closes, rsiCfg.period) : null),

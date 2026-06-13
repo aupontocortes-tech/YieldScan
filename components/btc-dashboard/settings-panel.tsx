@@ -13,6 +13,7 @@ import {
   CHART_LABEL_MODE_LABELS,
 } from '@/lib/btc/chart-indicator-display'
 import type { ChartIndicatorLabelMode, ChartIndicatorTapAction, MaType } from '@/lib/btc/types'
+import { TIMEFRAME_PRESETS } from '@/lib/btc/types'
 import { BTC_CHART_THEME } from '@/lib/btc/chart-theme'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -240,6 +241,7 @@ export function SettingsPanel({
     setChartIndicatorDisplay,
     trendRadar,
     setTrendRadar,
+    setTimeframe,
     resetDefaults,
   } = useBtcSettings()
 
@@ -323,12 +325,36 @@ export function SettingsPanel({
       <IndicatorSection
         title="Radar de Tendência"
         subtitle="Sinais BUY/SELL · ativa aqui ou pelo botão «Radar» no gráfico"
-        helpText="Analisa RSI, ADX, MACD, EMA, Volume, HTF e POC. Desenha setas BUY/SELL no gráfico e painel com score, TP e SL."
+        helpText="Sistema de confluência: RSI, MACD, ADX, Volume, EMA 20/50/200, VWAP, ATR, HTF e POC. Sinais só com score + confluência mínima. Backtest e otimização automática."
         enabled={trendRadar.enabled}
-        onToggle={(v) => setTrendRadar({ ...trendRadar, enabled: v })}
+        onToggle={(v) => {
+          setTrendRadar({ ...trendRadar, enabled: v })
+          if (v && trendRadar.preferWeeklyTimeframe) {
+            const w = TIMEFRAME_PRESETS.find((t) => t.id === '1w')
+            if (w) setTimeframe(w)
+          }
+        }}
         defaultOpen
       >
         <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-violet-500/25 bg-violet-950/20 px-3 py-2">
+            <div>
+              <Label className="text-[10px] text-violet-200">Abrir em semanal (1w)</Label>
+              <p className="mt-0.5 text-[9px] leading-snug text-zinc-500">
+                Sim: ao abrir o indicador ou ativar o Radar, o gráfico vai para o semanal (melhor taxa de acerto).
+              </p>
+            </div>
+            <Switch
+              checked={trendRadar.preferWeeklyTimeframe}
+              onCheckedChange={(c) => {
+                setTrendRadar({ ...trendRadar, preferWeeklyTimeframe: c })
+                if (c) {
+                  const w = TIMEFRAME_PRESETS.find((t) => t.id === '1w')
+                  if (w) setTimeframe(w)
+                }
+              }}
+            />
+          </div>
           <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
             <Label className="text-[10px] text-zinc-400">Painel lateral no gráfico</Label>
             <Switch
@@ -350,8 +376,15 @@ export function SettingsPanel({
               onCheckedChange={(c) => setTrendRadar({ ...trendRadar, showPocLine: c })}
             />
           </div>
+          <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-black/50 px-3 py-2">
+            <Label className="text-[10px] text-zinc-400">Linhas EMA no gráfico</Label>
+            <Switch
+              checked={trendRadar.showChartLines}
+              onCheckedChange={(c) => setTrendRadar({ ...trendRadar, showChartLines: c })}
+            />
+          </div>
           <p className="text-[10px] leading-relaxed text-zinc-500">
-            Score ≥ 90 muito forte · 75–89 forte · 60–74 moderado · abaixo de 60 não operar.
+            Painel compacto no canto inferior — clique para expandir. Meta de acerto: 68% (otimização automática).
           </p>
         </div>
       </IndicatorSection>
