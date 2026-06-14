@@ -46,7 +46,7 @@ import {
 import { useChartLandscapeContext } from '@/components/btc-dashboard/chart-landscape-context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { DrawingsPanel } from '@/components/btc-dashboard/drawings-panel'
-import { IndicatorMobileActionsMenu } from '@/components/btc-dashboard/indicator-mobile-actions'
+import { IndicatorMobileToolbar } from '@/components/btc-dashboard/indicator-mobile-actions'
 
 const SettingsPanelLazy = dynamic(
   () =>
@@ -338,7 +338,7 @@ export function BtcDashboard() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-0">
-            <ChartLandscapeToggle showLabels={!isPhone} />
+            <ChartLandscapeToggle showLabels />
             <Button
               type="button"
               variant="ghost"
@@ -369,7 +369,8 @@ export function BtcDashboard() {
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen} modal>
           <SheetContent
             side="right"
-            className="z-[210] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg"
+            overlayClassName="z-[270]"
+            className="z-[280] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg"
           >
             <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
               <SheetTitle className="text-base text-white">Indicadores &amp; aparência</SheetTitle>
@@ -396,9 +397,12 @@ export function BtcDashboard() {
     <div className="flex min-h-0 w-full flex-1 flex-col bg-[#050505] text-zinc-100">
       <header
         className={cn(
-          'grid shrink-0 gap-x-1.5 border-b border-white/[0.06] px-1.5 py-1.5 sm:gap-x-2 sm:px-3 sm:py-2',
+          'relative z-[120] grid shrink-0 gap-x-1.5 border-b border-white/[0.06] px-1.5 py-1.5 sm:gap-x-2 sm:px-3 sm:py-2',
           isPhone
-            ? 'grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-y-1'
+            ? cn(
+                'grid-cols-[minmax(0,1fr)_auto]',
+                chartExpanded ? 'grid-rows-[auto_auto]' : 'grid-rows-[auto_auto_auto] gap-y-1',
+              )
             : cn(
                 'grid-cols-[minmax(0,1fr)_auto]',
                 chartExpanded
@@ -406,6 +410,7 @@ export function BtcDashboard() {
                   : 'grid-rows-[auto_auto] gap-y-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2',
               ),
         )}
+        data-no-swipe-nav
       >
         <div
           className={cn(
@@ -419,81 +424,67 @@ export function BtcDashboard() {
           <IndicatorPairSelector pair={pair} onSelect={setPair} />
         </div>
 
-        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
-          <ChartLandscapeToggle showLabels={!isPhone} />
-          {!chartExpanded && (
+        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:gap-1" data-no-swipe-nav>
+          <ChartLandscapeToggle showLabels />
+          {!chartExpanded && !isPhone && (
             <>
-              {isPhone ? (
-                <IndicatorMobileActionsMenu
-                  trendRadarOn={trendRadar.enabled}
-                  indicatorsOpen={drawerOpen}
-                  drawingsOpen={drawingsOpen}
-                  onToggleRadar={toggleTrendRadar}
-                  onOpenIndicators={openIndicatorsPanel}
-                  onOpenDrawings={openDrawingsPanel}
-                  onResetLayout={resetLayout}
-                />
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-                      trendRadar.enabled
-                        ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
-                    )}
-                    onClick={toggleTrendRadar}
-                    title="Radar de Tendência — sinais BUY/SELL no gráfico"
-                  >
-                    <Radar className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Radar</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-                      drawerOpen
-                        ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-                    )}
-                    onClick={openIndicatorsPanel}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Indicadores</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-                      drawingsOpen
-                        ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                        : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-                    )}
-                    onClick={openDrawingsPanel}
-                  >
-                    <PenLine className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Desenhos</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1 text-[11px] text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-                    onClick={resetLayout}
-                    title="Reajusta zoom dos gráficos"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Layout</span>
-                  </Button>
-                </>
-              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                  trendRadar.enabled
+                    ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
+                )}
+                onClick={toggleTrendRadar}
+                title="Radar de Tendência — sinais BUY/SELL no gráfico"
+              >
+                <Radar className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Radar</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                  drawerOpen
+                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+                )}
+                onClick={openIndicatorsPanel}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Indicadores</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                  drawingsOpen
+                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+                )}
+                onClick={openDrawingsPanel}
+              >
+                <PenLine className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Desenhos</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 text-[11px] text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                onClick={resetLayout}
+                title="Reajusta zoom dos gráficos"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Layout</span>
+              </Button>
             </>
           )}
           <Button
@@ -523,7 +514,10 @@ export function BtcDashboard() {
           className={cn(
             'flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-1 py-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]',
             isPhone
-              ? 'col-span-2 row-start-2 snap-x snap-mandatory'
+              ? cn(
+                  'col-span-2 snap-x snap-mandatory',
+                  chartExpanded ? 'row-start-2' : 'row-start-2',
+                )
               : cn(
                   'min-h-[36px] gap-0.5 px-0.5 py-0.5',
                   chartExpanded
@@ -550,6 +544,18 @@ export function BtcDashboard() {
             </button>
           ))}
         </nav>
+
+        {isPhone && !chartExpanded ? (
+          <IndicatorMobileToolbar
+            trendRadarOn={trendRadar.enabled}
+            indicatorsOpen={drawerOpen}
+            drawingsOpen={drawingsOpen}
+            onToggleRadar={toggleTrendRadar}
+            onOpenIndicators={openIndicatorsPanel}
+            onOpenDrawings={openDrawingsPanel}
+            onResetLayout={resetLayout}
+          />
+        ) : null}
       </header>
 
       {!chartExpanded && !isPhone && (
@@ -590,9 +596,9 @@ export function BtcDashboard() {
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen} modal>
         <SheetContent
           side="right"
+          overlayClassName="z-[270]"
           className={cn(
-            'flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg',
-            chartExpanded ? 'z-[260]' : 'z-[100]',
+            'z-[280] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg',
           )}
         >
           <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">
@@ -622,9 +628,9 @@ export function BtcDashboard() {
       <Sheet open={drawingsOpen} onOpenChange={setDrawingsOpen} modal>
         <SheetContent
           side="right"
+          overlayClassName="z-[270]"
           className={cn(
-            'flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg',
-            chartExpanded ? 'z-[260]' : 'z-[100]',
+            'z-[280] flex w-full flex-col border-white/[0.06] bg-[#050505] p-0 sm:max-w-lg',
           )}
         >
           <SheetHeader className="shrink-0 space-y-1 border-b border-white/[0.06] px-4 py-3 text-left">

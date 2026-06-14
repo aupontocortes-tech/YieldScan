@@ -1,15 +1,8 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { LayoutGrid, MoreVertical, PenLine, Radar, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { PenLine, Radar, RotateCcw, SlidersHorizontal } from 'lucide-react'
 
 type Props = {
   trendRadarOn: boolean
@@ -21,8 +14,11 @@ type Props = {
   onResetLayout: () => void
 }
 
-/** Menu compacto no telemóvel — evita 4 botões minúsculos na barra. */
-export function IndicatorMobileActionsMenu({
+const TOOL_BTN =
+  'h-10 shrink-0 snap-start gap-1.5 rounded-md px-3 text-xs touch-manipulation active:scale-[0.98]'
+
+/** Barra de ferramentas no telemóvel — toque directo (sem dropdown). */
+export function IndicatorMobileToolbar({
   trendRadarOn,
   indicatorsOpen,
   drawingsOpen,
@@ -31,56 +27,68 @@ export function IndicatorMobileActionsMenu({
   onOpenDrawings,
   onResetLayout,
 }: Props) {
-  const active = trendRadarOn || indicatorsOpen || drawingsOpen
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'h-10 w-10 shrink-0',
-            active ? 'bg-[#d4af37]/15 text-[#d4af37]' : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-          )}
-          aria-label="Mais opções do gráfico"
-        >
-          <MoreVertical className="h-5 w-5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="z-[260] w-52 border-white/10 bg-[#141414] text-zinc-100">
-        <DropdownMenuItem
-          className={cn('gap-2 py-2.5', trendRadarOn && 'bg-violet-500/15 text-violet-200')}
-          onClick={onToggleRadar}
-        >
-          <Radar className="h-4 w-4" />
-          Radar de Tendência
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className={cn('gap-2 py-2.5', indicatorsOpen && 'bg-[#d4af37]/15 text-[#d4af37]')}
-          onClick={onOpenIndicators}
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-          Indicadores
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className={cn('gap-2 py-2.5', drawingsOpen && 'bg-[#d4af37]/15 text-[#d4af37]')}
-          onClick={onOpenDrawings}
-        >
-          <PenLine className="h-4 w-4" />
-          Desenhos
-        </DropdownMenuItem>
-        <DropdownMenuSeparator className="bg-white/10" />
-        <DropdownMenuItem className="gap-2 py-2.5" onClick={onResetLayout}>
-          <RotateCcw className="h-4 w-4" />
-          Reajustar zoom
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2 py-2.5 text-zinc-400" disabled>
-          <LayoutGrid className="h-4 w-4" />
-          Usa «Ampliar» para ecrã cheio
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <nav
+      aria-label="Ferramentas do gráfico"
+      data-no-swipe-nav
+      className="col-span-2 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-1 py-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] snap-x snap-mandatory"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          TOOL_BTN,
+          trendRadarOn
+            ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35'
+            : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
+        )}
+        onClick={onToggleRadar}
+      >
+        <Radar className="h-3.5 w-3.5 shrink-0" />
+        Radar
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          TOOL_BTN,
+          indicatorsOpen
+            ? 'bg-[#d4af37]/15 text-[#d4af37]'
+            : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+        )}
+        onClick={onOpenIndicators}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+        Indicadores
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          TOOL_BTN,
+          drawingsOpen
+            ? 'bg-[#d4af37]/15 text-[#d4af37]'
+            : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+        )}
+        onClick={onOpenDrawings}
+      >
+        <PenLine className="h-3.5 w-3.5 shrink-0" />
+        Desenhos
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(TOOL_BTN, 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200')}
+        onClick={onResetLayout}
+        title="Reajusta zoom dos gráficos"
+      >
+        <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+        Layout
+      </Button>
+    </nav>
   )
 }

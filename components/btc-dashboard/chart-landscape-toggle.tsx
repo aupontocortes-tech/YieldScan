@@ -29,7 +29,7 @@ export function ChartFullscreenButton({
       variant="ghost"
       size={showLabel ? 'sm' : 'icon'}
       className={cn(
-        showLabel ? 'h-10 gap-1 px-2.5 text-xs' : 'h-10 w-10',
+        showLabel ? 'h-10 gap-1 px-2.5 text-xs touch-manipulation' : 'h-10 w-10 touch-manipulation',
         expanded
           ? 'bg-[#d4af37]/20 text-[#d4af37]'
           : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
@@ -74,7 +74,7 @@ export function ChartLandscapeToggle({ showLabels = true }: { showLabels?: boole
           variant="ghost"
           size={showLabels ? 'sm' : 'icon'}
           className={cn(
-            showLabels ? 'h-10 gap-1 px-2.5 text-xs' : 'h-10 w-10',
+            showLabels ? 'h-10 gap-1 px-2.5 text-xs touch-manipulation' : 'h-10 w-10 touch-manipulation',
             rotateActive
               ? 'bg-[#d4af37]/20 text-[#d4af37]'
               : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
