@@ -17,6 +17,7 @@ import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-lo
 import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { sanitizeMercadoErro } from '@/lib/mercado-erro'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
+import { isUsEquityXstock } from '@/lib/us-equities'
 import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 
 /** Moedas fiduciárias suportadas na UI (cotações e exibição). */
@@ -67,11 +68,11 @@ const UA = 'yieldscan-market/1'
 export const MAX_MARKET_FETCH_IDS = 24
 
 /** Evita 429 na API pública; com chave Pro/Demo os lotes são maiores. */
-const SIMPLE_PRICE_CHUNK_PUBLIC = 5
-const SIMPLE_PRICE_CHUNK_KEY = 18
-const SIMPLE_CHUNK_GAP_MS_PUBLIC = 400
-const SIMPLE_RETRY_GAP_MS = 600
-const BETWEEN_ENDPOINTS_MS = 350
+const SIMPLE_PRICE_CHUNK_PUBLIC = 4
+const SIMPLE_PRICE_CHUNK_KEY = 12
+const SIMPLE_CHUNK_GAP_MS_PUBLIC = 600
+const SIMPLE_RETRY_GAP_MS = 900
+const BETWEEN_ENDPOINTS_MS = 500
 const FETCH_MAX_RETRIES = 3
 const HIGHLIGHT_PRICE_CACHE_MS = 10 * 60 * 1000
 const HIGHLIGHT_PRICE_STALE_MS = 24 * 60 * 60 * 1000
@@ -79,6 +80,18 @@ const HIGHLIGHT_PRICE_STALE_MS = 24 * 60 * 60 * 1000
 type SimplePriceEntryLocal = SimplePriceEntry
 
 const highlightSimpleCache = new Map<string, { at: number; entry: SimplePriceEntryLocal }>()
+
+let exchangeRatesCache: { at: number; raw: unknown } | null = null
+const EXCHANGE_RATES_CACHE_MS = 60 * 60 * 1000
+
+async function fetchExchangeRatesCached(): Promise<unknown | null> {
+  if (exchangeRatesCache && Date.now() - exchangeRatesCache.at < EXCHANGE_RATES_CACHE_MS) {
+    return exchangeRatesCache.raw
+  }
+  const raw = await fetchJson<unknown>(EXCHANGE_RATES_PATH)
+  if (raw) exchangeRatesCache = { at: Date.now(), raw }
+  return raw
+}
 
 /** Nomes conhecidos para slugs frequentes (resto = título a partir do id). */
 const KNOWN_COIN_META: Record<string, { name: string; symbol: string }> = {
@@ -185,6 +198,7 @@ async function fetchSimplePriceChunk(ids: string[]): Promise<Record<string, Simp
     include24hrChange: true,
     includeMarketCap: true,
     allowStale: true,
+    onlyIds: ids,
   })
   const out: Record<string, SimplePriceEntryLocal> = {}
   for (const [id, entry] of Object.entries(data)) {
@@ -232,63 +246,54 @@ function simplePriceChunkGapMs(): number {
 async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntryLocal>> {
   const unique = [...new Set(ids.filter(Boolean))]
   const merged: Record<string, SimplePriceEntryLocal> = {}
-  const chunkSize = simplePriceChunkSize()
-  const gapMs = simplePriceChunkGapMs()
-
-  for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize)
-    Object.assign(merged, await fetchSimplePriceChunk(chunk))
-    if (gapMs > 0 && i + chunkSize < unique.length) {
-      await sleep(gapMs)
-    }
-  }
 
   for (const id of unique) {
-    if (hasValidUsd(merged[id])) continue
     const cached = cachedHighlightSimple(id, true)
     if (cached && hasValidUsd(cached)) merged[id] = cached
   }
 
-  const stillMissing = unique.filter((id) => !hasValidUsd(merged[id]))
-  if (stillMissing.length > 0) {
-    for (let i = 0; i < stillMissing.length; i += chunkSize) {
-      const chunk = stillMissing.slice(i, i + chunkSize)
-      await sleep(SIMPLE_RETRY_GAP_MS)
-      Object.assign(merged, await fetchSimplePriceChunk(chunk))
+  const cryptoIds = unique.filter((id) => !hasValidUsd(merged[id]) && !isUsEquityXstock(id))
+  if (cryptoIds.length > 0) {
+    const binance = await fetchBinanceSpotQuotes(cryptoIds)
+    applyBinanceFallbackToMerged(merged, cryptoIds, binance)
+    for (const id of cryptoIds) {
+      if (hasValidUsd(merged[id]) || !STABLE_COINGECKO_IDS.has(id)) continue
+      const stable = syntheticStableQuote()
+      merged[id] = { usd: stable.price, usd_24h_change: stable.change_24h }
+      rememberHighlightSimple(id, merged[id]!)
     }
+  }
 
-    const missingAfterRetry = unique.filter((id) => !hasValidUsd(merged[id]))
+  const cgOnlyIds = unique.filter((id) => !hasValidUsd(merged[id]))
+  if (cgOnlyIds.length === 0) return merged
+
+  const chunkSize = simplePriceChunkSize()
+  const gapMs = simplePriceChunkGapMs()
+
+  for (let i = 0; i < cgOnlyIds.length; i += chunkSize) {
+    const chunk = cgOnlyIds.slice(i, i + chunkSize)
+    Object.assign(merged, await fetchSimplePriceChunk(chunk))
+    if (gapMs > 0 && i + chunkSize < cgOnlyIds.length) {
+      await sleep(gapMs)
+    }
+  }
+
+  const stillMissing = cgOnlyIds.filter((id) => !hasValidUsd(merged[id]))
+  if (stillMissing.length > 0) {
+    await sleep(SIMPLE_RETRY_GAP_MS)
+    Object.assign(merged, await fetchSimplePriceChunk(stillMissing))
+
+    const missingAfterRetry = cgOnlyIds.filter((id) => !hasValidUsd(merged[id]))
     if (missingAfterRetry.length > 0) {
-      const binance = await fetchBinanceSpotQuotes(missingAfterRetry)
+      const binance = await fetchBinanceSpotQuotes(missingAfterRetry.filter((id) => !isUsEquityXstock(id)))
       applyBinanceFallbackToMerged(merged, missingAfterRetry, binance)
     }
 
-    const stillNoPrice = unique.filter((id) => !hasValidUsd(merged[id]))
-    for (const id of stillNoPrice) {
-      if (!STABLE_COINGECKO_IDS.has(id)) continue
+    for (const id of cgOnlyIds) {
+      if (hasValidUsd(merged[id]) || !STABLE_COINGECKO_IDS.has(id)) continue
       const stable = syntheticStableQuote()
-      const entry: SimplePriceEntryLocal = {
-        usd: stable.price,
-        usd_24h_change: stable.change_24h,
-      }
-      merged[id] = entry
-      rememberHighlightSimple(id, entry)
-    }
-
-    const marketsFallback = await fetchHighlightLogosByIds(
-      unique.filter((id) => !hasValidUsd(merged[id])),
-    )
-    for (const id of unique) {
-      if (hasValidUsd(merged[id])) continue
-      const row = marketsFallback.get(id)
-      if (row?.price != null) {
-        merged[id] = {
-          usd: row.price,
-          usd_24h_change: row.change_24h ?? undefined,
-          usd_market_cap: row.market_cap ?? undefined,
-        }
-        rememberHighlightSimple(id, merged[id]!)
-      }
+      merged[id] = { usd: stable.price, usd_24h_change: stable.change_24h }
+      rememberHighlightSimple(id, merged[id]!)
     }
   }
 
@@ -670,16 +675,14 @@ export async function agregarMercadoCoinGecko(
   let trendingRaw: { coins?: unknown[] } | null
 
   if (opts?.skipLists) {
-    ;[simpleRaw, exchangeRaw] = await Promise.all([
-      fetchSimplePricesForHighlights(ids),
-      fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
-    ])
+    simpleRaw = await fetchSimplePricesForHighlights(ids)
+    exchangeRaw = exchangeRatesCache?.raw ?? null
     marketsRaw = null
     trendingRaw = null
   } else if (hasCgKey) {
     const [simple, exchange, markets, trending] = await Promise.all([
       fetchSimplePricesForHighlights(ids),
-      fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
+      fetchExchangeRatesCached().catch(() => null),
       fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
       fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
     ])
@@ -690,11 +693,10 @@ export async function agregarMercadoCoinGecko(
   } else {
     simpleRaw = await fetchSimplePricesForHighlights(ids)
     await sleep(BETWEEN_ENDPOINTS_MS)
-    ;[exchangeRaw, marketsRaw, trendingRaw] = await Promise.all([
-      fetchJson<unknown>(EXCHANGE_RATES_PATH).catch(() => null),
-      fetchJson<unknown[]>(MARKETS_PATH).catch(() => null),
-      fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null),
-    ])
+    exchangeRaw = await fetchExchangeRatesCached().catch(() => null)
+    marketsRaw = await fetchJson<unknown[]>(MARKETS_PATH).catch(() => null)
+    await sleep(BETWEEN_ENDPOINTS_MS)
+    trendingRaw = await fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null)
   }
 
   const fx = parseFiatPerUsdFromExchangeRates(exchangeRaw)

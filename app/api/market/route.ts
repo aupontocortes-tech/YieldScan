@@ -13,7 +13,8 @@ import { fetchMercadoStocksTrending } from '@/lib/tendencias/fetch-us-equities'
 
 export const dynamic = 'force-dynamic'
 
-const TTL_MS = 90_000
+const TTL_MS = 180_000
+const STALE_SERVE_MS = 24 * 60 * 60 * 1000
 
 type CacheEntry = { payload: MarketApiPayload; ts: number }
 
@@ -62,11 +63,13 @@ export async function GET(req: NextRequest) {
   if (hit && now - hit.ts < TTL_MS) {
     return NextResponse.json(applyHighlightIdCache(hit.payload), {
       headers: {
-        'Cache-Control': 'public, s-maxage=90, stale-while-revalidate=180',
+        'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=300',
         'X-Market-Cache': 'hit',
       },
     })
   }
+
+  const expiredHit = hit && now - hit.ts < STALE_SERVE_MS ? hit.payload : undefined
 
   const mode = req.nextUrl.searchParams.get('mode') === 'highlights' ? 'highlights' : 'full'
 
@@ -84,7 +87,7 @@ export async function GET(req: NextRequest) {
       !anyHighlight && fresh.top10.length === 0 && fresh.trending.length === 0
 
     if (semNada) {
-      const fallback = staleFallback.get(cacheKey)
+      const fallback = staleFallback.get(cacheKey) ?? expiredHit
       if (fallback) {
         const body = applyHighlightIdCache({
           ...fallback,

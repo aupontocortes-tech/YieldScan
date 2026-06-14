@@ -133,17 +133,18 @@ export async function fetchCoingeckoPairOhlc(
   const id = coingeckoId.trim().toLowerCase()
   let lastErr = 'CoinGecko indisponível'
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await sleep(800 * attempt)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await sleep(600 * attempt)
     const res = await fetch(
       `/api/coingecko/ohlc?id=${encodeURIComponent(id)}&days=${days}`,
       { cache: 'no-store' },
     )
     const body = (await res.json()) as { ohlc?: unknown[]; error?: string; stale?: boolean }
-    if (res.ok && Array.isArray(body.ohlc)) {
+    if (res.ok && Array.isArray(body.ohlc) && body.ohlc.length > 0) {
       return parseCoingeckoOhlc(body.ohlc)
     }
     lastErr = body.error ?? `CoinGecko OHLC (${res.status})`
+    if (body.error === 'rate_limit' || res.status === 429) break
     if (res.status !== 429) break
   }
 
@@ -179,13 +180,24 @@ export async function fetchIndicatorKlines(
     return fetchBinancePairKlines(pair.binanceSymbol, timeframe.interval, limit)
   }
   if (pair.source === 'coingecko' && pair.coingeckoId) {
+    const fb = tryBinanceFallback(pair.coingeckoId, timeframe, limit)
+    if (fb) {
+      try {
+        const bars = await fb
+        if (bars.length > 0) {
+          if (limit > 0 && bars.length > limit) return bars.slice(-limit)
+          return bars
+        }
+      } catch {
+        /* tenta CoinGecko */
+      }
+    }
     const days = coingeckoOhlcDaysForTimeframe(timeframe)
     try {
       const bars = await fetchCoingeckoPairOhlc(pair.coingeckoId, days)
       if (limit > 0 && bars.length > limit) return bars.slice(-limit)
       return bars
     } catch (err) {
-      const fb = tryBinanceFallback(pair.coingeckoId, timeframe, limit)
       if (fb) {
         try {
           return await fb

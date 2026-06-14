@@ -144,8 +144,8 @@ export function BtcDashboard() {
   const { data: bars = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['indicator-klines', pair.id, timeframe.id],
     queryFn: () => fetchIndicatorKlines(pair, timeframe),
-    staleTime: fullHistoryChart ? 300_000 : 30_000,
-    refetchInterval: fullHistoryChart ? 300_000 : 60_000,
+    staleTime: fullHistoryChart ? 600_000 : 180_000,
+    refetchInterval: false as const,
     ...KLINES_QUERY_OPTIONS,
   })
 

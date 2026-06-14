@@ -1,4 +1,4 @@
-import { fetchCoingecko, isCoingeckoAuthError } from '@/lib/coingecko-server'
+import { fetchCoingecko, isCoingeckoAuthError, isCoingeckoRateLimit } from '@/lib/coingecko-server'
 
 export type SimplePriceEntry = {
   usd?: number
@@ -15,8 +15,11 @@ export type SimplePriceEntry = {
 type CacheRow = { at: number; data: Record<string, SimplePriceEntry> }
 
 const simplePriceCache = new Map<string, CacheRow>()
-const FRESH_MS = 90_000
-const STALE_ON_ERROR_MS = 6 * 60 * 60 * 1000
+/** Cache por slug — reutiliza preços entre pedidos com listas diferentes. */
+const simplePriceById = new Map<string, { at: number; entry: SimplePriceEntry }>()
+const FRESH_MS = 180_000
+const ID_FRESH_MS = 180_000
+const STALE_ON_ERROR_MS = 24 * 60 * 60 * 1000
 const MAX_KEYS = 120
 
 function cacheKey(ids: string[], vs: string, include24: boolean, includeCap: boolean): string {
@@ -40,8 +43,25 @@ export type SimplePriceResult = {
   stale?: boolean
 }
 
+function rememberById(data: Record<string, SimplePriceEntry>, at: number): void {
+  for (const [id, entry] of Object.entries(data)) {
+    if (hasUsd(entry)) simplePriceById.set(id, { at, entry })
+  }
+}
+
+function mergeFromIdCache(ids: string[], now: number): Record<string, SimplePriceEntry> {
+  const out: Record<string, SimplePriceEntry> = {}
+  for (const id of ids) {
+    const hit = simplePriceById.get(id)
+    if (hit && now - hit.at <= ID_FRESH_MS && hasUsd(hit.entry)) {
+      out[id] = hit.entry
+    }
+  }
+  return out
+}
+
 /**
- * simple/price com cache em memória e stale-on-429 (partilhado por /api/market e proxy).
+ * simple/price com cache em memória, cache por id e stale-on-429.
  */
 export async function fetchCoingeckoSimplePrices(
   ids: string[],
@@ -50,9 +70,11 @@ export async function fetchCoingeckoSimplePrices(
     include24hrChange?: boolean
     includeMarketCap?: boolean
     allowStale?: boolean
+    /** Slugs que ainda não têm preço — evita pedir à CG o lote completo. */
+    onlyIds?: string[]
   },
 ): Promise<SimplePriceResult> {
-  const unique = [...new Set(ids.map((id) => id.trim().toLowerCase()).filter(Boolean))]
+  const unique = [...new Set((opts?.onlyIds ?? ids).map((id) => id.trim().toLowerCase()).filter(Boolean))]
   if (!unique.length) return { data: {} }
 
   const vs = opts?.vsCurrencies ?? 'usd,brl,eur'
@@ -61,12 +83,18 @@ export async function fetchCoingeckoSimplePrices(
   const key = cacheKey(unique, vs, include24, includeCap)
   const now = Date.now()
   const hit = simplePriceCache.get(key)
+  const fromIds = mergeFromIdCache(unique, now)
 
   if (hit && now - hit.at <= FRESH_MS) {
-    return { data: hit.data, cached: true }
+    return { data: { ...fromIds, ...hit.data }, cached: true }
   }
 
-  const joined = unique.map((id) => encodeURIComponent(id)).join(',')
+  const needCg = unique.filter((id) => !hasUsd(fromIds[id]))
+  if (needCg.length === 0) {
+    return { data: fromIds, cached: true }
+  }
+
+  const joined = needCg.map((id) => encodeURIComponent(id)).join(',')
   let query = `/simple/price?ids=${joined}&vs_currencies=${encodeURIComponent(vs)}`
   if (include24) query += '&include_24hr_change=true'
   if (includeCap) query += '&include_market_cap=true'
@@ -74,12 +102,16 @@ export async function fetchCoingeckoSimplePrices(
   try {
     const res = await fetchCoingecko(query)
     if (!res.ok) {
+      const stalePool = { ...(hit?.data ?? {}), ...fromIds }
       const useStale =
-        hit &&
-        now - hit.at <= STALE_ON_ERROR_MS &&
-        (res.status === 429 || isCoingeckoAuthError(res.status))
+        Object.keys(stalePool).length > 0 &&
+        (hit ? now - hit.at <= STALE_ON_ERROR_MS : true) &&
+        (isCoingeckoRateLimit(res.status) || isCoingeckoAuthError(res.status))
       if (useStale) {
-        return { data: hit.data, stale: true }
+        return { data: stalePool, stale: true }
+      }
+      if (Object.keys(fromIds).length > 0) {
+        return { data: fromIds, stale: true }
       }
       return { data: hit?.data ?? {}, stale: Boolean(hit) }
     }
@@ -92,13 +124,15 @@ export async function fetchCoingeckoSimplePrices(
       }
     }
 
-    const merged = { ...(hit?.data ?? {}), ...data }
+    const merged = { ...fromIds, ...(hit?.data ?? {}), ...data }
     simplePriceCache.set(key, { at: now, data: merged })
+    rememberById(merged, now)
     trimCache()
     return { data: merged }
   } catch {
-    if (hit && (opts?.allowStale !== false) && now - hit.at <= STALE_ON_ERROR_MS) {
-      return { data: hit.data, stale: true }
+    const stalePool = { ...(hit?.data ?? {}), ...fromIds }
+    if (opts?.allowStale !== false && Object.keys(stalePool).length > 0) {
+      return { data: stalePool, stale: true }
     }
     return { data: hit?.data ?? {}, stale: Boolean(hit) }
   }

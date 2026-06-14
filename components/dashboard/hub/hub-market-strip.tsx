@@ -97,8 +97,8 @@ export function HubMarketStrip() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['hub-market', HUB_MARKET_IDS.join(',')],
     queryFn: fetchHubMarket,
-    staleTime: 120_000,
-    refetchInterval: 180_000,
+    staleTime: 300_000,
+    refetchInterval: false as const,
     refetchOnWindowFocus: false,
     refetchIntervalInBackground: false,
     retry: 3,

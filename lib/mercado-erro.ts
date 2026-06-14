@@ -7,6 +7,8 @@ const NOISE_PATTERNS = [
   /alguns preços v[eê]m de cache recente/i,
   /coinGecko\s*401/i,
   /coinGecko\s*403/i,
+  /coinGecko\s*429/i,
+  /coinGecko\s*OHLC\s*\(429\)/i,
 ]
 
 /**

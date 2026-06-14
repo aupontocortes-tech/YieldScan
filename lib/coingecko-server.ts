@@ -24,6 +24,38 @@ export function isCoingeckoAuthError(status: number): boolean {
   return status === 401 || status === 403
 }
 
+export function isCoingeckoRateLimit(status: number): boolean {
+  return status === 429
+}
+
+function hasCoingeckoApiKey(): boolean {
+  return Boolean(
+    process.env.COINGECKO_PRO_API_KEY?.trim() || process.env.COINGECKO_DEMO_API_KEY?.trim(),
+  )
+}
+
+function coingeckoMinGapMs(): number {
+  return hasCoingeckoApiKey() ? 150 : 550
+}
+
+let slotChain: Promise<void> = Promise.resolve()
+let lastCallAt = 0
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+/** Serializa pedidos CoinGecko para respeitar rate limit da API pública. */
+async function acquireCoingeckoSlot(): Promise<void> {
+  slotChain = slotChain.then(async () => {
+    const gap = coingeckoMinGapMs()
+    const wait = gap - (Date.now() - lastCallAt)
+    if (wait > 0) await sleep(wait)
+    lastCallAt = Date.now()
+  })
+  await slotChain
+}
+
 /** Lista de tiers por ordem de tentativa (Pro → Demo → público). */
 export function getCoingeckoTiers(): CoingeckoTier[] {
   const tiers: CoingeckoTier[] = []
@@ -84,11 +116,12 @@ export type FetchCoingeckoOptions = RequestInit & {
   timeoutMs?: number
   /** Cabeçalhos extra (ex.: User-Agent). */
   extraHeaders?: Record<string, string>
+  /** Tentativas extra em 429 (além do 1º pedido). */
+  rateLimitRetries?: number
 }
 
 /**
- * Pedido CoinGecko com fallback automático em 401/403.
- * 429 não muda de tier — significa limite, não chave inválida.
+ * Pedido CoinGecko com fila global, fallback 401/403 e retry em 429.
  */
 export async function fetchCoingecko(
   pathOrUrl: string,
@@ -96,36 +129,48 @@ export async function fetchCoingecko(
 ): Promise<Response> {
   const path = normalizeCoingeckoPath(pathOrUrl)
   const tiers = getCoingeckoTiers()
-  const { timeoutMs = 15_000, extraHeaders, ...init } = opts
+  const { timeoutMs = 15_000, extraHeaders, rateLimitRetries = 2, ...init } = opts
   let lastRes: Response | null = null
 
   for (let i = 0; i < tiers.length; i++) {
     const tier = tiers[i]!
     const url = `${tier.base}${path}`
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    try {
-      const res = await fetch(url, {
-        ...init,
-        method: init.method ?? 'GET',
-        headers: {
-          ...extraHeaders,
-          ...tier.headers,
-          ...(init.headers as Record<string, string> | undefined),
-        },
-        cache: init.cache ?? 'no-store',
-        signal: init.signal ?? ctrl.signal,
-      })
-      lastRes = res
 
-      if (isCoingeckoAuthError(res.status) && i < tiers.length - 1) {
-        continue
+    for (let rateAttempt = 0; rateAttempt <= rateLimitRetries; rateAttempt++) {
+      if (rateAttempt > 0) {
+        await sleep(900 * rateAttempt)
       }
-      return res
-    } catch {
-      if (i < tiers.length - 1) continue
-    } finally {
-      clearTimeout(timer)
+
+      await acquireCoingeckoSlot()
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+      try {
+        const res = await fetch(url, {
+          ...init,
+          method: init.method ?? 'GET',
+          headers: {
+            ...extraHeaders,
+            ...tier.headers,
+            ...(init.headers as Record<string, string> | undefined),
+          },
+          cache: init.cache ?? 'no-store',
+          signal: init.signal ?? ctrl.signal,
+        })
+        lastRes = res
+
+        if (isCoingeckoAuthError(res.status) && i < tiers.length - 1) {
+          break
+        }
+        if (isCoingeckoRateLimit(res.status) && rateAttempt < rateLimitRetries) {
+          continue
+        }
+        return res
+      } catch {
+        if (rateAttempt < rateLimitRetries) continue
+        if (i < tiers.length - 1) break
+      } finally {
+        clearTimeout(timer)
+      }
     }
   }
 

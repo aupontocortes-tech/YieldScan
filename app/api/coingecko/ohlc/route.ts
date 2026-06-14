@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchCoingecko, isCoingeckoAuthError } from '@/lib/coingecko-server'
+import { fetchCoingecko, isCoingeckoAuthError, isCoingeckoRateLimit } from '@/lib/coingecko-server'
 
 const ALLOWED_DAYS = new Set([1, 7, 14, 30, 90, 180, 365, 'max'])
 
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       const useStale =
         hit &&
         now - hit.at <= OHLC_STALE_ON_ERROR_MS &&
-        (res.status === 429 || isCoingeckoAuthError(res.status))
+        (isCoingeckoRateLimit(res.status) || isCoingeckoAuthError(res.status))
       if (useStale) {
         return NextResponse.json(
           { ohlc: hit.ohlc, id, days, stale: true },
@@ -70,9 +70,15 @@ export async function GET(req: NextRequest) {
           },
         )
       }
+      if (isCoingeckoRateLimit(res.status)) {
+        return NextResponse.json(
+          { ohlc: [], id, days, error: 'rate_limit' },
+          { status: 200, headers: { 'Cache-Control': 'public, s-maxage=30' } },
+        )
+      }
       return NextResponse.json(
         { error: `CoinGecko ${res.status}` },
-        { status: res.status === 429 ? 429 : 502 },
+        { status: 502 },
       )
     }
 
