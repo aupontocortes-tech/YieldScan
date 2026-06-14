@@ -397,7 +397,7 @@ export function BtcDashboard() {
     <div className="flex min-h-0 w-full flex-1 flex-col bg-[#050505] text-zinc-100">
       <header
         className={cn(
-          'relative z-[120] grid shrink-0 gap-x-1.5 border-b border-white/[0.06] px-1.5 py-1.5 sm:gap-x-2 sm:px-3 sm:py-2',
+          'relative z-[200] grid shrink-0 gap-x-1.5 border-b border-white/[0.06] bg-[#050505] px-1.5 py-1.5 sm:gap-x-2 sm:px-3 sm:py-2',
           isPhone
             ? cn(
                 'grid-cols-[minmax(0,1fr)_auto]',
@@ -554,6 +554,7 @@ export function BtcDashboard() {
             onOpenIndicators={openIndicatorsPanel}
             onOpenDrawings={openDrawingsPanel}
             onResetLayout={resetLayout}
+            onResetAll={resetDefaults}
           />
         ) : null}
       </header>

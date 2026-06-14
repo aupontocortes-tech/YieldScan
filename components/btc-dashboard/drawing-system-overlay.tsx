@@ -7,7 +7,7 @@ import { DrawingManager } from '@/lib/drawing-system/core/drawing-manager'
 import { PointerEngine } from '@/lib/drawing-system/events/pointer-engine'
 import { getGesturePreview } from '@/lib/drawing-system/events/gesture-preview'
 import { renderCanvas } from '@/lib/drawing-system/renderers/canvas-renderer'
-import { useDrawingStore } from '@/lib/drawing-system/store/drawing-store'
+import { EMPTY_DRAWINGS, useDrawingStore } from '@/lib/drawing-system/store/drawing-store'
 import { resolveToolMode } from '@/lib/drawing-system/tools/tool-registry'
 import { hitTestDrawings } from '@/lib/drawing-system/core/hit-test'
 import type { OhlcvBar } from '@/lib/btc/types'
@@ -364,7 +364,10 @@ function DrawingContextMenu({
   drawingId: string
   onClose: () => void
 }) {
-  const drawing = useDrawingStore((s) => s.getDrawings().find((d) => d.id === drawingId))
+  const drawing = useDrawingStore((s) => {
+    const list = s.byScope[s.scopeKey]?.drawings ?? EMPTY_DRAWINGS
+    return list.find((d) => d.id === drawingId)
+  })
 
   useEffect(() => {
     const close = () => onClose()

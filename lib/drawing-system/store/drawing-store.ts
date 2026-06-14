@@ -68,6 +68,9 @@ function emptyScope(): ScopeData {
   return { drawings: [], past: [], future: [] }
 }
 
+/** Referência estável para selectors React/Zustand (evita loop infinito). */
+export const EMPTY_DRAWINGS: Drawing[] = []
+
 function snapshot(drawings: Drawing[]): Drawing[] {
   return drawings.map((d) => ({
     ...d,
@@ -139,15 +142,18 @@ export const useDrawingStore = create<DrawingStoreState & DrawingStoreActions>()
       favoriteToolIds: [],
 
       setScope: (scopeKey) =>
-        set((s) => ({
-          scopeKey,
-          selectedId: null,
-          hoveredId: null,
-          hoveredFibLevelIndex: null,
-          draft: null,
-          transient: { draft: null, move: null },
-          byScope: s.byScope[scopeKey] ? s.byScope : { ...s.byScope, [scopeKey]: emptyScope() },
-        })),
+        set((s) => {
+          if (s.scopeKey === scopeKey) return s
+          return {
+            scopeKey,
+            selectedId: null,
+            hoveredId: null,
+            hoveredFibLevelIndex: null,
+            draft: null,
+            transient: { draft: null, move: null },
+            byScope: s.byScope[scopeKey] ? s.byScope : { ...s.byScope, [scopeKey]: emptyScope() },
+          }
+        }),
 
       setActiveTool: (activeToolId) =>
         set({ activeToolId, draft: null, transient: { draft: null, move: null } }),
@@ -183,7 +189,7 @@ export const useDrawingStore = create<DrawingStoreState & DrawingStoreActions>()
 
       getDrawings: () => {
         const s = get()
-        return s.byScope[s.scopeKey]?.drawings ?? []
+        return s.byScope[s.scopeKey]?.drawings ?? EMPTY_DRAWINGS
       },
 
       pushHistory: () =>

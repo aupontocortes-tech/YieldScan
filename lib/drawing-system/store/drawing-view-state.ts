@@ -1,4 +1,5 @@
 import type { ChartPoint, Drawing, DrawingDraft } from '@/lib/drawing-system/types'
+import { EMPTY_DRAWINGS } from '@/lib/drawing-system/store/drawing-store'
 
 export type DrawingTransientState = {
   draft: DrawingDraft | null
@@ -20,7 +21,7 @@ export type DrawingPaintState = {
 }
 
 export function getDrawingPaintState(state: DrawingStoreSnapshot): DrawingPaintState {
-  const base = state.prefs.drawingsVisible ? state.byScope[state.scopeKey]?.drawings ?? [] : []
+  const base = state.prefs.drawingsVisible ? state.byScope[state.scopeKey]?.drawings ?? EMPTY_DRAWINGS : EMPTY_DRAWINGS
   const isGesture = Boolean(state.transient.draft || state.transient.move)
 
   let drawings = base

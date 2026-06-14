@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -25,6 +26,7 @@ import type {
 import type { OhlcvBar } from '@/lib/btc/types'
 import {
   createDrawing,
+  EMPTY_DRAWINGS,
   useDrawingStore,
 } from '@/lib/drawing-system/store/drawing-store'
 import {
@@ -124,10 +126,13 @@ export function ChartDrawingsProvider({ children }: { children: ReactNode }) {
   const selectedId = useDrawingStore((s) => s.selectedId)
   const revision = useDrawingStore((s) => s.revision)
   const storeDraft = useDrawingStore((s) => s.draft)
-  const drawings = useDrawingStore((s) => s.byScope[s.scopeKey]?.drawings ?? [])
+  const drawings = useDrawingStore((s) => s.byScope[scopeKey]?.drawings ?? EMPTY_DRAWINGS)
+
+  useLayoutEffect(() => {
+    useDrawingStore.getState().setScope(scopeKey)
+  }, [scopeKey])
 
   useEffect(() => {
-    useDrawingStore.getState().setScope(scopeKey)
     const scope = useDrawingStore.getState().byScope[scopeKey]
     if (!scope?.drawings.length) {
       const legacy = readLegacyInstances(legacyKey)
