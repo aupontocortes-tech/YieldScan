@@ -33,7 +33,7 @@ export function IndicatorMobileToolbar({
     <nav
       aria-label="Ferramentas do gráfico"
       data-no-swipe-nav
-      className="relative isolate z-[10] col-span-2 row-start-3 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-[#050505] px-1 py-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]"
+      className="relative z-[1] col-span-2 row-start-3 flex min-w-0 touch-manipulation flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-[#050505] px-1 py-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] pointer-events-auto"
     >
       <ToolButton
         label="Radar"

@@ -34,11 +34,14 @@ function SheetContent({
   side = 'right',
   overlayClassName,
   overlayProps,
+  showOverlay = true,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: 'top' | 'right' | 'bottom' | 'left'
   overlayClassName?: string
   overlayProps?: React.ComponentProps<typeof SheetPrimitive.Overlay>
+  /** Quando false (ex.: modal={false}), não bloqueia cliques no gráfico. */
+  showOverlay?: boolean
 }) {
   const {
     className: overlayClassNameProp,
@@ -47,15 +50,17 @@ function SheetContent({
 
   return (
     <SheetPortal>
-      <SheetPrimitive.Overlay
-        data-slot="sheet-overlay"
-        className={cn(
-          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]',
-          overlayClassName,
-          overlayClassNameProp,
-        )}
-        {...overlayRest}
-      />
+      {showOverlay ? (
+        <SheetPrimitive.Overlay
+          data-slot="sheet-overlay"
+          className={cn(
+            'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]',
+            overlayClassName,
+            overlayClassNameProp,
+          )}
+          {...overlayRest}
+        />
+      ) : null}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(

@@ -15,6 +15,7 @@ type Props = {
   settings: TrendRadarSettings
   bars?: OhlcvBar[]
   barsCount?: number
+  computing?: boolean
 }
 
 function fmtPrice(v: number | null): string {
@@ -420,11 +421,11 @@ export function TrendRadarMarkers({ analysis, settings, bars = [] }: Props) {
     if (!api) return
     const ts = api.chart.timeScale()
     const handler = () => paint()
-    ts.subscribeVisibleTimeRangeChange(handler)
+    ts.subscribeVisibleLogicalRangeChange(handler)
     const ro = new ResizeObserver(handler)
     ro.observe(api.container)
     return () => {
-      ts.unsubscribeVisibleTimeRangeChange(handler)
+      ts.unsubscribeVisibleLogicalRangeChange(handler)
       ro.disconnect()
     }
   }, [paint, mainChart])
@@ -440,15 +441,15 @@ export function TrendRadarMarkers({ analysis, settings, bars = [] }: Props) {
   )
 }
 
-export function TrendRadarOverlay({ analysis, settings, bars = [], barsCount = 0 }: Props) {
+export function TrendRadarOverlay({ analysis, settings, bars = [], barsCount = 0, computing = false }: Props) {
   if (!settings.enabled) return null
 
   if (!analysis) {
     return (
-      <div className="absolute bottom-14 right-2 z-20 rounded-lg border border-white/15 bg-black/88 px-3 py-2 text-[11px] text-zinc-300 shadow-lg sm:bottom-16 sm:right-3">
+      <div className="pointer-events-none absolute bottom-14 right-2 z-20 rounded-lg border border-white/15 bg-black/88 px-3 py-2 text-[11px] text-zinc-300 shadow-lg sm:bottom-16 sm:right-3">
         <span className="flex items-center gap-2">
           <Radar className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
-          {barsCount < 55 ? 'A carregar…' : 'A otimizar sinais…'}
+          {barsCount < 55 ? 'A carregar…' : computing ? 'A calcular sinais…' : 'A otimizar sinais…'}
         </span>
       </div>
     )

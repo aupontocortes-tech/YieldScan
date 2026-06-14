@@ -40,8 +40,7 @@ import {
 } from '@/lib/btc/chart-indicator-display'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
-import { computeOptimizedBtcSignals } from '@/lib/btc/signal-system'
-import { getHigherTimeframeId, type TrendRadarAnalysis } from '@/lib/btc/trend-radar'
+import { useTrendRadarAnalysis } from '@/hooks/use-trend-radar-analysis'
 import { TrendRadarOverlay } from '@/components/btc-dashboard/trend-radar-overlay'
 import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
 import {
@@ -191,16 +190,14 @@ export function BtcChartsSuite({
   const highs = useMemo(() => bars.map((b) => b.high), [bars])
   const lows = useMemo(() => bars.map((b) => b.low), [bars])
 
-  const trendRadarAnalysis = useMemo((): TrendRadarAnalysis | null => {
-    if (!trendRadar.enabled || bars.length < 55) return null
-    const htfId = getHigherTimeframeId(timeframe.id)
-    const htfLabel = TIMEFRAME_PRESETS.find((t) => t.id === htfId)?.label ?? htfId
-    return computeOptimizedBtcSignals(
-      bars,
-      htfBarsForTrendRadar.length >= 25 ? htfBarsForTrendRadar : undefined,
-      { chartLabel: timeframe.label, htfLabel, optimize: bars.length >= 80 },
-    )
-  }, [trendRadar.enabled, bars, htfBarsForTrendRadar, timeframe.id, timeframe.label])
+  const trendRadarInput = useTrendRadarAnalysis(
+    trendRadar.enabled,
+    bars,
+    htfBarsForTrendRadar,
+    timeframe,
+  )
+  const trendRadarAnalysis = trendRadarInput.analysis
+  const trendRadarComputing = trendRadarInput.computing
 
   const rsiSeries = useMemo(
     () => (rsiCfg.enabled ? rsi(closes, rsiCfg.period) : null),
@@ -956,7 +953,13 @@ export function BtcChartsSuite({
       >
         <div ref={mainRef} className="yieldscan-chart-root absolute inset-0" />
         <DrawingSystemOverlay bars={bars} />
-        <TrendRadarOverlay analysis={trendRadarAnalysis} settings={trendRadar} bars={bars} barsCount={bars.length} />
+        <TrendRadarOverlay
+          analysis={trendRadarAnalysis}
+          settings={trendRadar}
+          bars={bars}
+          barsCount={bars.length}
+          computing={trendRadarComputing}
+        />
         <ChartIndicatorHitLayer bars={bars} onOpenSettings={onOpenIndicatorSettings} />
         <ChartDrawingsLegend />
         <ChartIndicatorLegend

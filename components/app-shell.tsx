@@ -147,7 +147,10 @@ function AppShellInset({
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const title = pageTitle(pathname)
-  const swipeNav = useSwipeMainNavHandlers()
+  const swipeNavRaw = useSwipeMainNavHandlers()
+  const swipeNav = pathname.startsWith('/indicator')
+    ? { onTouchStart: () => undefined, onTouchEnd: () => undefined }
+    : swipeNavRaw
   const isPhone = useIsMobile()
   const compactHeader = isPhone && pathname.startsWith('/indicator')
 
