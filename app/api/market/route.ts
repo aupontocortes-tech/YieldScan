@@ -20,6 +20,10 @@ type CacheEntry = { payload: MarketApiPayload; ts: number }
 
 const memCache = new Map<string, CacheEntry>()
 const staleFallback = new Map<string, MarketApiPayload>()
+
+function marketCacheKey(highlightIds: string[], mode: 'highlights' | 'full'): string {
+  return `${highlightIds.join(',')}|${mode}`
+}
 /** Preços por slug — sobrevive a mudanças na lista de destaques e a 429 pontuais. */
 const highlightByIdCache = new Map<string, MercadoCoin>()
 
@@ -57,7 +61,9 @@ const fetchMarketPayloadCached = unstable_cache(
 export async function GET(req: NextRequest) {
   const now = Date.now()
   const highlightIds = parseHighlightsQueryParam(req.nextUrl.searchParams.get('highlights'))
-  const cacheKey = highlightIds.join(',')
+  const mode = req.nextUrl.searchParams.get('mode') === 'highlights' ? 'highlights' : 'full'
+  const idsKey = highlightIds.join(',')
+  const cacheKey = marketCacheKey(highlightIds, mode)
 
   const hit = memCache.get(cacheKey)
   if (hit && now - hit.ts < TTL_MS) {
@@ -71,13 +77,11 @@ export async function GET(req: NextRequest) {
 
   const expiredHit = hit && now - hit.ts < STALE_SERVE_MS ? hit.payload : undefined
 
-  const mode = req.nextUrl.searchParams.get('mode') === 'highlights' ? 'highlights' : 'full'
-
   try {
     const base =
       mode === 'highlights'
         ? await agregarMercadoCoinGecko(highlightIds, { skipLists: true })
-        : await fetchMarketPayloadCached(cacheKey)
+        : await fetchMarketPayloadCached(idsKey)
     const fresh = applyHighlightIdCache(
       mode === 'highlights' ? { ...base, trendingStocks: [] } : base,
     )
@@ -87,7 +91,10 @@ export async function GET(req: NextRequest) {
       !anyHighlight && fresh.top10.length === 0 && fresh.trending.length === 0
 
     if (semNada) {
-      const fallback = staleFallback.get(cacheKey) ?? expiredHit
+      const fallback =
+        staleFallback.get(cacheKey) ??
+        staleFallback.get(marketCacheKey(highlightIds, 'full')) ??
+        expiredHit
       if (fallback) {
         const body = applyHighlightIdCache({
           ...fallback,
@@ -118,7 +125,8 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch {
-    const fallback = staleFallback.get(cacheKey)
+    const fallback =
+      staleFallback.get(cacheKey) ?? staleFallback.get(marketCacheKey(highlightIds, 'full'))
     if (fallback) {
       const body = applyHighlightIdCache({
         ...fallback,

@@ -43,6 +43,12 @@ export async function fetchAndCacheMercadoPrices(ids: string[]): Promise<MarketA
 export async function fetchAndCacheMercadoFull(ids: string[]): Promise<MarketApiPayload> {
   const key = mercadoQueryKey(ids)
   const payload = await fetchMercadoClient(ids, 'full')
-  writeMercadoSessionCache(key, payload)
+  const hasLists =
+    payload.top10.length > 0 ||
+    payload.trending.length > 0 ||
+    (payload.trendingStocks?.length ?? 0) > 0
+  if (hasLists) {
+    writeMercadoSessionCache(key, payload)
+  }
   return payload
 }
