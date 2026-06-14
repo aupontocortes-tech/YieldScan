@@ -647,6 +647,11 @@ export function DashbuddyCryptoMarket() {
 
       {marketLoading && (
         <div className="space-y-8">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={`pin-sk-${i}`} className="h-44 rounded-2xl" />
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
             {Array.from({ length: Math.min(MAX_MARKET_HIGHLIGHTS, Math.max(4, highlightIds.length)) }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -658,11 +663,46 @@ export function DashbuddyCryptoMarket() {
 
       {data && (
         <>
+          <div>
+            <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-400/95">
+              <Building2 className="h-4 w-4" />
+              Ações americanas em destaque
+            </h3>
+            <p className="mb-4 text-xs text-muted-foreground">
+              NVIDIA, Nasdaq, Microsoft e outras referências US (tokenizadas xStock · CoinGecko).
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+              {pinnedStockIds.map((id) => {
+                const coin = coinById.get(id)
+                const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                if (displayCoin) {
+                  return (
+                    <HighlightCard
+                      key={`pinned-${displayCoin.id}`}
+                      coin={displayCoin}
+                      mercadoPrefs={displayPrefs}
+                      stock
+                      onFiatChange={setCoinFiat}
+                    />
+                  )
+                }
+                return (
+                  <HighlightEmptyCard
+                    key={`pinned-empty-${id}`}
+                    id={id}
+                    mercadoPrefs={displayPrefs}
+                    onFiatChange={setCoinFiat}
+                  />
+                )
+              })}
+            </div>
+          </div>
+
           {cryptoHighlightSlots.length > 0 && (
             <div>
               <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 <Coins className="h-4 w-4 text-cyan-500/80" />
-                Os teus favoritos (cripto)
+                Cripto em destaque
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
                 {cryptoHighlightSlots.map(({ id, coin, index }) => {
@@ -689,49 +729,6 @@ export function DashbuddyCryptoMarket() {
               </div>
             </div>
           )}
-
-          <div>
-            <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-400/95">
-              <Building2 className="h-4 w-4" />
-              Ações americanas em destaque
-            </h3>
-            <p className="mb-4 text-xs text-muted-foreground">
-              NVIDIA, Nasdaq, Microsoft e outras referências US (tokenizadas xStock · CoinGecko).
-            </p>
-            {marketLoading ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={`pin-sk-${i}`} className="h-44 rounded-2xl" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
-                {pinnedStockIds.map((id) => {
-                  const coin = coinById.get(id)
-                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
-                  if (displayCoin) {
-                    return (
-                      <HighlightCard
-                        key={`pinned-${displayCoin.id}`}
-                        coin={displayCoin}
-                        mercadoPrefs={displayPrefs}
-                        stock
-                        onFiatChange={setCoinFiat}
-                      />
-                    )
-                  }
-                  return (
-                    <HighlightEmptyCard
-                      key={`pinned-empty-${id}`}
-                      id={id}
-                      mercadoPrefs={displayPrefs}
-                      onFiatChange={setCoinFiat}
-                    />
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
           {extraStockHighlightSlots.length > 0 && (
             <div>
