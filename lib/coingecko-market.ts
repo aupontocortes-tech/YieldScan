@@ -17,7 +17,8 @@ import { COINGECKO_LOGO_BY_ID, SYMBOL_LOGO_URL } from '@/lib/coingecko-static-lo
 import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { sanitizeMercadoErro } from '@/lib/mercado-erro'
 import { DEFAULT_MARKET_HIGHLIGHT_IDS, MAX_MARKET_HIGHLIGHTS } from '@/lib/mercado-highlight-ids'
-import { isUsEquityXstock } from '@/lib/us-equities'
+import { isUsEquityXstock, XSTOCK_ID_TO_TICKER } from '@/lib/us-equities'
+import { fetchFmpQuotesForSymbols } from '@/lib/tendencias/fetch-us-equities'
 import type { TendenciasEquityRow } from '@/lib/tendencias/types'
 
 /** Moedas fiduciárias suportadas na UI (cotações e exibição). */
@@ -243,6 +244,39 @@ function simplePriceChunkGapMs(): number {
   return hasCgKey ? 0 : SIMPLE_CHUNK_GAP_MS_PUBLIC
 }
 
+function applyFmpXstockFallback(
+  merged: Record<string, SimplePriceEntryLocal>,
+  xstockIds: string[],
+): Promise<void> {
+  return (async () => {
+    const need = xstockIds.filter((id) => isUsEquityXstock(id) && !hasValidUsd(merged[id]))
+    if (!need.length) return
+
+    const symToId = new Map<string, string>()
+    const symbols: string[] = []
+    for (const id of need) {
+      const sym = XSTOCK_ID_TO_TICKER[id]
+      if (!sym) continue
+      symbols.push(sym)
+      symToId.set(sym, id)
+    }
+    if (!symbols.length) return
+
+    const rows = await fetchFmpQuotesForSymbols(symbols)
+    for (const row of rows) {
+      const id = row.xstockId ?? symToId.get(row.symbol)
+      if (!id || row.price == null || hasValidUsd(merged[id])) continue
+      const entry: SimplePriceEntryLocal = {
+        usd: row.price,
+        usd_24h_change: row.changePct ?? undefined,
+        usd_market_cap: row.marketCap ?? undefined,
+      }
+      merged[id] = entry
+      rememberHighlightSimple(id, entry)
+    }
+  })()
+}
+
 async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<string, SimplePriceEntryLocal>> {
   const unique = [...new Set(ids.filter(Boolean))]
   const merged: Record<string, SimplePriceEntryLocal> = {}
@@ -267,26 +301,46 @@ async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<str
   const cgOnlyIds = unique.filter((id) => !hasValidUsd(merged[id]))
   if (cgOnlyIds.length === 0) return merged
 
+  const xstockIds = cgOnlyIds.filter((id) => isUsEquityXstock(id))
+  const otherCgIds = cgOnlyIds.filter((id) => !isUsEquityXstock(id))
+
   const chunkSize = simplePriceChunkSize()
   const gapMs = simplePriceChunkGapMs()
 
-  for (let i = 0; i < cgOnlyIds.length; i += chunkSize) {
-    const chunk = cgOnlyIds.slice(i, i + chunkSize)
+  // xStock primeiro (lotes pequenos) — evita 429 misturando com muitas cripto
+  for (let i = 0; i < xstockIds.length; i += Math.min(chunkSize, 3)) {
+    const chunk = xstockIds.slice(i, i + Math.min(chunkSize, 3))
     Object.assign(merged, await fetchSimplePriceChunk(chunk))
-    if (gapMs > 0 && i + chunkSize < cgOnlyIds.length) {
-      await sleep(gapMs)
-    }
+    if (gapMs > 0 && i + chunk.length < xstockIds.length) await sleep(gapMs)
+  }
+
+  for (let i = 0; i < otherCgIds.length; i += chunkSize) {
+    const chunk = otherCgIds.slice(i, i + chunkSize)
+    Object.assign(merged, await fetchSimplePriceChunk(chunk))
+    if (gapMs > 0 && i + chunkSize < otherCgIds.length) await sleep(gapMs)
   }
 
   const stillMissing = cgOnlyIds.filter((id) => !hasValidUsd(merged[id]))
   if (stillMissing.length > 0) {
     await sleep(SIMPLE_RETRY_GAP_MS)
-    Object.assign(merged, await fetchSimplePriceChunk(stillMissing))
+    const missingXstock = stillMissing.filter((id) => isUsEquityXstock(id))
+    const missingOther = stillMissing.filter((id) => !isUsEquityXstock(id))
+
+    for (const id of missingXstock) {
+      Object.assign(merged, await fetchSimplePriceChunk([id]))
+      await sleep(400)
+    }
+    if (missingOther.length > 0) {
+      Object.assign(merged, await fetchSimplePriceChunk(missingOther))
+    }
+
+    await applyFmpXstockFallback(merged, missingXstock)
 
     const missingAfterRetry = cgOnlyIds.filter((id) => !hasValidUsd(merged[id]))
     if (missingAfterRetry.length > 0) {
       const binance = await fetchBinanceSpotQuotes(missingAfterRetry.filter((id) => !isUsEquityXstock(id)))
       applyBinanceFallbackToMerged(merged, missingAfterRetry, binance)
+      await applyFmpXstockFallback(merged, missingAfterRetry)
     }
 
     for (const id of cgOnlyIds) {
@@ -294,6 +348,22 @@ async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<str
       const stable = syntheticStableQuote()
       merged[id] = { usd: stable.price, usd_24h_change: stable.change_24h }
       rememberHighlightSimple(id, merged[id]!)
+    }
+  }
+
+  const xstockStillMissing = unique.filter((id) => isUsEquityXstock(id) && !hasValidUsd(merged[id]))
+  if (xstockStillMissing.length > 0) {
+    const fromMarkets = await fetchHighlightLogosByIds(xstockStillMissing)
+    for (const id of xstockStillMissing) {
+      const coin = fromMarkets.get(id)
+      if (coin?.price == null) continue
+      const entry: SimplePriceEntryLocal = {
+        usd: coin.price,
+        usd_24h_change: coin.change_24h ?? undefined,
+        usd_market_cap: coin.market_cap ?? undefined,
+      }
+      merged[id] = entry
+      rememberHighlightSimple(id, entry)
     }
   }
 

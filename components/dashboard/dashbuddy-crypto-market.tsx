@@ -307,7 +307,7 @@ function HighlightCard({
 
 function SectionSkeleton() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 rounded-xl border border-border/40 p-3">
           <Skeleton className="h-11 w-11 rounded-full" />
@@ -647,7 +647,7 @@ export function DashbuddyCryptoMarket() {
 
       {marketLoading && (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
             {Array.from({ length: Math.min(MAX_MARKET_HIGHLIGHTS, Math.max(4, highlightIds.length)) }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
             ))}
@@ -664,7 +664,7 @@ export function DashbuddyCryptoMarket() {
                 <Coins className="h-4 w-4 text-cyan-500/80" />
                 Os teus favoritos (cripto)
               </h3>
-              <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
                 {cryptoHighlightSlots.map(({ id, coin, index }) => {
                   const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
                   if (displayCoin) {
@@ -699,13 +699,13 @@ export function DashbuddyCryptoMarket() {
               NVIDIA, Nasdaq, Microsoft e outras referências US (tokenizadas xStock · CoinGecko).
             </p>
             {marketLoading ? (
-              <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton key={`pin-sk-${i}`} className="h-44 rounded-2xl" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
                 {pinnedStockIds.map((id) => {
                   const coin = coinById.get(id)
                   const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
@@ -739,7 +739,7 @@ export function DashbuddyCryptoMarket() {
                 <Building2 className="h-4 w-4 text-blue-500/80" />
                 Mais ações nos teus destaques
               </h3>
-              <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
                 {extraStockHighlightSlots.map(({ id, coin, index }) => {
                   const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
                   if (displayCoin) {

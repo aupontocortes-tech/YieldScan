@@ -165,6 +165,13 @@ function buildSnapshot(
   return { highlights, topVolume, aiWatchlist, summary }
 }
 
+/** Cotações FMP por ticker — fallback para xStock no Mercado quando CoinGecko falha. */
+export async function fetchFmpQuotesForSymbols(symbols: string[]): Promise<TendenciasEquityRow[]> {
+  const unique = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))]
+  if (!unique.length) return []
+  return fetchStableBatch(unique)
+}
+
 export type UsEquitiesSnapshot = {
   highlights: TendenciasEquityRow[]
   topVolume: TendenciasEquityRow[]
