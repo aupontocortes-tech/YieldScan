@@ -307,7 +307,7 @@ function HighlightCard({
 
 function SectionSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 rounded-xl border border-border/40 p-3">
           <Skeleton className="h-11 w-11 rounded-full" />
@@ -647,11 +647,6 @@ export function DashbuddyCryptoMarket() {
 
       {marketLoading && (
         <div className="space-y-8">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={`pin-sk-${i}`} className="h-44 rounded-2xl" />
-            ))}
-          </div>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
             {Array.from({ length: Math.min(MAX_MARKET_HIGHLIGHTS, Math.max(4, highlightIds.length)) }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -663,6 +658,38 @@ export function DashbuddyCryptoMarket() {
 
       {data && (
         <>
+          {cryptoHighlightSlots.length > 0 && (
+            <div>
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                <Coins className="h-4 w-4 text-cyan-500/80" />
+                Os teus favoritos (cripto)
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+                {cryptoHighlightSlots.map(({ id, coin, index }) => {
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  if (displayCoin) {
+                    return (
+                      <HighlightCard
+                        key={`crypto-${displayCoin.id}-${index}`}
+                        coin={displayCoin}
+                        mercadoPrefs={displayPrefs}
+                        onFiatChange={setCoinFiat}
+                      />
+                    )
+                  }
+                  return (
+                    <HighlightEmptyCard
+                      key={`empty-crypto-${id || index}`}
+                      id={id}
+                      mercadoPrefs={displayPrefs}
+                      onFiatChange={setCoinFiat}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-400/95">
               <Building2 className="h-4 w-4" />
@@ -697,38 +724,6 @@ export function DashbuddyCryptoMarket() {
               })}
             </div>
           </div>
-
-          {cryptoHighlightSlots.length > 0 && (
-            <div>
-              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                <Coins className="h-4 w-4 text-cyan-500/80" />
-                Cripto em destaque
-              </h3>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
-                {cryptoHighlightSlots.map(({ id, coin, index }) => {
-                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
-                  if (displayCoin) {
-                    return (
-                      <HighlightCard
-                        key={`crypto-${displayCoin.id}-${index}`}
-                        coin={displayCoin}
-                        mercadoPrefs={displayPrefs}
-                        onFiatChange={setCoinFiat}
-                      />
-                    )
-                  }
-                  return (
-                    <HighlightEmptyCard
-                      key={`empty-crypto-${id || index}`}
-                      id={id}
-                      mercadoPrefs={displayPrefs}
-                      onFiatChange={setCoinFiat}
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
           {extraStockHighlightSlots.length > 0 && (
             <div>
