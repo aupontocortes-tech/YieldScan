@@ -44,7 +44,7 @@ export function IndicatorPairSelector({ pair, onSelect }: Props) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex min-w-0 max-w-[min(100%,14rem)] items-center gap-2 rounded-lg border border-white/[0.08] bg-black/30 px-2 py-1.5 text-left transition-colors hover:border-[#d4af37]/40 hover:bg-white/[0.04] sm:max-w-none sm:px-2.5"
+          className="flex min-w-0 max-w-[min(100%,14rem)] items-center gap-2 rounded-lg border border-white/[0.08] bg-black/30 px-2.5 py-2 text-left transition-colors hover:border-[#d4af37]/40 hover:bg-white/[0.04] min-h-10 sm:max-w-none sm:px-2.5"
           aria-label="Escolher par de moedas"
         >
           <TokenSymbolAvatar

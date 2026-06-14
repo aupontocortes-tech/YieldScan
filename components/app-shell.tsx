@@ -38,6 +38,7 @@ import { MobileSidebarEdgeOpenStrip } from '@/components/mobile-sidebar-edge-str
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { useSwipeMainNavHandlers } from '@/hooks/use-swipe-main-nav'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 type NavItem = {
   name: string
@@ -94,12 +95,15 @@ function AppShellInset({
   title,
   swipeNav,
   wideContent,
+  compactHeader,
   children,
 }: {
   title: string
   swipeNav: ReturnType<typeof useSwipeMainNavHandlers>
   /** Usa mais largura útil (remove margem/arredondado do inset em desktop). */
   wideContent?: boolean
+  /** Indicadores no telemóvel — menos chrome, mais gráfico. */
+  compactHeader?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -110,14 +114,23 @@ function AppShellInset({
           : undefined
       }
     >
-      <header className="relative z-40 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 px-3 backdrop-blur-md md:px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-1 h-6" />
+      <header
+        className={cn(
+          'relative z-40 flex shrink-0 items-center gap-2 border-b border-border/70 bg-background/90 backdrop-blur-md',
+          compactHeader ? 'h-10 px-2' : 'h-14 px-3 md:px-4',
+        )}
+      >
+        <SidebarTrigger className={cn('-ml-1', compactHeader && 'h-9 w-9')} />
+        {!compactHeader ? <Separator orientation="vertical" className="mr-1 h-6" /> : null}
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            YieldScan
+          {!compactHeader ? (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              YieldScan
+            </span>
+          ) : null}
+          <span className={cn('truncate font-semibold text-foreground', compactHeader ? 'text-xs' : 'text-sm')}>
+            {title}
           </span>
-          <span className="truncate text-sm font-semibold text-foreground">{title}</span>
         </div>
       </header>
       <div
@@ -135,6 +148,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const title = pageTitle(pathname)
   const swipeNav = useSwipeMainNavHandlers()
+  const isPhone = useIsMobile()
+  const compactHeader = isPhone && pathname.startsWith('/indicator')
 
   return (
     <SidebarProvider>
@@ -248,6 +263,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppShellInset
         title={title}
         swipeNav={swipeNav}
+        compactHeader={compactHeader}
         wideContent={
           pathname.startsWith('/my-liquidity') ||
           pathname.startsWith('/rebalance-pro') ||

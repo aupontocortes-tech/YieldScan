@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useChartDrawings } from '@/components/btc-dashboard/chart-drawings-context'
 import type { MainChartApi } from '@/lib/btc/chart-drawing-types'
 import { ema } from '@/lib/btc/indicators'
@@ -72,6 +72,7 @@ function IndicatorRow({
 
 export function TrendRadarPanel({ analysis, settings }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const isPhone = useIsMobile()
 
   if (!settings.enabled || !settings.showPanel || !analysis) return null
 
@@ -95,15 +96,21 @@ export function TrendRadarPanel({ analysis, settings }: Props) {
   return (
     <div
       className={cn(
-        'absolute bottom-14 right-2 z-20 overflow-hidden rounded-lg border shadow-[0_8px_32px_rgba(0,0,0,0.65)] backdrop-blur-md sm:bottom-16 sm:right-3',
-        expanded ? 'w-[13.5rem]' : 'w-[9.5rem]',
+        'absolute z-20 overflow-hidden rounded-lg border shadow-[0_8px_32px_rgba(0,0,0,0.65)] backdrop-blur-md',
+        isPhone
+          ? 'bottom-2 right-1.5 max-w-[calc(100%-1rem)]'
+          : 'bottom-14 right-2 sm:bottom-16 sm:right-3',
+        expanded ? (isPhone ? 'w-[11.5rem]' : 'w-[13.5rem]') : isPhone ? 'w-[8.25rem]' : 'w-[9.5rem]',
         compactBg,
       )}
     >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04]"
+        className={cn(
+          'flex w-full items-center gap-2 text-left transition-colors hover:bg-white/[0.04]',
+          isPhone ? 'px-2 py-2.5' : 'px-2.5 py-2',
+        )}
         aria-expanded={expanded}
         aria-label={expanded ? 'Recolher painel de sinais' : 'Expandir painel de sinais'}
       >

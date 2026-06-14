@@ -949,8 +949,8 @@ export function BtcChartsSuite({
         className={cn(
           'relative w-full min-w-0',
           isPhone && hasOscillatorStack
-            ? 'h-[min(46dvh,340px)] shrink-0'
-            : 'min-h-[200px] flex-1 sm:min-h-[240px]',
+            ? 'h-[min(54dvh,380px)] shrink-0'
+            : 'min-h-[220px] flex-1 sm:min-h-[240px]',
           focusPrice && isPhone && 'min-h-0',
         )}
       >

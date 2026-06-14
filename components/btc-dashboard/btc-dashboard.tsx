@@ -46,6 +46,7 @@ import {
 import { useChartLandscapeContext } from '@/components/btc-dashboard/chart-landscape-context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { DrawingsPanel } from '@/components/btc-dashboard/drawings-panel'
+import { IndicatorMobileActionsMenu } from '@/components/btc-dashboard/indicator-mobile-actions'
 
 const SettingsPanelLazy = dynamic(
   () =>
@@ -245,6 +246,25 @@ export function BtcDashboard() {
     setChartResetKey((k) => k + 1)
   }
 
+  const toggleTrendRadar = () => {
+    const next = !trendRadar.enabled
+    setTrendRadar({ ...trendRadar, enabled: next })
+    if (next && trendRadar.preferWeeklyTimeframe) {
+      const w = TIMEFRAME_PRESETS.find((t) => t.id === '1w')
+      if (w) setTimeframe(w)
+    }
+  }
+
+  const openIndicatorsPanel = () => {
+    setDrawingsOpen(false)
+    setDrawerOpen(true)
+  }
+
+  const openDrawingsPanel = () => {
+    setDrawerOpen(false)
+    setDrawingsOpen(true)
+  }
+
   const openIndicatorSettings = (_focus: ChartLegendSettingsFocus) => {
     setDrawerOpen(true)
   }
@@ -376,103 +396,111 @@ export function BtcDashboard() {
     <div className="flex min-h-0 w-full flex-1 flex-col bg-[#050505] text-zinc-100">
       <header
         className={cn(
-          'grid shrink-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 border-b border-white/[0.06] px-2 py-1.5 sm:px-3 sm:py-2',
-          chartExpanded
-            ? 'grid-rows-1 items-center'
-            : 'grid-rows-[auto_auto] gap-y-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2',
+          'grid shrink-0 gap-x-1.5 border-b border-white/[0.06] px-1.5 py-1.5 sm:gap-x-2 sm:px-3 sm:py-2',
+          isPhone
+            ? 'grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-y-1'
+            : cn(
+                'grid-cols-[minmax(0,1fr)_auto]',
+                chartExpanded
+                  ? 'grid-rows-1 items-center'
+                  : 'grid-rows-[auto_auto] gap-y-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2',
+              ),
         )}
       >
         <div
           className={cn(
-            'col-start-1 row-start-1 flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1',
-            chartExpanded && 'col-span-1',
+            'col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 sm:gap-2',
+            !isPhone && chartExpanded && 'col-span-1',
           )}
         >
-          {!chartExpanded && <LayoutGrid className="h-4 w-4 shrink-0 text-[#d4af37]/90" aria-hidden />}
+          {!chartExpanded && !isPhone && (
+            <LayoutGrid className="h-4 w-4 shrink-0 text-[#d4af37]/90" aria-hidden />
+          )}
           <IndicatorPairSelector pair={pair} onSelect={setPair} />
         </div>
 
-        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:col-start-3 sm:row-start-1 sm:gap-1">
-          <ChartLandscapeToggle />
+        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
+          <ChartLandscapeToggle showLabels={!isPhone} />
           {!chartExpanded && (
             <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-                  trendRadar.enabled
-                    ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35'
-                    : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
-                )}
-                onClick={() => {
-                  const next = !trendRadar.enabled
-                  setTrendRadar({ ...trendRadar, enabled: next })
-                  if (next && trendRadar.preferWeeklyTimeframe) {
-                    const w = TIMEFRAME_PRESETS.find((t) => t.id === '1w')
-                    if (w) setTimeframe(w)
-                  }
-                }}
-                title="Radar de Tendência — sinais BUY/SELL no gráfico"
-              >
-                <Radar className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Radar</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-                  drawerOpen
-                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                    : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-                )}
-                onClick={() => {
-                  setDrawingsOpen(false)
-                  setDrawerOpen(true)
-                }}
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Indicadores</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
-                  drawingsOpen
-                    ? 'bg-[#d4af37]/15 text-[#d4af37]'
-                    : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
-                )}
-                onClick={() => {
-                  setDrawerOpen(false)
-                  setDrawingsOpen(true)
-                }}
-              >
-                <PenLine className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Desenhos</span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1 text-[11px] text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-                onClick={resetLayout}
-                title="Reajusta zoom dos gráficos"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Layout</span>
-              </Button>
+              {isPhone ? (
+                <IndicatorMobileActionsMenu
+                  trendRadarOn={trendRadar.enabled}
+                  indicatorsOpen={drawerOpen}
+                  drawingsOpen={drawingsOpen}
+                  onToggleRadar={toggleTrendRadar}
+                  onOpenIndicators={openIndicatorsPanel}
+                  onOpenDrawings={openDrawingsPanel}
+                  onResetLayout={resetLayout}
+                />
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                      trendRadar.enabled
+                        ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/35'
+                        : 'text-zinc-400 hover:bg-white/5 hover:text-violet-300',
+                    )}
+                    onClick={toggleTrendRadar}
+                    title="Radar de Tendência — sinais BUY/SELL no gráfico"
+                  >
+                    <Radar className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Radar</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                      drawerOpen
+                        ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                        : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+                    )}
+                    onClick={openIndicatorsPanel}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Indicadores</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-8 gap-1.5 px-2 text-[11px] sm:px-3',
+                      drawingsOpen
+                        ? 'bg-[#d4af37]/15 text-[#d4af37]'
+                        : 'text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]',
+                    )}
+                    onClick={openDrawingsPanel}
+                  >
+                    <PenLine className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Desenhos</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1 text-[11px] text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                    onClick={resetLayout}
+                    title="Reajusta zoom dos gráficos"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Layout</span>
+                  </Button>
+                </>
+              )}
             </>
           )}
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]"
+            className={cn('shrink-0 text-zinc-400 hover:bg-white/5 hover:text-[#d4af37]', isPhone ? 'h-10 w-10' : 'h-8 w-8')}
             disabled={isFetching}
             onClick={() => void refetch()}
             title="Atualizar dados"
@@ -493,10 +521,15 @@ export function BtcDashboard() {
         <nav
           aria-label="Intervalo das velas"
           className={cn(
-            'flex min-h-[36px] min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-0.5 py-0.5 [scrollbar-width:thin]',
-            chartExpanded
-              ? 'col-span-2 col-start-1 row-start-2 -mx-0.5'
-              : 'col-span-2 row-start-2 -mx-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mx-0',
+            'flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-1 py-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]',
+            isPhone
+              ? 'col-span-2 row-start-2 snap-x snap-mandatory'
+              : cn(
+                  'min-h-[36px] gap-0.5 px-0.5 py-0.5',
+                  chartExpanded
+                    ? 'col-span-2 col-start-1 row-start-2 -mx-0.5'
+                    : 'col-span-2 row-start-2 -mx-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mx-0',
+                ),
           )}
         >
           {TF_PRESETS.map((tf) => (
@@ -506,7 +539,8 @@ export function BtcDashboard() {
               title={TIMEFRAME_TOOLTIP_PT[tf.id] ?? tf.label}
               onClick={() => setTimeframe(tf)}
               className={cn(
-                'shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] font-medium tabular-nums tracking-tight transition-colors',
+                'shrink-0 snap-start rounded-md font-mono font-medium tabular-nums tracking-tight transition-colors',
+                isPhone ? 'min-h-10 min-w-[2.75rem] px-3 text-xs' : 'px-2 py-1.5 text-[11px]',
                 timeframe.id === tf.id
                   ? 'bg-[#d4af37] text-black'
                   : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200',
@@ -518,15 +552,9 @@ export function BtcDashboard() {
         </nav>
       </header>
 
-      {!chartExpanded && (
-        <div
-          className={cn(
-            'shrink-0 border-b border-white/[0.04]',
-            isPhone ? 'px-2 py-1' : 'px-2 py-1.5 sm:px-3 sm:py-2',
-            isPhone && '[@media(orientation:landscape)]:hidden',
-          )}
-        >
-          <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" compact={isPhone} />
+      {!chartExpanded && !isPhone && (
+        <div className="shrink-0 border-b border-white/[0.04] px-2 py-1.5 sm:px-3 sm:py-2">
+          <MarketCard bars={bars} signal={signalResult} pair={pair} variant="strip" />
         </div>
       )}
 
