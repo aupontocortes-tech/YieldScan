@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import { fetchCoingecko } from '@/lib/coingecko-server'
 
 /**
  * Proxy para CoinGecko coins/{id}/market_chart (preços históricos vs USD).
@@ -12,15 +12,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'id obrigatório (CoinGecko coin id)' }, { status: 400 })
   }
 
-  const { base, headers } = getCoingeckoRequestParts()
-  const url = `${base}/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${days}`
+  const path = `/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${days}`
 
   try {
-    const res = await fetch(url, {
-      headers,
-      next: { revalidate: 0 },
-      cache: 'no-store',
-    })
+    const res = await fetchCoingecko(path, { next: { revalidate: 0 } })
     if (!res.ok) {
       return NextResponse.json(
         { error: `CoinGecko ${res.status}` },

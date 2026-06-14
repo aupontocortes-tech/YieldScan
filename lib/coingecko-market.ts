@@ -3,7 +3,7 @@
  * Docs: https://docs.coingecko.com/reference
  */
 
-import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import { fetchCoingecko, getCoingeckoRequestParts } from '@/lib/coingecko-server'
 import {
   fetchBinanceSpotQuotes,
   STABLE_COINGECKO_IDS,
@@ -128,30 +128,20 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     : null
 }
 
-function cgApiUrl(path: string): string {
-  const { base } = getCoingeckoRequestParts()
-  const p = path.startsWith('/') ? path : `/${path}`
-  return `${base}${p}`
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function fetchJson<T>(pathOrUrl: string, timeoutMs = 12_000): Promise<T | null> {
-  const url = pathOrUrl.startsWith('http') ? pathOrUrl : cgApiUrl(pathOrUrl)
-  const { headers: cgHeaders } = getCoingeckoRequestParts()
-  const headers = { ...cgHeaders, 'User-Agent': UA }
+  const path = pathOrUrl.startsWith('http')
+    ? pathOrUrl.replace(/^https?:\/\/[^/]+\/api\/v3/, '')
+    : pathOrUrl
 
   for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
-      const res = await fetch(url, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-        signal: ctrl.signal,
+      const res = await fetchCoingecko(path, {
+        timeoutMs,
+        extraHeaders: { 'User-Agent': UA },
       })
       if (res.status === 429 && attempt < FETCH_MAX_RETRIES) {
         await sleep(900 * (attempt + 1))
@@ -165,8 +155,6 @@ async function fetchJson<T>(pathOrUrl: string, timeoutMs = 12_000): Promise<T | 
         continue
       }
       return null
-    } finally {
-      clearTimeout(t)
     }
   }
   return null

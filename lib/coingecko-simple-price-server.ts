@@ -1,4 +1,4 @@
-import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import { fetchCoingecko, isCoingeckoAuthError } from '@/lib/coingecko-server'
 
 export type SimplePriceEntry = {
   usd?: number
@@ -16,7 +16,7 @@ type CacheRow = { at: number; data: Record<string, SimplePriceEntry> }
 
 const simplePriceCache = new Map<string, CacheRow>()
 const FRESH_MS = 90_000
-const STALE_ON_429_MS = 6 * 60 * 60 * 1000
+const STALE_ON_ERROR_MS = 6 * 60 * 60 * 1000
 const MAX_KEYS = 120
 
 function cacheKey(ids: string[], vs: string, include24: boolean, includeCap: boolean): string {
@@ -66,16 +66,19 @@ export async function fetchCoingeckoSimplePrices(
     return { data: hit.data, cached: true }
   }
 
-  const { base, headers } = getCoingeckoRequestParts()
   const joined = unique.map((id) => encodeURIComponent(id)).join(',')
-  let url = `${base}/simple/price?ids=${joined}&vs_currencies=${encodeURIComponent(vs)}`
-  if (include24) url += '&include_24hr_change=true'
-  if (includeCap) url += '&include_market_cap=true'
+  let query = `/simple/price?ids=${joined}&vs_currencies=${encodeURIComponent(vs)}`
+  if (include24) query += '&include_24hr_change=true'
+  if (includeCap) query += '&include_market_cap=true'
 
   try {
-    const res = await fetch(url, { headers, cache: 'no-store' })
+    const res = await fetchCoingecko(query)
     if (!res.ok) {
-      if (res.status === 429 && hit && now - hit.at <= STALE_ON_429_MS) {
+      const useStale =
+        hit &&
+        now - hit.at <= STALE_ON_ERROR_MS &&
+        (res.status === 429 || isCoingeckoAuthError(res.status))
+      if (useStale) {
         return { data: hit.data, stale: true }
       }
       return { data: hit?.data ?? {}, stale: Boolean(hit) }
@@ -94,7 +97,7 @@ export async function fetchCoingeckoSimplePrices(
     trimCache()
     return { data: merged }
   } catch {
-    if (hit && (opts?.allowStale !== false) && now - hit.at <= STALE_ON_429_MS) {
+    if (hit && (opts?.allowStale !== false) && now - hit.at <= STALE_ON_ERROR_MS) {
       return { data: hit.data, stale: true }
     }
     return { data: hit?.data ?? {}, stale: Boolean(hit) }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import { fetchCoingecko, isCoingeckoAuthError } from '@/lib/coingecko-server'
 
 const ALLOWED_DAYS = new Set([1, 7, 14, 30, 90, 180, 365, 'max'])
 
@@ -7,7 +7,7 @@ type CacheEntry = { at: number; ohlc: unknown[] }
 
 const ohlcCache = new Map<string, CacheEntry>()
 const OHLC_FRESH_MS = 120_000
-const OHLC_STALE_ON_429_MS = 6 * 60 * 60 * 1000
+const OHLC_STALE_ON_ERROR_MS = 6 * 60 * 60 * 1000
 
 function cacheKey(id: string, days: string | number): string {
   return `${id}:${days}`
@@ -52,18 +52,17 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const { base, headers } = getCoingeckoRequestParts()
-  const url = `${base}/coins/${encodeURIComponent(id)}/ohlc?vs_currency=usd&days=${days}`
+  const path = `/coins/${encodeURIComponent(id)}/ohlc?vs_currency=usd&days=${days}`
 
   try {
-    const res = await fetch(url, {
-      headers,
-      next: { revalidate: 0 },
-      cache: 'no-store',
-    })
+    const res = await fetchCoingecko(path, { next: { revalidate: 0 } })
 
     if (!res.ok) {
-      if (res.status === 429 && hit && now - hit.at <= OHLC_STALE_ON_429_MS) {
+      const useStale =
+        hit &&
+        now - hit.at <= OHLC_STALE_ON_ERROR_MS &&
+        (res.status === 429 || isCoingeckoAuthError(res.status))
+      if (useStale) {
         return NextResponse.json(
           { ohlc: hit.ohlc, id, days, stale: true },
           {
@@ -91,7 +90,7 @@ export async function GET(req: NextRequest) {
       },
     )
   } catch {
-    if (hit && now - hit.at <= OHLC_STALE_ON_429_MS) {
+    if (hit && now - hit.at <= OHLC_STALE_ON_ERROR_MS) {
       return NextResponse.json(
         { ohlc: hit.ohlc, id, days, stale: true },
         { headers: { 'Cache-Control': 'public, s-maxage=60' } },

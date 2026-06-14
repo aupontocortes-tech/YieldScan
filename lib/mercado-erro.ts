@@ -5,6 +5,8 @@ const NOISE_PATTERNS = [
   /cota[cç][oõ]es aproximadas/i,
   /trending indispon[ií]vel/i,
   /alguns preços v[eê]m de cache recente/i,
+  /coinGecko\s*401/i,
+  /coinGecko\s*403/i,
 ]
 
 /**

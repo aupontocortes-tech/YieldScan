@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import { fetchCoingecko } from '@/lib/coingecko-server'
 
 /**
  * Logos CoinGecko por slug (coins/markets) — até 12 ids por pedido.
@@ -19,11 +19,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ icons: {} as Record<string, string> })
   }
 
-  const { base, headers } = getCoingeckoRequestParts()
-  const url = `${base}/coins/markets?vs_currency=usd&ids=${ids.map(encodeURIComponent).join(',')}&order=market_cap_desc&per_page=${ids.length}&page=1&sparkline=false`
+  const path = `/coins/markets?vs_currency=usd&ids=${ids.map(encodeURIComponent).join(',')}&order=market_cap_desc&per_page=${ids.length}&page=1&sparkline=false`
 
   try {
-    const res = await fetch(url, { headers, next: { revalidate: 3600 } })
+    const res = await fetchCoingecko(path, { next: { revalidate: 3600 } })
     if (!res.ok) {
       return NextResponse.json({ icons: {} }, { status: res.status === 429 ? 429 : 502 })
     }

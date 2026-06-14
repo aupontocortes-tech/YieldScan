@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCoingeckoRequestParts } from '@/lib/coingecko-server'
+import { fetchCoingecko } from '@/lib/coingecko-server'
 
 type MarketRow = {
   id?: string
@@ -37,11 +37,7 @@ async function loadCoinsList(): Promise<ListRow[]> {
   if (coinsListCache && Date.now() - coinsListCache.at < LIST_TTL_MS) {
     return coinsListCache.rows
   }
-  const { base, headers } = getCoingeckoRequestParts()
-  const res = await fetch(`${base}/coins/list`, {
-    headers,
-    next: { revalidate: 3600 },
-  })
+  const res = await fetchCoingecko('/coins/list', { next: { revalidate: 3600 } })
   if (!res.ok) {
     return coinsListCache?.rows ?? []
   }
@@ -188,13 +184,12 @@ async function fetchMarketsForIds(
   geckoIds: string[],
 ): Promise<{ prices: Record<string, MarketRow> } | { error: string; status: number }> {
   if (!geckoIds.length) return { prices: {} }
-  const { base, headers } = getCoingeckoRequestParts()
   const chunkSize = 120
   const merged: MarketRow[] = []
   for (let i = 0; i < geckoIds.length; i += chunkSize) {
     const chunk = geckoIds.slice(i, i + chunkSize)
-    const url = `${base}/coins/markets?vs_currency=usd&ids=${encodeURIComponent(chunk.join(','))}&price_change_percentage=24h,7d&per_page=250&page=1`
-    const res = await fetch(url, { headers, cache: 'no-store' })
+    const path = `/coins/markets?vs_currency=usd&ids=${encodeURIComponent(chunk.join(','))}&price_change_percentage=24h,7d&per_page=250&page=1`
+    const res = await fetchCoingecko(path)
     if (!res.ok) {
       return { error: `coingecko_${res.status}`, status: res.status === 429 ? 429 : 502 }
     }
