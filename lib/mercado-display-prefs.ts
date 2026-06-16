@@ -4,7 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
-import { withDisplayQuotes, type MercadoCoin, MercadoFiat } from '@/lib/coingecko-market'
+import { withDisplayQuotes, type MercadoCoin, MercadoFiat, type MercadoFxRates } from '@/lib/coingecko-market'
 
 export type MercadoDisplayFiat = MercadoFiat
 
@@ -156,9 +156,10 @@ function quoteSlice(
 export function resolveMercadoDisplay(
   coin: MercadoCoin,
   fiat: MercadoDisplayFiat,
-  overrides: MercadoPriceOverrides
+  overrides: MercadoPriceOverrides,
+  fx?: MercadoFxRates | null,
 ): ResolvedMercadoQuote {
-  const enriched = withDisplayQuotes(coin)
+  const enriched = withDisplayQuotes(coin, fx?.brlPerUsd, fx?.eurPerUsd)
   const slug = enriched.id.trim().toLowerCase()
   const overrideVal = slug ? overrides[slug]?.[fiat] : undefined
   const base = quoteSlice(enriched, fiat)
@@ -179,6 +180,13 @@ export function resolveMercadoDisplay(
   return { price: null, change_24h: null, market_cap: null, priceSource: 'api' }
 }
 
+function mercadoPriceFractionDigits(n: number): { minimum: number; maximum: number } {
+  const abs = Math.abs(n)
+  if (abs >= 1) return { minimum: 2, maximum: 2 }
+  if (abs >= 0.01) return { minimum: 0, maximum: 4 }
+  return { minimum: 0, maximum: 6 }
+}
+
 export function formatMercadoFiatAmount(
   n: number | null,
   fiat: MercadoDisplayFiat,
@@ -186,10 +194,12 @@ export function formatMercadoFiatAmount(
 ): string {
   if (n == null || !Number.isFinite(n)) return '—'
   const currency = fiat === 'brl' ? 'BRL' : fiat === 'eur' ? 'EUR' : 'USD'
+  const { minimum, maximum } = mercadoPriceFractionDigits(n)
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
-    maximumFractionDigits: n < 1 && n > 0 ? 6 : n < 100 ? 4 : 2,
+    minimumFractionDigits: minimum,
+    maximumFractionDigits: maximum,
   }).format(n)
 }
 

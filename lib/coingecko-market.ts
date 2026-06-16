@@ -44,6 +44,11 @@ export type MercadoCoin = {
   quotes?: Partial<Record<MercadoFiat, MercadoQuoteSlice>>
 }
 
+export type MercadoFxRates = {
+  brlPerUsd: number
+  eurPerUsd: number
+}
+
 export type MarketApiPayload = {
   /** Ordem = pedido; null = moeda sem preço nesta resposta. */
   highlightCoins: (MercadoCoin | null)[]
@@ -53,6 +58,8 @@ export type MarketApiPayload = {
   trending: MercadoCoin[]
   /** Ações US em tendência (volume / movimento; FMP ou xStock). */
   trendingStocks: TendenciasEquityRow[]
+  /** Taxas USD→BRL/EUR usadas na conversão (para o cliente alinhar exibição). */
+  fxRates?: MercadoFxRates | null
   cachedAt: string
   partial: boolean
   erro: string | null
@@ -84,6 +91,15 @@ const highlightSimpleCache = new Map<string, { at: number; entry: SimplePriceEnt
 
 let exchangeRatesCache: { at: number; raw: unknown } | null = null
 const EXCHANGE_RATES_CACHE_MS = 60 * 60 * 1000
+
+let fiatFallbackCache: { at: number; fx: MercadoFxRates } | null = null
+const FIAT_FALLBACK_CACHE_MS = 30 * 60 * 1000
+
+/** Último recurso quando CoinGecko e APIs alternativas falham. */
+export const LEGACY_MERCADO_FX_FALLBACK: MercadoFxRates = {
+  brlPerUsd: 5.5,
+  eurPerUsd: 0.92,
+}
 
 async function fetchExchangeRatesCached(): Promise<unknown | null> {
   if (exchangeRatesCache && Date.now() - exchangeRatesCache.at < EXCHANGE_RATES_CACHE_MS) {
@@ -370,9 +386,50 @@ async function fetchSimplePricesForHighlights(ids: string[]): Promise<Record<str
   return merged
 }
 
+/** Deduz USD→fiat a partir de cotações já presentes no ativo. */
+export function inferFxFromCoin(coin: MercadoCoin): MercadoFxRates | null {
+  const usd = coin.quotes?.usd?.price ?? coin.price
+  const brl = coin.quotes?.brl?.price
+  const eur = coin.quotes?.eur?.price
+  if (
+    typeof usd === 'number' &&
+    usd > 0 &&
+    typeof brl === 'number' &&
+    brl > 0 &&
+    typeof eur === 'number' &&
+    eur > 0
+  ) {
+    return { brlPerUsd: brl / usd, eurPerUsd: eur / usd }
+  }
+  return null
+}
+
+export function fxRatesFromPayload(payload?: Pick<MarketApiPayload, 'fxRates'> | null): MercadoFxRates | null {
+  const fx = payload?.fxRates
+  if (
+    fx &&
+    typeof fx.brlPerUsd === 'number' &&
+    fx.brlPerUsd > 0 &&
+    typeof fx.eurPerUsd === 'number' &&
+    fx.eurPerUsd > 0
+  ) {
+    return fx
+  }
+  return null
+}
+
 /** Garante USD/BRL/EUR no cliente quando a resposta veio incompleta ou de cache antigo. */
-export function withDisplayQuotes(coin: MercadoCoin, brlPerUsd = 5.5, eurPerUsd = 0.92): MercadoCoin {
-  return enrichCoinQuotesFromUsd(usdOnlyQuotes(coin), brlPerUsd, eurPerUsd)
+export function withDisplayQuotes(
+  coin: MercadoCoin,
+  brlPerUsd?: number,
+  eurPerUsd?: number,
+): MercadoCoin {
+  const inferred = inferFxFromCoin(coin)
+  return enrichCoinQuotesFromUsd(
+    usdOnlyQuotes(coin),
+    brlPerUsd ?? inferred?.brlPerUsd ?? LEGACY_MERCADO_FX_FALLBACK.brlPerUsd,
+    eurPerUsd ?? inferred?.eurPerUsd ?? LEGACY_MERCADO_FX_FALLBACK.eurPerUsd,
+  )
 }
 
 /** Preenche destaques sem preço a partir de cache global ou resposta anterior. */
@@ -435,7 +492,7 @@ export function normalizeMarketsRow(raw: Record<string, unknown>): MercadoCoin |
   }
 }
 
-function parseFiatPerUsdFromExchangeRates(raw: unknown): { brlPerUsd: number; eurPerUsd: number } | null {
+function parseFiatPerUsdFromExchangeRates(raw: unknown): MercadoFxRates | null {
   const r = asRecord(raw)
   const rates = r && asRecord(r.rates)
   if (!rates) return null
@@ -447,6 +504,67 @@ function parseFiatPerUsdFromExchangeRates(raw: unknown): { brlPerUsd: number; eu
   const eurV = eur && typeof (eur as { value?: unknown }).value === 'number' ? (eur as { value: number }).value : NaN
   if (!Number.isFinite(usdV) || usdV <= 0 || !Number.isFinite(brlV) || !Number.isFinite(eurV)) return null
   return { brlPerUsd: brlV / usdV, eurPerUsd: eurV / usdV }
+}
+
+function inferFxFromSimpleRaw(
+  simpleRaw?: Record<string, SimplePriceEntryLocal>,
+): MercadoFxRates | null {
+  if (!simpleRaw) return null
+  for (const entry of Object.values(simpleRaw)) {
+    const usd = entry.usd
+    const brl = entry.brl
+    const eur = entry.eur
+    if (
+      typeof usd === 'number' &&
+      usd > 0 &&
+      typeof brl === 'number' &&
+      brl > 0 &&
+      typeof eur === 'number' &&
+      eur > 0
+    ) {
+      return { brlPerUsd: brl / usd, eurPerUsd: eur / usd }
+    }
+  }
+  return null
+}
+
+async function fetchFiatPerUsdFallbackCached(): Promise<MercadoFxRates | null> {
+  if (fiatFallbackCache && Date.now() - fiatFallbackCache.at < FIAT_FALLBACK_CACHE_MS) {
+    return fiatFallbackCache.fx
+  }
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(8_000),
+      next: { revalidate: 1800 },
+    })
+    if (!res.ok) return null
+    const j = (await res.json()) as { rates?: { BRL?: number; EUR?: number } }
+    const brl = j.rates?.BRL
+    const eur = j.rates?.EUR
+    if (typeof brl !== 'number' || !(brl > 0) || typeof eur !== 'number' || !(eur > 0)) return null
+    const fx = { brlPerUsd: brl, eurPerUsd: eur }
+    fiatFallbackCache = { at: Date.now(), fx }
+    return fx
+  } catch {
+    return null
+  }
+}
+
+async function resolveMercadoFxRates(
+  exchangeRaw: unknown | null,
+  simpleRaw?: Record<string, SimplePriceEntryLocal>,
+): Promise<MercadoFxRates> {
+  const fromCg = parseFiatPerUsdFromExchangeRates(exchangeRaw)
+  if (fromCg) return fromCg
+
+  const fromSimple = inferFxFromSimpleRaw(simpleRaw)
+  if (fromSimple) return fromSimple
+
+  const fromFallback = await fetchFiatPerUsdFallbackCached()
+  if (fromFallback) return fromFallback
+
+  return { ...LEGACY_MERCADO_FX_FALLBACK }
 }
 
 function sliceFromSimpleFiat(
@@ -711,6 +829,7 @@ function emptyPayload(
     top10: [],
     trending: [],
     trendingStocks: [],
+    fxRates: null,
     cachedAt: new Date().toISOString(),
     partial,
     erro,
@@ -745,8 +864,12 @@ export async function agregarMercadoCoinGecko(
   let trendingRaw: { coins?: unknown[] } | null
 
   if (opts?.skipLists) {
-    simpleRaw = await fetchSimplePricesForHighlights(ids)
-    exchangeRaw = exchangeRatesCache?.raw ?? null
+    const [simple, exchange] = await Promise.all([
+      fetchSimplePricesForHighlights(ids),
+      fetchExchangeRatesCached().catch(() => null),
+    ])
+    simpleRaw = simple
+    exchangeRaw = exchange
     marketsRaw = null
     trendingRaw = null
   } else if (hasCgKey) {
@@ -769,9 +892,8 @@ export async function agregarMercadoCoinGecko(
     trendingRaw = await fetchJson<{ coins?: unknown[] }>(TRENDING_PATH).catch(() => null)
   }
 
-  const fx = parseFiatPerUsdFromExchangeRates(exchangeRaw)
-  const brlPerUsd = fx?.brlPerUsd ?? 5.5
-  const eurPerUsd = fx?.eurPerUsd ?? 0.92
+  const fxRates = await resolveMercadoFxRates(exchangeRaw, simpleRaw)
+  const { brlPerUsd, eurPerUsd } = fxRates
 
   let partial = false
   const erros: string[] = []
@@ -791,7 +913,7 @@ export async function agregarMercadoCoinGecko(
     partial = true
   }
 
-  if (!fx) {
+  if (!parseFiatPerUsdFromExchangeRates(exchangeRaw)) {
     partial = true
   }
 
@@ -882,6 +1004,7 @@ export async function agregarMercadoCoinGecko(
     top10,
     trending,
     trendingStocks: [],
+    fxRates,
     cachedAt: new Date().toISOString(),
     partial: partial || semDados,
     erro: sanitizeMercadoErro(

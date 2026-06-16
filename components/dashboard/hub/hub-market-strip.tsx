@@ -6,6 +6,7 @@ import { TrendingUp } from 'lucide-react'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import { HubPanel } from '@/components/dashboard/hub/hub-panel'
 import type { MarketApiPayload, MercadoCoin } from '@/lib/coingecko-market'
+import { fxRatesFromPayload } from '@/lib/coingecko-market'
 import { fetchMercadoClient } from '@/lib/fetch-mercado-client'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import {
@@ -33,9 +34,17 @@ async function fetchHubMarket(): Promise<MarketApiPayload> {
   return fetchMercadoClient([...HUB_MARKET_IDS], 'highlights')
 }
 
-function MarketTile({ coin, prefs }: { coin: MercadoCoin; prefs: MercadoDisplayPrefs }) {
+function MarketTile({
+  coin,
+  prefs,
+  fxRates,
+}: {
+  coin: MercadoCoin
+  prefs: MercadoDisplayPrefs
+  fxRates?: ReturnType<typeof fxRatesFromPayload>
+}) {
   const fiat = effectiveDisplayFiatForCoin(coin.id, prefs)
-  const view = resolveMercadoDisplay(coin, fiat, prefs.priceOverrides)
+  const view = resolveMercadoDisplay(coin, fiat, prefs.priceOverrides, fxRates)
   const ch = view.change_24h
   const up = ch != null && ch >= 0
   const isStock = isUsEquityXstock(coin.id)
@@ -105,6 +114,8 @@ export function HubMarketStrip() {
     retryDelay: (attempt) => Math.min(10_000, 1_500 * 2 ** attempt),
   })
 
+  const fxRates = useMemo(() => fxRatesFromPayload(data), [data])
+
   const coins = useMemo(() => {
     if (!data?.highlightCoins) return []
     return data.highlightCoins.filter((c): c is MercadoCoin => c != null && c.price != null)
@@ -136,7 +147,7 @@ export function HubMarketStrip() {
       {!isLoading && coins.length > 0 && (
         <div className="-mx-0.5 flex gap-2.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
           {coins.map((coin) => (
-            <MarketTile key={coin.id} coin={coin} prefs={prefs} />
+            <MarketTile key={coin.id} coin={coin} prefs={prefs} fxRates={fxRates} />
           ))}
         </div>
       )}

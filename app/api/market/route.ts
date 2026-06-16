@@ -147,6 +147,7 @@ export async function GET(req: NextRequest) {
       top10: [],
       trending: [],
       trendingStocks: [],
+      fxRates: null,
       cachedAt: new Date().toISOString(),
       partial: true,
       erro: 'Não foi possível obter dados de mercado.',

@@ -8,9 +8,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { whenYieldscanSqliteReady } from '@/lib/client-db/sqlite-core'
-import type { MercadoCoin, MarketApiPayload } from '@/lib/coingecko-market'
+import type { MercadoCoin, MarketApiPayload, MercadoFxRates } from '@/lib/coingecko-market'
 import type { TendenciasEquityRow } from '@/lib/tendencias/types'
-import { syntheticHighlightCoin, withDisplayQuotes } from '@/lib/coingecko-market'
+import { fxRatesFromPayload, syntheticHighlightCoin, withDisplayQuotes } from '@/lib/coingecko-market'
 import { highlightMetaFromPresetOrId } from '@/lib/mercado-highlight-presets'
 import { COINGECKO_LOGO_BY_ID } from '@/lib/coingecko-static-logos'
 import { readHighlightIconUrl, writeHighlightIconUrl } from '@/lib/mercado-highlight-icons'
@@ -57,6 +57,7 @@ function mergeMarketPayload(
     ...full,
     highlightCoins: prices.highlightCoins,
     highlightIds: prices.highlightIds,
+    fxRates: full.fxRates ?? prices.fxRates ?? null,
     partial: prices.partial || full.partial,
     erro: prices.erro ?? full.erro,
     cachedAt: full.cachedAt || prices.cachedAt,
@@ -161,14 +162,16 @@ function CoinRowCard({
   coin,
   compact,
   mercadoPrefs,
+  fxRates,
 }: {
   coin: MercadoCoin
   compact?: boolean
   mercadoPrefs: MercadoDisplayPrefs
+  fxRates?: MercadoFxRates | null
 }) {
   const href = `https://www.coingecko.com/en/coins/${encodeURIComponent(coin.id)}`
   const displayFiat = effectiveDisplayFiatForCoin(coin.id, mercadoPrefs)
-  const q = resolveMercadoDisplay(coin, displayFiat, mercadoPrefs.priceOverrides)
+  const q = resolveMercadoDisplay(coin, displayFiat, mercadoPrefs.priceOverrides, fxRates)
   return (
     <a
       href={href}
@@ -218,15 +221,17 @@ function HighlightCard({
   mercadoPrefs,
   stock,
   onFiatChange,
+  fxRates,
 }: {
   coin: MercadoCoin
   mercadoPrefs: MercadoDisplayPrefs
   stock?: boolean
   onFiatChange: (coinId: string, mode: MercadoDisplayFiat | 'default') => void
+  fxRates?: MercadoFxRates | null
 }) {
   const href = `https://www.coingecko.com/en/coins/${encodeURIComponent(coin.id)}`
   const displayFiat = effectiveDisplayFiatForCoin(coin.id, mercadoPrefs)
-  const q = resolveMercadoDisplay(coin, displayFiat, mercadoPrefs.priceOverrides)
+  const q = resolveMercadoDisplay(coin, displayFiat, mercadoPrefs.priceOverrides, fxRates)
   const priceLabel = formatMercadoFiatAmount(q.price, displayFiat)
   return (
     <div
@@ -330,21 +335,26 @@ function withStoredHighlightImage(coin: MercadoCoin): MercadoCoin {
 function coinForHighlightDisplay(
   coin: MercadoCoin | null,
   id: string,
-  prefs: MercadoDisplayPrefs
+  prefs: MercadoDisplayPrefs,
+  fxRates?: MercadoFxRates | null,
 ): MercadoCoin | null {
   const slug = (coin?.id ?? canonicalHighlightCoinGeckoId(id)).trim().toLowerCase()
   if (!slug) return coin
 
   if (coin) {
-    const enriched = withDisplayQuotes(withStoredHighlightImage(coin))
+    const enriched = withDisplayQuotes(
+      withStoredHighlightImage(coin),
+      fxRates?.brlPerUsd,
+      fxRates?.eurPerUsd,
+    )
     const fiat = effectiveDisplayFiatForCoin(slug, prefs)
-    const q = resolveMercadoDisplay(enriched, fiat, prefs.priceOverrides)
+    const q = resolveMercadoDisplay(enriched, fiat, prefs.priceOverrides, fxRates)
     if (q.price != null) return enriched
   }
 
   const synthetic = withStoredHighlightImage(syntheticHighlightCoin(slug))
   const fiat = effectiveDisplayFiatForCoin(slug, prefs)
-  const q = resolveMercadoDisplay(synthetic, fiat, prefs.priceOverrides)
+  const q = resolveMercadoDisplay(synthetic, fiat, prefs.priceOverrides, fxRates)
   if (q.price != null) return synthetic
 
   return coin ? withStoredHighlightImage(coin) : coin
@@ -354,19 +364,28 @@ function HighlightEmptyCard({
   id,
   mercadoPrefs,
   onFiatChange,
+  fxRates,
 }: {
   id: string
   mercadoPrefs: MercadoDisplayPrefs
   onFiatChange: (coinId: string, mode: MercadoDisplayFiat | 'default') => void
+  fxRates?: MercadoFxRates | null
 }) {
   const slug = canonicalHighlightCoinGeckoId(id)
   const meta = highlightMetaFromPresetOrId(slug)
   const synthetic = syntheticHighlightCoin(slug)
   const fiat = effectiveDisplayFiatForCoin(slug, mercadoPrefs)
-  const q = resolveMercadoDisplay(synthetic, fiat, mercadoPrefs.priceOverrides)
+  const q = resolveMercadoDisplay(synthetic, fiat, mercadoPrefs.priceOverrides, fxRates)
 
   if (q.price != null) {
-    return <HighlightCard coin={synthetic} mercadoPrefs={mercadoPrefs} onFiatChange={onFiatChange} />
+    return (
+      <HighlightCard
+        coin={synthetic}
+        mercadoPrefs={mercadoPrefs}
+        onFiatChange={onFiatChange}
+        fxRates={fxRates}
+      />
+    )
   }
 
   return (
@@ -573,6 +592,7 @@ export function DashbuddyCryptoMarket() {
   const fiatLabel = FIAT_OPTIONS.find((x) => x.id === displayFiatLive)?.label ?? displayFiatLive.toUpperCase()
   const hasPerCoinFiat = Object.keys(displayPrefs.displayFiatByCoinId).length > 0
   const mercadoNotice = useMemo(() => sanitizeMercadoErro(data?.erro ?? null), [data?.erro])
+  const fxRates = useMemo(() => fxRatesFromPayload(data), [data])
   void iconRefresh
 
   return (
@@ -666,7 +686,7 @@ export function DashbuddyCryptoMarket() {
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
                 {cryptoHighlightSlots.map(({ id, coin, index }) => {
-                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs, fxRates)
                   if (displayCoin) {
                     return (
                       <HighlightCard
@@ -674,6 +694,7 @@ export function DashbuddyCryptoMarket() {
                         coin={displayCoin}
                         mercadoPrefs={displayPrefs}
                         onFiatChange={setCoinFiat}
+                        fxRates={fxRates}
                       />
                     )
                   }
@@ -683,6 +704,7 @@ export function DashbuddyCryptoMarket() {
                       id={id}
                       mercadoPrefs={displayPrefs}
                       onFiatChange={setCoinFiat}
+                      fxRates={fxRates}
                     />
                   )
                 })}
@@ -701,7 +723,7 @@ export function DashbuddyCryptoMarket() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 [&>*]:min-w-0">
               {pinnedStockIds.map((id) => {
                 const coin = coinById.get(id)
-                const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs, fxRates)
                 if (displayCoin) {
                   return (
                     <HighlightCard
@@ -710,6 +732,7 @@ export function DashbuddyCryptoMarket() {
                       mercadoPrefs={displayPrefs}
                       stock
                       onFiatChange={setCoinFiat}
+                      fxRates={fxRates}
                     />
                   )
                 }
@@ -719,6 +742,7 @@ export function DashbuddyCryptoMarket() {
                     id={id}
                     mercadoPrefs={displayPrefs}
                     onFiatChange={setCoinFiat}
+                    fxRates={fxRates}
                   />
                 )
               })}
@@ -733,7 +757,7 @@ export function DashbuddyCryptoMarket() {
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
                 {extraStockHighlightSlots.map(({ id, coin, index }) => {
-                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs)
+                  const displayCoin = coinForHighlightDisplay(coin ?? null, id, displayPrefs, fxRates)
                   if (displayCoin) {
                     return (
                       <HighlightCard
@@ -742,6 +766,7 @@ export function DashbuddyCryptoMarket() {
                         mercadoPrefs={displayPrefs}
                         stock
                         onFiatChange={setCoinFiat}
+                        fxRates={fxRates}
                       />
                     )
                   }
@@ -751,6 +776,7 @@ export function DashbuddyCryptoMarket() {
                       id={id}
                       mercadoPrefs={displayPrefs}
                       onFiatChange={setCoinFiat}
+                      fxRates={fxRates}
                     />
                   )
                 })}
@@ -766,7 +792,7 @@ export function DashbuddyCryptoMarket() {
               </h3>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {data.top10.map((c) => (
-                  <CoinRowCard key={c.id} coin={c} compact mercadoPrefs={displayPrefs} />
+                  <CoinRowCard key={c.id} coin={c} compact mercadoPrefs={displayPrefs} fxRates={fxRates} />
                 ))}
               </div>
             </div>
@@ -780,7 +806,7 @@ export function DashbuddyCryptoMarket() {
               </h3>
               <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {data.trending.map((c) => (
-                  <CoinRowCard key={`t-${c.id}-${c.symbol}`} coin={c} compact mercadoPrefs={displayPrefs} />
+                  <CoinRowCard key={`t-${c.id}-${c.symbol}`} coin={c} compact mercadoPrefs={displayPrefs} fxRates={fxRates} />
                 ))}
               </div>
             </div>
