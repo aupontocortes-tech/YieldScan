@@ -24,6 +24,8 @@ import {
   readMercadoFullPlaceholder,
   readMercadoPricesPlaceholder,
 } from '@/lib/fetch-mercado-client'
+import { readMercadoCacheUpdatedAt } from '@/lib/mercado-session-cache'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { TokenSymbolAvatar } from '@/components/token-symbol-avatar'
 import {
   effectiveDisplayFiatForCoin,
@@ -53,11 +55,26 @@ function mergeMarketPayload(
   if (!prices && !full) return undefined
   if (!full) return prices
   if (!prices) return full
+
+  const coinById = new Map<string, MercadoCoin | null>()
+  const ingest = (ids: string[], coins: (MercadoCoin | null)[]) => {
+    ids.forEach((id, i) => {
+      const c = coins[i] ?? null
+      const prev = coinById.get(id)
+      if (c?.price != null || prev?.price == null) coinById.set(id, c)
+    })
+  }
+
+  ingest(full.highlightIds, full.highlightCoins)
+  ingest(prices.highlightIds, prices.highlightCoins)
+
+  const mergedIds = [...new Set([...full.highlightIds, ...prices.highlightIds])]
+
   return {
     ...full,
-    highlightCoins: prices.highlightCoins,
-    highlightIds: prices.highlightIds,
-    fxRates: full.fxRates ?? prices.fxRates ?? null,
+    highlightIds: mergedIds,
+    highlightCoins: mergedIds.map((id) => coinById.get(id) ?? null),
+    fxRates: prices.fxRates ?? full.fxRates ?? null,
     partial: prices.partial || full.partial,
     erro: prices.erro ?? full.erro,
     cachedAt: full.cachedAt || prices.cachedAt,
@@ -413,6 +430,7 @@ function HighlightEmptyCard({
 }
 
 export function DashbuddyCryptoMarket() {
+  const isMobile = useIsMobile()
   const [highlightIds, setHighlightIds] = useState<string[]>(
     () => readStoredHighlightIds() ?? [...DEFAULT_MARKET_HIGHLIGHT_IDS],
   )
@@ -446,7 +464,20 @@ export function DashbuddyCryptoMarket() {
     return out
   }, [highlightIds])
 
+  const favoriteQueryKey = mercadoQueryKey(highlightIds)
   const marketQueryKey = mercadoQueryKey(allMarketIds)
+  const pricesCacheKey = `${favoriteQueryKey}|prices`
+
+  const pricesPlaceholder = useMemo(
+    () => readMercadoPricesPlaceholder(highlightIds),
+    [highlightIds],
+  )
+  const pricesCacheUpdatedAt = useMemo(
+    () => readMercadoCacheUpdatedAt(pricesCacheKey),
+    [pricesCacheKey],
+  )
+
+  const [fullFetchReady, setFullFetchReady] = useState(true)
 
   const {
     data: pricesData,
@@ -454,16 +485,22 @@ export function DashbuddyCryptoMarket() {
     isFetching: pricesFetching,
     refetch: refetchPrices,
   } = useQuery({
-    queryKey: [MERCADO_PRICES_QUERY_PREFIX, marketQueryKey],
-    queryFn: () => fetchAndCacheMercadoPrices(allMarketIds),
-    staleTime: 300_000,
+    queryKey: [MERCADO_PRICES_QUERY_PREFIX, favoriteQueryKey],
+    queryFn: () => fetchAndCacheMercadoPrices(highlightIds),
+    staleTime: isMobile ? 120_000 : 300_000,
     refetchInterval: false as const,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
-    gcTime: 300_000,
-    retry: 3,
-    retryDelay: (attempt) => Math.min(12_000, 1_500 * 2 ** attempt),
-    placeholderData: () => readMercadoPricesPlaceholder(allMarketIds),
+    refetchOnWindowFocus: isMobile,
+    refetchOnMount: 'always',
+    gcTime: isMobile ? 600_000 : 300_000,
+    retry: isMobile ? 2 : 3,
+    retryDelay: (attempt) =>
+      isMobile
+        ? Math.min(6_000, 800 * 2 ** attempt)
+        : Math.min(12_000, 1_500 * 2 ** attempt),
+    initialData: pricesPlaceholder,
+    initialDataUpdatedAt: pricesCacheUpdatedAt,
+    placeholderData: (prev) => prev ?? readMercadoPricesPlaceholder(highlightIds),
   })
 
   const {
@@ -476,29 +513,55 @@ export function DashbuddyCryptoMarket() {
   } = useQuery({
     queryKey: [MERCADO_LISTS_QUERY_PREFIX, marketQueryKey],
     queryFn: () => fetchAndCacheMercadoFull(allMarketIds),
-    enabled: Boolean(pricesData) && !pricesFetching,
+    enabled: fullFetchReady,
     staleTime: 300_000,
     refetchInterval: false as const,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
     gcTime: 300_000,
-    retry: 2,
-    retryDelay: (attempt) => Math.min(12_000, 2_000 * 2 ** attempt),
+    retry: isMobile ? 1 : 2,
+    retryDelay: (attempt) =>
+      isMobile
+        ? Math.min(8_000, 1_200 * 2 ** attempt)
+        : Math.min(12_000, 2_000 * 2 ** attempt),
     placeholderData: () => readMercadoFullPlaceholder(allMarketIds),
   })
+
+  useEffect(() => {
+    if (!isMobile) {
+      setFullFetchReady(true)
+      return
+    }
+    setFullFetchReady(false)
+    const delay = pricesData ? 350 : 2_000
+    const t = window.setTimeout(() => setFullFetchReady(true), delay)
+    return () => window.clearTimeout(t)
+  }, [isMobile, pricesData, favoriteQueryKey])
 
   const data = useMemo(
     () => mergeMarketPayload(pricesData, listsData),
     [pricesData, listsData],
   )
 
-  const isLoading = pricesLoading && !pricesData
+  const isLoading = pricesLoading && !pricesData && !pricesPlaceholder
   const isFetching = pricesFetching || listsFetching
 
   const refetch = useCallback(() => {
     void refetchPrices()
-    void refetchLists()
-  }, [refetchPrices, refetchLists])
+    if (fullFetchReady) void refetchLists()
+  }, [refetchPrices, refetchLists, fullFetchReady])
+
+  useEffect(() => {
+    if (!isMobile) return
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      const updatedAt = readMercadoCacheUpdatedAt(pricesCacheKey)
+      if (updatedAt && Date.now() - updatedAt < 90_000) return
+      void refetchPrices()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [isMobile, refetchPrices, pricesCacheKey])
 
   useEffect(() => {
     if (!pricesData || pricesFetching) return
@@ -509,10 +572,20 @@ export function DashbuddyCryptoMarket() {
     }
   }, [pricesData, pricesFetching, refetchPrices])
 
+  const coinById = useMemo(() => {
+    const map = new Map<string, MercadoCoin | null>()
+    if (!data) return map
+    const ids = data.highlightIds ?? allMarketIds
+    ids.forEach((id, i) => {
+      map.set(id, data.highlightCoins[i] ?? null)
+    })
+    return map
+  }, [data, allMarketIds])
+
   useEffect(() => {
     if (!data) return
-    const need = highlightIds.filter((id, i) =>
-      highlightNeedsIconFetch(id, data.highlightCoins[i] ?? null),
+    const need = highlightIds.filter((id) =>
+      highlightNeedsIconFetch(id, coinById.get(id) ?? null),
     )
     const key = need.slice().sort().join(',')
     if (!key || iconsFetchedFor.current === key) return
@@ -536,17 +609,7 @@ export function DashbuddyCryptoMarket() {
     return () => {
       cancelled = true
     }
-  }, [data, highlightIds])
-
-  const coinById = useMemo(() => {
-    const map = new Map<string, MercadoCoin | null>()
-    if (!data) return map
-    const ids = data.highlightIds ?? allMarketIds
-    ids.forEach((id, i) => {
-      map.set(id, data.highlightCoins[i] ?? null)
-    })
-    return map
-  }, [data, allMarketIds])
+  }, [data, highlightIds, coinById])
 
   const marketLoading = isLoading && !data
 

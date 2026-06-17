@@ -1,29 +1,28 @@
 'use client'
 
 import { useEffect } from 'react'
-import { DEFAULT_MARKET_HIGHLIGHT_IDS } from '@/lib/mercado-highlight-ids'
-import { MARKET_PINNED_STOCK_IDS } from '@/lib/us-equities'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  fetchAndCacheMercadoPrices,
+  MERCADO_PRICES_QUERY_PREFIX,
+  mercadoQueryKey,
+} from '@/lib/fetch-mercado-client'
+import { DEFAULT_MARKET_HIGHLIGHT_IDS, readStoredHighlightIds } from '@/lib/mercado-highlight-ids'
 
-const WARM_KEY = 'yieldscan:market-warm-at'
-const WARM_MIN_MS = 5 * 60_000
-
-/** Aquece /api/market (só preços) no máximo 1× a cada 5 min por sessão. */
+/** Pré-carrega preços dos favoritos no React Query ao abrir a app (útil no telemóvel/PWA). */
 export function MarketApiWarm() {
-  useEffect(() => {
-    try {
-      const last = Number(sessionStorage.getItem(WARM_KEY) || 0)
-      if (Date.now() - last < WARM_MIN_MS) return
-      sessionStorage.setItem(WARM_KEY, String(Date.now()))
-    } catch {
-      /* ignore */
-    }
+  const qc = useQueryClient()
 
-    const ids = [...new Set([...DEFAULT_MARKET_HIGHLIGHT_IDS, ...MARKET_PINNED_STOCK_IDS])]
-    const q = new URLSearchParams({
-      highlights: ids.join(','),
-      mode: 'highlights',
+  useEffect(() => {
+    const favorites = readStoredHighlightIds() ?? [...DEFAULT_MARKET_HIGHLIGHT_IDS]
+    const key = mercadoQueryKey(favorites)
+
+    void qc.prefetchQuery({
+      queryKey: [MERCADO_PRICES_QUERY_PREFIX, key],
+      queryFn: () => fetchAndCacheMercadoPrices(favorites),
+      staleTime: 120_000,
     })
-    void fetch(`/api/market?${q.toString()}`).catch(() => {})
-  }, [])
+  }, [qc])
+
   return null
 }
