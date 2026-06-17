@@ -24,6 +24,7 @@ import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } 
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import { isStandalonePwa } from '@/lib/mic-permission'
+import { GfBrowserVoiceButton } from '@/components/gestao-financeira/gf-browser-voice-button'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -158,7 +159,21 @@ export function GestaoFinanceiraPage() {
   const [deleting, setDeleting] = useState(false)
 
   const openVoice = useCallback((autoStart = false) => {
-    dispatchGfVoiceOpen({ autoStart: autoStart && !isStandalonePwa() })
+    dispatchGfVoiceOpen({
+      autoStart: autoStart && !isStandalonePwa(),
+      setupMic: autoStart && !isStandalonePwa(),
+    })
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('voz') !== '1' && params.get('mic') !== '1') return
+    dispatchGfVoiceOpen({
+      autoStart: params.get('mic') === '1' && !isStandalonePwa(),
+      setupMic: params.get('mic') === '1',
+    })
+    window.history.replaceState({}, '', '/news/gestao-financeira')
   }, [])
 
   const confirmDelete = useCallback(async () => {
@@ -319,6 +334,16 @@ export function GestaoFinanceiraPage() {
         </span>
         <span className="hidden text-xs font-medium text-emerald-400 sm:inline">Segure Gestão no menu ↑</span>
       </button>
+
+      {isStandalonePwa() ? (
+        <div className="rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Para usar <strong className="text-foreground">comando de voz</strong> no celular, abra no navegador uma vez e
+            permita o microfone.
+          </p>
+          <GfBrowserVoiceButton size="lg" />
+        </div>
+      ) : null}
 
       {!gf.ready || !s ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">

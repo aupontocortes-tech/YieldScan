@@ -29,29 +29,65 @@ export function isStandalonePwa(): boolean {
 }
 
 export function getMicPermissionPageUrl(openVoice = false): string {
-  const path = `/news/gestao-financeira/microfone${openVoice ? '?voz=1' : ''}`
+  return getBrowserVoiceUrl(openVoice)
+}
+
+/** URL para abrir Gestão no navegador com voz e pedido de microfone. */
+export function getBrowserVoiceUrl(openVoice = true): string {
+  const qs = openVoice ? '?voz=1&mic=1' : '?mic=1'
+  const path = `/news/gestao-financeira${qs}`
   if (typeof window === 'undefined') return path
   return `${window.location.origin}${path}`
 }
 
-/**
- * Abre o site no navegador do sistema (fora do app instalado).
- * No Android instalado, isto é o método mais fiável para o aviso de microfone aparecer.
- */
-export function openSiteInSystemBrowser(path: string): void {
-  if (typeof window === 'undefined') return
-  const url = path.startsWith('http') ? path : `${window.location.origin}${path}`
+export async function copyBrowserVoiceLink(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false
+  try {
+    await navigator.clipboard.writeText(getBrowserVoiceUrl())
+    return true
+  } catch {
+    return false
+  }
+}
 
-  if (detectMicPlatform() === 'android' && isStandalonePwa()) {
-    const hostPath = url.replace(/^https?:\/\//, '')
-    const intent = `intent://${hostPath}#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`
-    window.location.assign(intent)
+/**
+ * Abre o YieldScan no navegador do sistema para ativar microfone e voz.
+ * Usa vários métodos (link, intent Android) porque PWAs instalados bloqueiam o microfone.
+ */
+export function openVoiceInSystemBrowser(): void {
+  if (typeof window === 'undefined') return
+  const url = getBrowserVoiceUrl()
+
+  const link = document.createElement('a')
+  link.href = url
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+
+  if (detectMicPlatform() === 'android') {
     window.setTimeout(() => {
-      window.open(url, '_blank', 'noopener,noreferrer')
-    }, 700)
+      try {
+        const hostPath = url.replace(/^https?:\/\//, '')
+        window.location.assign(
+          `intent://${hostPath}#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`,
+        )
+      } catch {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+    }, 500)
+  }
+}
+
+/** @deprecated use openVoiceInSystemBrowser */
+export function openSiteInSystemBrowser(path: string): void {
+  if (path.includes('gestao-financeira')) {
+    openVoiceInSystemBrowser()
     return
   }
-
+  if (typeof window === 'undefined') return
+  const url = path.startsWith('http') ? path : `${window.location.origin}${path}`
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 

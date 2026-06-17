@@ -13,11 +13,13 @@ import type { GfParsedVoiceEntry } from '@/lib/gestao-financeira/types'
 export function GfVoiceHost() {
   const [open, setOpen] = useState(false)
   const [autoStart, setAutoStart] = useState(false)
+  const [setupMic, setSetupMic] = useState(false)
 
   useEffect(() => {
     const onVoice = (e: Event) => {
       const detail = (e as CustomEvent<GfVoiceOpenDetail>).detail
       setAutoStart(Boolean(detail?.autoStart))
+      setSetupMic(Boolean(detail?.setupMic))
       setOpen(true)
     }
     window.addEventListener(GF_VOICE_EVENT, onVoice)
@@ -35,6 +37,7 @@ export function GfVoiceHost() {
       onOpenChange={setOpen}
       onConfirm={onConfirm}
       autoStartMic={autoStart}
+      setupMic={setupMic}
     />
   )
 }

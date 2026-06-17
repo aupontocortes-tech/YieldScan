@@ -1,6 +1,6 @@
 export const GF_VOICE_EVENT = 'yieldscan:gf-voice-open'
 
-export type GfVoiceOpenDetail = { autoStart?: boolean }
+export type GfVoiceOpenDetail = { autoStart?: boolean; setupMic?: boolean }
 
 export function dispatchGfVoiceOpen(opts?: GfVoiceOpenDetail): void {
   if (typeof window === 'undefined') return
