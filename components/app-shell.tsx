@@ -166,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
-                <Link href="/news/gestao-financeira">
+                <Link href="/news/mercado">
                   <div className="relative aspect-square size-10 shrink-0 overflow-hidden rounded-lg border border-sidebar-primary/35 bg-black">
                     <Image
                       src="/icon-192.png"

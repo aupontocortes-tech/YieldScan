@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-/** Abertura da app → Gestão Financeira (central patrimonial). */
+/** Abertura da app → Preços e mercado (cripto e ações). */
 export default function HomePage() {
-  redirect('/news/gestao-financeira')
+  redirect('/news/mercado')
 }
