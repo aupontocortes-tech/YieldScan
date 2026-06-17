@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,7 +23,8 @@ import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
-import { openGfVoiceFromUserGesture, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
+import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
+import { requestMicrophoneAccess } from '@/lib/mic-permission'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -151,14 +153,22 @@ function StatCard({
 }
 
 export function GestaoFinanceiraPage() {
+  const router = useRouter()
   const gf = useGestaoFinanceira()
   const [tab, setTab] = useState('dashboard')
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const openVoice = useCallback((autoStart = false) => {
-    openGfVoiceFromUserGesture({ autoStart })
-  }, [])
+    const micPromise = requestMicrophoneAccess()
+    void micPromise.then((result) => {
+      if (result.ok) {
+        dispatchGfVoiceOpen({ autoStart })
+        return
+      }
+      router.push(`/news/gestao-financeira/microfone${autoStart ? '?voz=1' : ''}`)
+    })
+  }, [router])
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return
