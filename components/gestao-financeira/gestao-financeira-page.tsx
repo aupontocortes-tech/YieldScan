@@ -22,7 +22,7 @@ import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
-import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
+import { openGfVoiceFromUserGesture, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -157,7 +157,7 @@ export function GestaoFinanceiraPage() {
   const [deleting, setDeleting] = useState(false)
 
   const openVoice = useCallback((autoStart = false) => {
-    dispatchGfVoiceOpen({ autoStart })
+    openGfVoiceFromUserGesture({ autoStart })
   }, [])
 
   const confirmDelete = useCallback(async () => {
@@ -287,7 +287,7 @@ export function GestaoFinanceiraPage() {
             <Badge className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0">Premium</Badge>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Voz grátis pelo Chrome · dados no SQLite local · confirmação antes de salvar.
+            Voz grátis pelo navegador · dados no SQLite local · confirmação antes de salvar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

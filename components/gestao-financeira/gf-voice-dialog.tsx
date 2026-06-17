@@ -100,7 +100,7 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
             Registro por voz
           </DialogTitle>
           <DialogDescription>
-            Voz <strong>100% grátis</strong> pelo navegador (Chrome/Edge). Fale naturalmente — o app organiza sozinho.
+            Voz <strong>100% grátis</strong> pelo navegador do celular. Fale naturalmente — o app organiza sozinho.
             Ex.: &quot;Comprei 89 reais de internet&quot;, &quot;Ganhei 3 mil de salário na carteira&quot;,
             &quot;Transferi 500 da principal para reserva&quot;.
           </DialogDescription>

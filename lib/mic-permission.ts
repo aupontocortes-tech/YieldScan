@@ -54,18 +54,18 @@ export async function ensureMicrophoneAccess(): Promise<boolean> {
 export function micPermissionHelpLines(platform: MicPlatform): string[] {
   if (platform === 'android') {
     return [
-      'Toque em «Permitir microfone» acima — o celular deve mostrar um aviso.',
-      'Se não aparecer: abra o Chrome, toque no cadeado ao lado do endereço do site → Microfone → Permitir.',
-      'Ou: Ajustes do celular → Apps → Chrome → Permissões → Microfone → Permitir.',
-      'Feche o YieldScan, abra de novo e toque em «Permitir microfone».',
+      'Toque no microfone — o celular deve mostrar «Permitir microfone?». Toque em Permitir.',
+      'Não precisa do app Chrome: funciona no navegador que instalou o YieldScan (Samsung Internet, Edge, etc.).',
+      'Se não aparecer o aviso: Ajustes → Apps → YieldScan (ou seu navegador) → Permissões → Microfone → Permitir.',
+      'Feche o app, abra de novo e toque outra vez no microfone.',
     ]
   }
   if (platform === 'ios') {
     return [
       'Toque em «Permitir microfone» — se aparecer o aviso do iPhone, toque em Permitir.',
-      'Ajustes → Safari (ou Chrome) → Microfone → Perguntar ou Permitir.',
-      'Ou: Ajustes → Privacidade → Microfone → ative Safari ou Chrome.',
-      'No iPhone, o Chrome costuma funcionar melhor que o app instalado.',
+      'Ajustes → Safari → Microfone → Perguntar ou Permitir.',
+      'Ou: Ajustes → Privacidade e Segurança → Microfone → ative o navegador que você usa.',
+      'Se instalou pela tela inicial, abrir pelo Safari costuma pedir permissão mais fácil.',
     ]
   }
   return [
