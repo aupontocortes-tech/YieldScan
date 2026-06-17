@@ -120,7 +120,7 @@ function matchCashBoxInFragment(fragment: string): string | null {
 }
 
 function buildDescription(text: string, category: string | null): string {
-  const raw = text.trim().replace(/\s+/g, ' ')
+  const raw = stripDatePhrases(text.trim()).replace(/\s+/g, ' ')
   const noValor = raw.replace(/r\$\s*[\d.,]+/gi, '').replace(/\d[\d.,]*\s*(?:reais?|mil)/gi, '')
   const emMatch = noValor.match(/\b(?:no|na|em|de|com|para)\s+(.{3,60})/i)
   if (emMatch?.[1]) {
@@ -137,28 +137,155 @@ function buildSummary(
   category: string | null,
   cashBox: string | null,
   toCashBox: string | null,
+  occurredAt: Date,
+  referenceDate: Date,
 ): string {
   const brl = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const dateSuffix = isSameCalendarDay(occurredAt, referenceDate)
+    ? ''
+    : ` · ${formatOccurredDate(occurredAt)}`
+
   if (type === 'transfer') {
     const dest = toCashBox ?? 'outra caixa'
     const orig = cashBox ?? 'caixa principal'
-    return `Transferir ${brl} de ${orig} para ${dest}`
+    return `Transferir ${brl} de ${orig} para ${dest}${dateSuffix}`
   }
   if (type === 'income') {
     const dest = cashBox ?? 'Caixa Principal'
     const cat = category ? ` (${category})` : ''
-    return `Receita ${brl}${cat} → ${dest}`
+    return `Receita ${brl}${cat} → ${dest}${dateSuffix}`
   }
   const orig = cashBox ?? 'Caixa Principal'
   const cat = category ? ` · ${category}` : ''
-  return `Despesa ${brl}${cat} · ${orig}`
+  return `Despesa ${brl}${cat} · ${orig}${dateSuffix}`
+}
+
+const WEEKDAY_ALIASES: { pattern: RegExp; dow: number }[] = [
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:último\s+|ultima\s+)?domingo\b/i, dow: 0 },
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:última\s+|ultima\s+)?segunda(?:\s*[- ]?\s*feira)?\b/i, dow: 1 },
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:última\s+|ultima\s+)?ter[cç]a(?:\s*[- ]?\s*feira)?\b/i, dow: 2 },
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:última\s+|ultima\s+)?quarta(?:\s*[- ]?\s*feira)?\b/i, dow: 3 },
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:última\s+|ultima\s+)?quinta(?:\s*[- ]?\s*feira)?\b/i, dow: 4 },
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:última\s+|ultima\s+)?sexta(?:\s*[- ]?\s*feira)?\b/i, dow: 5 },
+  { pattern: /\b(?:no\s+|na\s+|em\s+)?(?:último\s+|ultima\s+)?s[aá]bado\b/i, dow: 6 },
+]
+
+const DATE_PHRASE_PATTERN =
+  /\b(?:ontem|anteontem|ante\s*-?\s*ontem|hoje|semana\s+passad[ao]|(?:no\s+|na\s+|em\s+)?(?:últim[ao]\s+|ultim[ao]\s+)?(?:segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo)(?:\s*[- ]?\s*feira)?(?:\s+passad[ao])?|(?:h[aá]|a)\s*\d{1,2}\s*dias?\s*(?:atr[aá]s)?)\b/gi
+
+function atLocalNoon(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(12, 0, 0, 0)
+  return x
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+function formatOccurredDate(d: Date): string {
+  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+/** Segunda/terça/etc. da semana corrente, ou o dia mais recente no passado. */
+function resolveWeekdayDate(targetDow: number, ref: Date): Date {
+  const d = new Date(ref)
+  const refDow = d.getDay()
+  let diff = refDow - targetDow
+  if (diff < 0) diff += 7
+  d.setDate(d.getDate() - diff)
+  return atLocalNoon(d)
+}
+
+/** Interpreta "ontem", "segunda-feira", "terça passada", "há 3 dias", etc. */
+export function parseOccurredAt(text: string, referenceDate = new Date()): Date {
+  const lower = text.toLowerCase()
+  const ref = atLocalNoon(referenceDate)
+
+  const semanaPassada = lower.match(
+    /\bsemana\s+passad[ao]\b.*?\b(segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo)(?:\s*[- ]?\s*feira)?\b/i,
+  )
+  if (semanaPassada) {
+    const dow = weekdayNameToDow(semanaPassada[1] ?? '')
+    if (dow != null) {
+      const thisWeek = resolveWeekdayDate(dow, ref)
+      thisWeek.setDate(thisWeek.getDate() - 7)
+      return atLocalNoon(thisWeek)
+    }
+  }
+
+  const weekdayPassado = lower.match(
+    /\b(segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo)(?:\s*[- ]?\s*feira)?\s+passad[ao]\b/i,
+  )
+  if (weekdayPassado) {
+    const dow = weekdayNameToDow(weekdayPassado[1] ?? '')
+    if (dow != null) {
+      const thisWeek = resolveWeekdayDate(dow, ref)
+      thisWeek.setDate(thisWeek.getDate() - 7)
+      return atLocalNoon(thisWeek)
+    }
+  }
+
+  if (/\banteontem\b|\bante\s*-?\s*ontem\b/i.test(lower)) {
+    const d = new Date(ref)
+    d.setDate(d.getDate() - 2)
+    return atLocalNoon(d)
+  }
+
+  if (/\bontem\b/i.test(lower)) {
+    const d = new Date(ref)
+    d.setDate(d.getDate() - 1)
+    return atLocalNoon(d)
+  }
+
+  if (/\bhoje\b/i.test(lower)) {
+    return ref
+  }
+
+  for (const { pattern, dow } of WEEKDAY_ALIASES) {
+    if (pattern.test(lower)) {
+      return resolveWeekdayDate(dow, ref)
+    }
+  }
+
+  const diasAtras = lower.match(/\b(?:h[aá]|a)\s*(\d{1,2})\s*dias?\s*(?:atr[aá]s)?\b/i)
+  if (diasAtras) {
+    const n = Number(diasAtras[1])
+    if (n > 0 && n <= 366) {
+      const d = new Date(ref)
+      d.setDate(d.getDate() - n)
+      return atLocalNoon(d)
+    }
+  }
+
+  return ref
+}
+
+function weekdayNameToDow(fragment: string): number | null {
+  const f = fragment.toLowerCase()
+  if (f.startsWith('dom')) return 0
+  if (f.startsWith('seg')) return 1
+  if (f.startsWith('ter')) return 2
+  if (f.startsWith('qua') && !f.startsWith('quint')) return 3
+  if (f.startsWith('qui')) return 4
+  if (f.startsWith('sex')) return 5
+  if (f.startsWith('sab') || f.startsWith('sáb')) return 6
+  return null
+}
+
+function stripDatePhrases(text: string): string {
+  return text.replace(DATE_PHRASE_PATTERN, ' ').replace(/\s+/g, ' ').trim()
 }
 
 /**
  * Interpreta frase em português (voz grátis do navegador ou texto digitado).
  * Não usa API paga — a "inteligência" é regras locais em PT-BR.
  */
-export function parseGfVoiceText(text: string): GfParsedVoiceEntry | null {
+export function parseGfVoiceText(text: string, referenceDate = new Date()): GfParsedVoiceEntry | null {
   const raw = text.trim()
   if (!raw) return null
 
@@ -169,6 +296,8 @@ export function parseGfVoiceText(text: string): GfParsedVoiceEntry | null {
   const categoryName = detectCategory(raw)
   let cashBoxName = detectCashBox(raw)
   let toCashBoxName: string | null = null
+  const occurredAt = parseOccurredAt(raw, referenceDate)
+  const ref = atLocalNoon(referenceDate)
 
   if (type === 'transfer') {
     const boxes = detectTransferBoxes(raw)
@@ -189,7 +318,7 @@ export function parseGfVoiceText(text: string): GfParsedVoiceEntry | null {
         : 'low'
 
   const description = buildDescription(raw, categoryName)
-  const summary = buildSummary(type, amount, categoryName, cashBoxName, toCashBoxName)
+  const summary = buildSummary(type, amount, categoryName, cashBoxName, toCashBoxName, occurredAt, ref)
 
   return {
     type,
@@ -198,7 +327,7 @@ export function parseGfVoiceText(text: string): GfParsedVoiceEntry | null {
     cashBoxName,
     toCashBoxName,
     description,
-    occurredAt: new Date().toISOString(),
+    occurredAt: occurredAt.toISOString(),
     confidence,
     summary,
   }
