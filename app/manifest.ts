@@ -18,8 +18,6 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['finance', 'productivity'],
     lang: 'pt-BR',
     dir: 'ltr',
-    // Ajuda PWAs Android a declarar uso de microfone (Chrome 142+).
-    permissions: ['microphone'],
     icons: [
       {
         src: '/icon-192.png',
