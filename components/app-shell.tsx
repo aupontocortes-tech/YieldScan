@@ -12,6 +12,7 @@ import {
   LockKeyhole,
   Droplets,
   LayoutGrid,
+  Building2,
   LineChart,
   Newspaper,
   SlidersHorizontal,
@@ -50,6 +51,7 @@ type NavItem = {
 
 const MAIN_NAV: NavItem[] = [
   { name: 'Painel', href: '/dashboard', icon: Activity, iconClassName: 'text-emerald-400' },
+  { name: 'Gestão Financeira', href: '/news/gestao-financeira', icon: Building2, iconClassName: 'text-emerald-400' },
   { name: 'Notícias', href: '/news', icon: Newspaper, iconClassName: 'text-blue-400' },
   { name: 'Carteira', href: '/portfolio', icon: Wallet, iconClassName: 'text-amber-400' },
   { name: 'Pools', href: '/pools', icon: BarChart3, iconClassName: 'text-cyan-400' },
@@ -74,7 +76,10 @@ const RESOURCE_NAV: NavItem[] = [
 
 function pageTitle(pathname: string): string {
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Painel'
-  if (pathname === '/news' || pathname.startsWith('/news/')) return 'Notícias'
+  if (pathname === '/news' || pathname.startsWith('/news/')) {
+    if (pathname.startsWith('/news/gestao-financeira')) return 'Gestão Financeira'
+    return 'Notícias'
+  }
   if (pathname.startsWith('/portfolio')) return 'Carteira'
   if (pathname.startsWith('/pools')) return 'Pools'
   if (pathname.startsWith('/my-liquidity')) return 'A minha liquidez'
@@ -161,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
-                <Link href="/">
+                <Link href="/news/gestao-financeira">
                   <div className="relative aspect-square size-10 shrink-0 overflow-hidden rounded-lg border border-sidebar-primary/35 bg-black">
                     <Image
                       src="/icon-192.png"

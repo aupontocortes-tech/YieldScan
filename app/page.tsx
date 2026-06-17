@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-/** Abertura da app → hub de notícias / mercado (preços das criptos). Dashboard fica em /dashboard. */
+/** Abertura da app → Gestão Financeira (central patrimonial). */
 export default function HomePage() {
-  redirect('/news/mercado')
+  redirect('/news/gestao-financeira')
 }

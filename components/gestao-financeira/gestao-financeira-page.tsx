@@ -1,0 +1,641 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { GfVoiceDialog } from '@/components/gestao-financeira/gf-voice-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
+import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
+import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
+import { GF_VOICE_EVENT, type GfVoiceOpenDetail } from '@/lib/gestao-financeira/voice-bridge'
+import { cn } from '@/lib/utils'
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Bitcoin,
+  Download,
+  Landmark,
+  Mic,
+  PiggyBank,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  Upload,
+  Wallet,
+} from 'lucide-react'
+
+const GfCharts = dynamic(
+  () => import('@/components/gestao-financeira/gf-charts').then((m) => ({ default: m.GfCharts })),
+  {
+    loading: () => <div className="h-48 animate-pulse rounded-2xl bg-muted/15" aria-hidden />,
+    ssr: false,
+  },
+)
+
+function fmtBrl(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function CashBoxTransfer({
+  cashBoxes,
+  onTransfer,
+}: {
+  cashBoxes: { id: string; name: string }[]
+  onTransfer: (input: {
+    type: 'transfer'
+    amount: number
+    cashBoxId: string
+    toCashBoxId: string
+    description?: string
+  }) => void
+}) {
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [amount, setAmount] = useState('')
+  useEffect(() => {
+    if (cashBoxes[0] && !from) setFrom(cashBoxes[0]!.id)
+    if (cashBoxes[1] && !to) setTo(cashBoxes[1]!.id)
+  }, [cashBoxes, from, to])
+
+  if (cashBoxes.length < 2) return null
+
+  return (
+    <form
+      className="rounded-2xl border border-border/50 bg-card/40 p-4 grid gap-3 sm:grid-cols-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const v = Number(amount.replace(',', '.'))
+        if (!v || !from || !to || from === to) return
+        onTransfer({ type: 'transfer', amount: v, cashBoxId: from, toCashBoxId: to, description: 'Transferência entre caixas' })
+        setAmount('')
+      }}
+    >
+      <div>
+        <Label>De</Label>
+        <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm" value={from} onChange={(e) => setFrom(e.target.value)}>
+          {cashBoxes.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <Label>Para</Label>
+        <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm" value={to} onChange={(e) => setTo(e.target.value)}>
+          {cashBoxes.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <Label>Valor</Label>
+        <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" required />
+      </div>
+      <div className="flex items-end">
+        <Button type="submit" className="w-full">Transferir</Button>
+      </div>
+    </form>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tone = 'default',
+}: {
+  label: string
+  value: string
+  icon: typeof Wallet
+  tone?: 'default' | 'green' | 'red' | 'blue' | 'amber'
+}) {
+  const tones = {
+    default: 'border-border/50',
+    green: 'border-emerald-500/30 bg-emerald-950/10',
+    red: 'border-red-500/25 bg-red-950/10',
+    blue: 'border-blue-500/30 bg-blue-950/10',
+    amber: 'border-amber-500/30 bg-amber-950/10',
+  }
+  return (
+    <div className={cn('rounded-2xl border p-4 backdrop-blur-sm', tones[tone])}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="mt-1 text-lg font-bold tracking-tight sm:text-xl">{value}</p>
+        </div>
+        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+      </div>
+    </div>
+  )
+}
+
+export function GestaoFinanceiraPage() {
+  const gf = useGestaoFinanceira()
+  const [voiceOpen, setVoiceOpen] = useState(false)
+  const [voiceAutoStart, setVoiceAutoStart] = useState(false)
+  const [tab, setTab] = useState('dashboard')
+
+  const openVoice = useCallback((autoStart = false) => {
+    setVoiceAutoStart(autoStart)
+    setVoiceOpen(true)
+  }, [])
+
+  // Form manual
+  const [formType, setFormType] = useState<'income' | 'expense'>('expense')
+  const [formAmount, setFormAmount] = useState('')
+  const [formDesc, setFormDesc] = useState('')
+  const [formCategory, setFormCategory] = useState('')
+
+  // Crypto form
+  const [cryptoWallet, setCryptoWallet] = useState('')
+  const [cryptoCoin, setCryptoCoin] = useState('bitcoin')
+  const [cryptoSymbol, setCryptoSymbol] = useState('BTC')
+  const [cryptoQty, setCryptoQty] = useState('')
+  const [cryptoAvg, setCryptoAvg] = useState('')
+
+  // Debt form
+  const [debtName, setDebtName] = useState('')
+  const [debtTotal, setDebtTotal] = useState('')
+  const [debtDue, setDebtDue] = useState('')
+
+  useEffect(() => {
+    const onVoice = (e: Event) => {
+      const detail = (e as CustomEvent<GfVoiceOpenDetail>).detail
+      setTab('movimentos')
+      openVoice(Boolean(detail?.autoStart))
+    }
+    window.addEventListener(GF_VOICE_EVENT, onVoice)
+    return () => window.removeEventListener(GF_VOICE_EVENT, onVoice)
+  }, [openVoice])
+
+  useEffect(() => {
+    if (gf.cryptoWallets[0] && !cryptoWallet) setCryptoWallet(gf.cryptoWallets[0]!.id)
+  }, [gf.cryptoWallets, cryptoWallet])
+
+  const cryptoBreakdown = useMemo(() => {
+    return gf.cryptoHoldings
+      .map((h) => {
+        const px = gf.cryptoPrices[h.coinId]?.usd ?? 0
+        return { name: h.symbol, value: h.quantity * px * gf.brlPerUsd }
+      })
+      .filter((x) => x.value > 0)
+  }, [gf.cryptoHoldings, gf.cryptoPrices, gf.brlPerUsd])
+
+  const dueSoon = useMemo(() => debtsDueSoon(gf.debts), [gf.debts])
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const amount = Number(formAmount.replace(',', '.'))
+    if (!amount || !gf.cashBoxes[0]) return
+    const cat = formCategory.trim()
+    let categoryId: string | null = null
+    if (cat) {
+      const found = gf.categories.find((c) => c.name.toLowerCase() === cat.toLowerCase())
+      if (found) categoryId = found.id
+      else {
+        const created = await gf.addCategory(cat, formType)
+        categoryId = created.id
+      }
+    }
+    await gf.addTransaction({
+      type: formType,
+      amount,
+      categoryId,
+      cashBoxId: gf.cashBoxes[0].id,
+      description: formDesc || null,
+    })
+    setFormAmount('')
+    setFormDesc('')
+    setFormCategory('')
+  }
+
+  const handleCryptoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!cryptoWallet) return
+    await gf.saveHolding({
+      walletId: cryptoWallet,
+      coinId: cryptoCoin.trim().toLowerCase(),
+      symbol: cryptoSymbol.trim().toUpperCase(),
+      quantity: Number(cryptoQty.replace(',', '.')),
+      avgPriceUsd: Number(cryptoAvg.replace(',', '.')),
+    })
+    setCryptoQty('')
+    setCryptoAvg('')
+  }
+
+  const handleDebtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const total = Number(debtTotal.replace(',', '.'))
+    if (!debtName.trim() || !total) return
+    await gf.addDebt({
+      name: debtName.trim(),
+      totalAmount: total,
+      paidAmount: 0,
+      installments: null,
+      paidInstallments: 0,
+      dueDate: debtDue || null,
+    })
+    setDebtName('')
+    setDebtTotal('')
+    setDebtDue('')
+  }
+
+  const onVoiceConfirm = useCallback(
+    async (parsed: Parameters<typeof gf.addFromParsed>[0]) => {
+      await gf.addFromParsed(parsed)
+    },
+    [gf],
+  )
+
+  const s = gf.stats
+
+  return (
+    <div className="gestao-financeira space-y-6 pb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Landmark className="h-6 w-6 text-emerald-400" />
+            <h2 className="text-2xl font-bold tracking-tight">Gestão Financeira</h2>
+            <Badge className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0">Premium</Badge>
+          </div>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Voz grátis pelo Chrome · dados no SQLite local · confirmação antes de salvar.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-500" onClick={() => openVoice(true)}>
+            <Mic className="h-4 w-4" />
+            Falar agora
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void gf.reload()}>
+            <RefreshCw className={cn('h-4 w-4', gf.pricesLoading && 'animate-spin')} />
+            Actualizar
+          </Button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => openVoice(true)}
+        className="flex w-full items-center gap-3 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 to-teal-950/20 px-4 py-3 text-left transition-colors hover:border-emerald-400/50 active:scale-[0.99]"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-white shadow-lg">
+          <Mic className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-foreground">Comando de voz grátis</span>
+          <span className="block text-xs text-muted-foreground line-clamp-1">
+            Ex.: &quot;Comprei 50 reais de mercado&quot; · &quot;Recebi 2 mil na carteira&quot;
+          </span>
+        </span>
+        <span className="hidden text-xs font-medium text-emerald-400 sm:inline">Segure Gestão no menu ↑</span>
+      </button>
+
+      {!gf.ready || !s ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
+        </div>
+      ) : (
+        <>
+      {gf.insights.length > 0 ? (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/15 p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-300">
+            <Sparkles className="h-4 w-4" />
+            IA Financeira
+          </div>
+          <ul className="space-y-1.5 text-sm text-muted-foreground">
+            {gf.insights.map((line, i) => (
+              <li key={i}>• {line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="flex h-auto w-full flex-wrap gap-1 bg-muted/50 p-1">
+          <TabsTrigger value="dashboard">Painel</TabsTrigger>
+          <TabsTrigger value="movimentos">Receitas / Despesas</TabsTrigger>
+          <TabsTrigger value="caixas">Caixas</TabsTrigger>
+          <TabsTrigger value="dividas">Dívidas</TabsTrigger>
+          <TabsTrigger value="cripto">Cripto</TabsTrigger>
+          <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="mt-4 space-y-6">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+            <StatCard label="Patrimônio total" value={fmtBrl(s.totalPatrimony)} icon={TrendingUp} tone="blue" />
+            <StatCard label="Patrimônio líquido" value={fmtBrl(s.netWorth)} icon={Landmark} tone="green" />
+            <StatCard label="Saldo em caixa" value={fmtBrl(s.cashBalance)} icon={Wallet} />
+            <StatCard label="Receitas do mês" value={fmtBrl(s.monthIncome)} icon={ArrowDownLeft} tone="green" />
+            <StatCard label="Despesas do mês" value={fmtBrl(s.monthExpense)} icon={ArrowUpRight} tone="red" />
+            <StatCard label="Economia do mês" value={fmtBrl(s.monthSavings)} icon={PiggyBank} tone="amber" />
+            <StatCard label="Dívidas pendentes" value={fmtBrl(s.pendingDebts)} icon={ArrowUpRight} tone="red" />
+            <StatCard label="Total investido" value={fmtBrl(s.totalInvested)} icon={TrendingUp} tone="blue" />
+            <StatCard label="Total em cripto" value={fmtBrl(s.totalCrypto)} icon={Bitcoin} tone="amber" />
+          </div>
+
+          {dueSoon.length > 0 ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-950/15 px-4 py-3 text-sm">
+              <p className="font-medium text-amber-200">Vencimentos próximos</p>
+              <ul className="mt-1 text-muted-foreground">
+                {dueSoon.map((d) => (
+                  <li key={d.id}>
+                    {d.name} — restam {fmtBrl(d.totalAmount - d.paidAmount)} · vence {d.dueDate?.slice(0, 10)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <GfCharts
+            transactions={gf.transactions}
+            categories={gf.categories}
+            snapshots={gf.snapshots}
+            stats={s}
+            cryptoBreakdown={cryptoBreakdown}
+          />
+        </TabsContent>
+
+        <TabsContent value="movimentos" className="mt-4 space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <form onSubmit={(e) => void handleManualSubmit(e)} className="rounded-2xl border border-border/50 bg-card/40 p-4 space-y-3">
+              <h3 className="font-semibold">Registro manual</h3>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={formType === 'expense' ? 'default' : 'outline'} onClick={() => setFormType('expense')}>
+                  Despesa
+                </Button>
+                <Button type="button" size="sm" variant={formType === 'income' ? 'default' : 'outline'} onClick={() => setFormType('income')}>
+                  Receita
+                </Button>
+              </div>
+              <div>
+                <Label>Valor (R$)</Label>
+                <Input value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="120,50" required />
+              </div>
+              <div>
+                <Label>Categoria</Label>
+                <Input value={formCategory} onChange={(e) => setFormCategory(e.target.value)} placeholder="Mercado" list="gf-cats" />
+                <datalist id="gf-cats">
+                  {gf.categories.map((c) => (
+                    <option key={c.id} value={c.name} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <Label>Descrição</Label>
+                <Input value={formDesc} onChange={(e) => setFormDesc(e.target.value)} placeholder="Supermercado" />
+              </div>
+              <Button type="submit" className="w-full gap-2">
+                <Plus className="h-4 w-4" />
+                Salvar
+              </Button>
+            </form>
+
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
+              <h3 className="font-semibold">Registro por voz</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Toque em Voz ou segure o botão Gestão Financeira no menu superior para falar.
+              </p>
+              <Button type="button" className="mt-4 gap-2" onClick={() => openVoice(true)}>
+                <Mic className="h-4 w-4" />
+                Abrir gravador
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border/50 overflow-hidden">
+            <div className="border-b border-border/40 px-4 py-3 font-semibold">Histórico recente</div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-border/30">
+              {gf.transactions.slice(0, 40).map((t) => {
+                const cat = gf.categories.find((c) => c.id === t.categoryId)
+                return (
+                  <div key={t.id} className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{t.description ?? cat?.name ?? t.type}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(t.occurredAt).toLocaleString('pt-BR')}</p>
+                    </div>
+                    <span className={cn('shrink-0 font-semibold', t.type === 'income' ? 'text-emerald-400' : 'text-red-400')}>
+                      {t.type === 'income' ? '+' : '-'}
+                      {fmtBrl(t.amount)}
+                    </span>
+                  </div>
+                )
+              })}
+              {gf.transactions.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">Nenhuma movimentação ainda.</p>
+              ) : null}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="caixas" className="mt-4 space-y-4">
+          <CashBoxTransfer cashBoxes={gf.cashBoxes} onTransfer={(input) => void gf.addTransaction(input)} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {gf.cashBoxes.map((box) => (
+              <div key={box.id} className="rounded-2xl border border-border/50 bg-card/40 p-4">
+                <p className="font-semibold">{box.name}</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-400">{fmtBrl(box.balance)}</p>
+                {box.goal != null ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Objetivo: {fmtBrl(box.goal)}</p>
+                ) : null}
+                {box.note ? <p className="mt-2 text-xs text-muted-foreground">{box.note}</p> : null}
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="dividas" className="mt-4 space-y-6">
+          <form onSubmit={(e) => void handleDebtSubmit(e)} className="rounded-2xl border border-border/50 bg-card/40 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Label>Nome</Label>
+              <Input value={debtName} onChange={(e) => setDebtName(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Valor total</Label>
+              <Input value={debtTotal} onChange={(e) => setDebtTotal(e.target.value)} required />
+            </div>
+            <div>
+              <Label>Vencimento</Label>
+              <Input type="date" value={debtDue} onChange={(e) => setDebtDue(e.target.value)} />
+            </div>
+            <div className="flex items-end">
+              <Button type="submit" className="w-full">Adicionar dívida</Button>
+            </div>
+          </form>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {gf.debts.map((d) => {
+              const remaining = d.totalAmount - d.paidAmount
+              return (
+                <div key={d.id} className="rounded-2xl border border-border/50 bg-card/40 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold">{d.name}</p>
+                    <Badge variant={d.status === 'paid' ? 'secondary' : 'outline'}>{d.status}</Badge>
+                  </div>
+                  <p className="mt-2 text-lg font-bold text-red-300">{fmtBrl(remaining)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pago {fmtBrl(d.paidAmount)} de {fmtBrl(d.totalAmount)}
+                    {d.dueDate ? ` · vence ${d.dueDate.slice(0, 10)}` : ''}
+                  </p>
+                  {remaining > 0 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={() => void gf.payDebt(d.id, d.totalAmount)}
+                    >
+                      Marcar como paga
+                    </Button>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="cripto" className="mt-4 space-y-6">
+          <form onSubmit={(e) => void handleCryptoSubmit(e)} className="rounded-2xl border border-border/50 bg-card/40 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <Label>Carteira</Label>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                value={cryptoWallet}
+                onChange={(e) => setCryptoWallet(e.target.value)}
+              >
+                {gf.cryptoWallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Moeda (CoinGecko id)</Label>
+              <Input value={cryptoCoin} onChange={(e) => setCryptoCoin(e.target.value)} placeholder="bitcoin" />
+            </div>
+            <div>
+              <Label>Símbolo</Label>
+              <Input value={cryptoSymbol} onChange={(e) => setCryptoSymbol(e.target.value)} placeholder="BTC" />
+            </div>
+            <div>
+              <Label>Quantidade</Label>
+              <Input value={cryptoQty} onChange={(e) => setCryptoQty(e.target.value)} />
+            </div>
+            <div>
+              <Label>Preço médio (USD)</Label>
+              <Input value={cryptoAvg} onChange={(e) => setCryptoAvg(e.target.value)} />
+            </div>
+            <div className="flex items-end">
+              <Button type="submit" className="w-full gap-2">
+                <Bitcoin className="h-4 w-4" />
+                Guardar posição
+              </Button>
+            </div>
+          </form>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {gf.cryptoHoldings.map((h) => {
+              const px = gf.cryptoPrices[h.coinId]?.usd ?? 0
+              const current = h.quantity * px * gf.brlPerUsd
+              const invested = h.quantity * h.avgPriceUsd * gf.brlPerUsd
+              const pnl = current - invested
+              const wallet = gf.cryptoWallets.find((w) => w.id === h.walletId)
+              return (
+                <div key={h.id} className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
+                  <div className="flex justify-between gap-2">
+                    <p className="font-bold">{h.symbol}</p>
+                    <Badge variant="outline">{wallet?.name}</Badge>
+                  </div>
+                  <p className="mt-1 text-lg font-semibold">{fmtBrl(current)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {h.quantity} · PM ${h.avgPriceUsd.toLocaleString('en-US')} · Atual ${px.toLocaleString('en-US')}
+                  </p>
+                  <p className={cn('mt-1 text-sm font-medium', pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                    {pnl >= 0 ? '+' : ''}
+                    {fmtBrl(pnl)} ({invested > 0 ? ((pnl / invested) * 100).toFixed(1) : '0'}%)
+                  </p>
+                </div>
+              )
+            })}
+            {gf.cryptoHoldings.length === 0 ? (
+              <p className="text-sm text-muted-foreground sm:col-span-2">Adicione posições em BTC, ETH, SOL e outras moedas CoinGecko.</p>
+            ) : null}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="relatorios" className="mt-4 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => downloadGfJsonBackup(gf.exportBackup())}
+            >
+              <Download className="h-4 w-4" />
+              Exportar JSON
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => downloadGfCsv(gf.transactions, gf.categories)}
+            >
+              <Download className="h-4 w-4" />
+              Exportar CSV / Excel
+            </Button>
+            <Button type="button" variant="outline" className="gap-2" onClick={printGfReport}>
+              <Download className="h-4 w-4" />
+              Imprimir / PDF
+            </Button>
+            <label className="inline-flex">
+              <Button type="button" variant="outline" className="gap-2" asChild>
+                <span>
+                  <Upload className="h-4 w-4" />
+                  Importar backup
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      void readGfBackupFile(f).then((p) => gf.importBackup(p))
+                      e.target.value = ''
+                    }}
+                  />
+                </span>
+              </Button>
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Backups automáticos a cada 6 horas no SQLite local. Importar faz merge — nunca apaga dados existentes.
+          </p>
+          <GfCharts
+            transactions={gf.transactions}
+            categories={gf.categories}
+            snapshots={gf.snapshots}
+            stats={s}
+            cryptoBreakdown={cryptoBreakdown}
+          />
+        </TabsContent>
+      </Tabs>
+        </>
+      )}
+
+      <GfVoiceDialog
+        open={voiceOpen}
+        onOpenChange={setVoiceOpen}
+        onConfirm={onVoiceConfirm}
+        autoStartMic={voiceAutoStart}
+      />
+    </div>
+  )
+}

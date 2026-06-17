@@ -230,3 +230,69 @@ export function kvDelete(key: string): void {
   }
   schedulePersist()
 }
+
+function bindParams(stmt: ReturnType<Database['prepare']>, params: unknown[]): void {
+  if (params.length === 0) return
+  stmt.bind(params as (string | number | null)[])
+}
+
+/** Executa SQL parametrizado (INSERT/UPDATE/CREATE). Nunca usa DELETE sem WHERE explícito nos módulos de dados. */
+export function sqlRun(sql: string, params: unknown[] = []): void {
+  if (!db) {
+    void openYieldscanSqlite().then(() => sqlRun(sql, params))
+    return
+  }
+  let stmt: ReturnType<Database['prepare']> | null = null
+  try {
+    stmt = db.prepare(sql)
+    bindParams(stmt, params)
+    stmt.step()
+  } finally {
+    try {
+      stmt?.free()
+    } catch {
+      /* ignore */
+    }
+  }
+  schedulePersist()
+}
+
+/** Consulta SQL — devolve linhas como objetos { col: value }. */
+export function sqlQuery<T extends Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): T[] {
+  if (!db) return []
+  let stmt: ReturnType<Database['prepare']> | null = null
+  try {
+    stmt = db.prepare(sql)
+    bindParams(stmt, params)
+    const cols = stmt.getColumnNames()
+    const rows: T[] = []
+    while (stmt.step()) {
+      const values = stmt.get()
+      const row: Record<string, unknown> = {}
+      cols.forEach((col: string, i: number) => {
+        row[col] = values[i]
+      })
+      rows.push(row as T)
+    }
+    return rows
+  } catch {
+    return []
+  } finally {
+    try {
+      stmt?.free()
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export function sqlQueryOne<T extends Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): T | null {
+  const rows = sqlQuery<T>(sql, params)
+  return rows[0] ?? null
+}
