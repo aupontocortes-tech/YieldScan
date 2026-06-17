@@ -1,13 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  detectMicPlatform,
-  queryMicrophonePermission,
-  requestMicrophoneAccess,
-  type MicPermissionState,
-  type MicPlatform,
-} from '@/lib/mic-permission'
+import { detectMicPlatform, type MicPlatform } from '@/lib/mic-permission'
 
 type SpeechResultEvent = {
   results: { length: number; [i: number]: { [j: number]: { transcript: string } } }
@@ -40,52 +34,23 @@ export function useSpeechRecognition(lang = 'pt-BR') {
   const [listening, setListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [micReady, setMicReady] = useState(false)
-  const [micState, setMicState] = useState<MicPermissionState>('prompt')
   const [micPlatform] = useState<MicPlatform>(() => detectMicPlatform())
   const recRef = useRef<InstanceType<SpeechCtor> | null>(null)
 
   const supported = typeof window !== 'undefined' && getSpeechRecognition() != null
-
-  const refreshMicState = useCallback(async () => {
-    const state = await queryMicrophonePermission()
-    setMicState(state)
-    setMicReady(state === 'granted')
-    return state
-  }, [])
 
   const stop = useCallback(() => {
     recRef.current?.stop()
     setListening(false)
   }, [])
 
-  const requestMic = useCallback(async () => {
-    const result = await requestMicrophoneAccess()
-    setMicState(result.state)
-    setMicReady(result.ok)
-    if (!result.ok) {
-      if (result.state === 'denied') {
-        setError('Microfone bloqueado. Use o botão abaixo e siga os passos.')
-      } else if (result.state === 'unsupported') {
-        setError('Microfone indisponível neste navegador — use o texto abaixo.')
-      } else {
-        setError('Não foi possível ativar o microfone. Tente novamente.')
-      }
-    } else {
-      setError(null)
-    }
-    return result.ok
-  }, [])
-
-  const start = useCallback(async () => {
+  /** Inicia gravação — pede permissão só aqui, no toque em Gravar. */
+  const start = useCallback(() => {
     const Ctor = getSpeechRecognition()
     if (!Ctor) {
-      setError('Reconhecimento de voz não suportado neste navegador.')
+      setError('Voz indisponível neste modo — digite no campo acima.')
       return false
     }
-
-    const hasMic = micReady || (await requestMic())
-    if (!hasMic) return false
 
     setError(null)
     setTranscript('')
@@ -102,11 +67,11 @@ export function useSpeechRecognition(lang = 'pt-BR') {
     }
     rec.onerror = (ev) => {
       if (ev.error === 'not-allowed') {
-        setMicState('denied')
-        setMicReady(false)
-        setError('Microfone bloqueado. Toque em «Permitir microfone» e siga os passos.')
+        setError('Microfone bloqueado — digite no campo acima (funciona igual).')
+      } else if (ev.error === 'no-speech') {
+        setError('Não ouvi nada. Tente de novo ou digite acima.')
       } else {
-        setError('Erro ao ouvir. Tente novamente.')
+        setError('Erro ao ouvir — digite no campo acima.')
       }
       setListening(false)
     }
@@ -117,30 +82,13 @@ export function useSpeechRecognition(lang = 'pt-BR') {
       setListening(true)
       return true
     } catch {
-      setError('Não foi possível iniciar o microfone.')
+      setError('Não foi possível gravar — digite no campo acima.')
       setListening(false)
       return false
     }
-  }, [lang, micReady, requestMic])
-
-  useEffect(() => {
-    void refreshMicState()
-  }, [refreshMicState])
+  }, [lang])
 
   useEffect(() => () => recRef.current?.abort(), [])
 
-  return {
-    supported,
-    listening,
-    transcript,
-    error,
-    micReady,
-    micState,
-    micPlatform,
-    start,
-    stop,
-    requestMic,
-    refreshMicState,
-    setTranscript,
-  }
+  return { supported, listening, transcript, error, micPlatform, start, stop, setTranscript }
 }

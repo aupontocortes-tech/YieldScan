@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +23,7 @@ import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
-import { requestMicrophoneAccess, isStandalonePwa, detectMicPlatform } from '@/lib/mic-permission'
+import { isStandalonePwa } from '@/lib/mic-permission'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -153,27 +152,14 @@ function StatCard({
 }
 
 export function GestaoFinanceiraPage() {
-  const router = useRouter()
   const gf = useGestaoFinanceira()
   const [tab, setTab] = useState('dashboard')
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const openVoice = useCallback((autoStart = false) => {
-    const micPath = `/news/gestao-financeira/microfone${autoStart ? '?voz=1' : ''}`
-    if (isStandalonePwa() && detectMicPlatform() === 'android') {
-      router.push(micPath)
-      return
-    }
-    const micPromise = requestMicrophoneAccess()
-    void micPromise.then((result) => {
-      if (result.ok) {
-        dispatchGfVoiceOpen({ autoStart })
-        return
-      }
-      router.push(micPath)
-    })
-  }, [router])
+    dispatchGfVoiceOpen({ autoStart: autoStart && !isStandalonePwa() })
+  }, [])
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -328,7 +314,7 @@ export function GestaoFinanceiraPage() {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-foreground">Comando de voz grátis</span>
           <span className="block text-xs text-muted-foreground line-clamp-1">
-            Ex.: &quot;Comprei 50 reais de mercado&quot; · &quot;Recebi 2 mil na carteira&quot;
+            Digite ou fale — ex.: &quot;Ontem gastei 50 de mercado&quot;
           </span>
         </span>
         <span className="hidden text-xs font-medium text-emerald-400 sm:inline">Segure Gestão no menu ↑</span>

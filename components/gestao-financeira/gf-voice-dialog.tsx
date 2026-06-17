@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -11,9 +11,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mic, MicOff, Loader2, ShieldAlert } from 'lucide-react'
+import { Mic, MicOff, Loader2 } from 'lucide-react'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
-import { micPermissionHelpLines, isStandalonePwa } from '@/lib/mic-permission'
+import { isStandalonePwa } from '@/lib/mic-permission'
 import { parseGfVoiceText } from '@/lib/gestao-financeira/voice-parser'
 import type { GfParsedVoiceEntry } from '@/lib/gestao-financeira/types'
 
@@ -21,45 +21,17 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (parsed: GfParsedVoiceEntry) => Promise<void>
-  /** Inicia gravação ao abrir (ex.: segurar botão Gestão no menu). */
   autoStartMic?: boolean
 }
 
 export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: Props) {
-  const {
-    supported,
-    listening,
-    transcript,
-    error,
-    micReady,
-    micState,
-    micPlatform,
-    start,
-    stop,
-    requestMic,
-    setTranscript,
-  } = useSpeechRecognition()
+  const { supported, listening, transcript, error, start, stop, setTranscript } = useSpeechRecognition()
   const [parsed, setParsed] = useState<GfParsedVoiceEntry | null>(null)
   const [saving, setSaving] = useState(false)
-  const [requestingMic, setRequestingMic] = useState(false)
   const [manual, setManual] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const autoStartedRef = useRef(false)
-  const showMicHelp = !micReady && (micState === 'denied' || Boolean(error))
-  const helpLines = micPermissionHelpLines(micPlatform, isStandalonePwa())
-
-  const handleAllowMic = useCallback(
-    async (andStart = false) => {
-      setRequestingMic(true)
-      try {
-        const ok = await requestMic()
-        if (ok && andStart) await start()
-        return ok
-      } finally {
-        setRequestingMic(false)
-      }
-    },
-    [requestMic, start],
-  )
+  const installedApp = typeof window !== 'undefined' && isStandalonePwa()
 
   useEffect(() => {
     if (!open) {
@@ -70,10 +42,14 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
       autoStartedRef.current = false
       return
     }
+    const t = window.setTimeout(() => textareaRef.current?.focus(), 150)
     if (autoStartedRef.current) return
     autoStartedRef.current = true
-    void handleAllowMic(autoStartMic && supported)
-  }, [open, autoStartMic, supported, stop, setTranscript, handleAllowMic])
+    if (autoStartMic && supported && !installedApp) {
+      window.setTimeout(() => start(), 300)
+    }
+    return () => window.clearTimeout(t)
+  }, [open, autoStartMic, supported, installedApp, start, stop, setTranscript])
 
   useEffect(() => {
     const text = manual.trim() || transcript.trim()
@@ -97,71 +73,20 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mic className="h-5 w-5 text-emerald-400" />
-            Registro por voz
+            Registrar despesa ou receita
           </DialogTitle>
           <DialogDescription>
-            Voz <strong>100% grátis</strong> pelo navegador do celular. Fale naturalmente — o app organiza sozinho.
-            Ex.: &quot;Comprei 89 reais de internet&quot;, &quot;Ganhei 3 mil de salário na carteira&quot;,
-            &quot;Transferi 500 da principal para reserva&quot;.
+            {installedApp
+              ? 'No app instalado, digitar é o mais fácil. Escreva abaixo ou toque em Gravar voz.'
+              : 'Digite ou fale. Ex.: «Ontem gastei 50 reais de mercado».'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          {!supported ? (
-            <p className="text-sm text-amber-200/90">Microfone indisponível — use o campo de texto abaixo.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {!micReady ? (
-                <Button
-                  type="button"
-                  className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500"
-                  disabled={requestingMic}
-                  onClick={() => void handleAllowMic(true)}
-                >
-                  {requestingMic ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
-                  Permitir microfone
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant={listening ? 'destructive' : 'default'}
-                className="flex-1 gap-2"
-                disabled={!micReady && micState === 'denied'}
-                onClick={() => (listening ? stop() : void start())}
-              >
-                {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                {listening ? 'Parar' : 'Gravar'}
-              </Button>
-            </div>
-          )}
-
-          {showMicHelp ? (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 text-sm space-y-2">
-              <p className="flex items-center gap-2 font-medium text-amber-200">
-                <ShieldAlert className="h-4 w-4 shrink-0" />
-                Como liberar o microfone
-              </p>
-              <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
-                {helpLines.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ol>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full"
-                disabled={requestingMic}
-                onClick={() => void handleAllowMic(false)}
-              >
-                Tentar novamente
-              </Button>
-            </div>
-          ) : null}
-
           <textarea
-            className="min-h-[88px] w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm"
-            placeholder="Ou digite aqui..."
+            ref={textareaRef}
+            className="min-h-[100px] w-full rounded-lg border border-emerald-500/30 bg-muted/30 px-3 py-2 text-sm"
+            placeholder="Ex: Ontem gastei 50 reais de mercado"
             value={manual || transcript}
             onChange={(e) => {
               setManual(e.target.value)
@@ -169,7 +94,21 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
             }}
           />
 
-          {error ? <p className="text-xs text-red-300">{error}</p> : null}
+          {supported ? (
+            <Button
+              type="button"
+              variant={listening ? 'destructive' : 'outline'}
+              className="w-full gap-2"
+              onClick={() => (listening ? stop() : start())}
+            >
+              {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              {listening ? 'Parar gravação' : 'Gravar voz (opcional)'}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">Voz indisponível aqui — use o campo acima.</p>
+          )}
+
+          {error ? <p className="text-xs text-amber-200/90">{error}</p> : null}
 
           {parsed ? (
             <div className="rounded-lg border border-emerald-500/25 bg-emerald-950/20 p-3 text-sm space-y-2">
@@ -187,7 +126,7 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
               ) : null}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Nenhum valor identificado ainda.</p>
+            <p className="text-xs text-muted-foreground">Digite um valor e descrição para ver a confirmação.</p>
           )}
         </div>
 

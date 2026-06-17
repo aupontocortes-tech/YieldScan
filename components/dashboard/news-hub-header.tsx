@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { openGfVoiceFromUserGesture } from '@/lib/gestao-financeira/voice-bridge'
-import { requestMicrophoneAccess } from '@/lib/mic-permission'
+import { isStandalonePwa } from '@/lib/mic-permission'
 import { Building2, LineChart, Newspaper, Sparkles } from 'lucide-react'
 
 const LINKS = [
@@ -69,7 +69,7 @@ function HubNavLink({
 
   const openVoiceAfterNav = useCallback(() => {
     const onGestao = pathname === href || pathname.startsWith(`${href}/`)
-    const open = () => openGfVoiceFromUserGesture({ autoStart: true })
+    const open = () => openGfVoiceFromUserGesture({ autoStart: !isStandalonePwa() })
     if (onGestao) {
       open()
       return
@@ -80,7 +80,6 @@ function HubNavLink({
 
   const startLongPress = useCallback(() => {
     if (!voiceOnLongPress) return
-    void requestMicrophoneAccess()
     longPressRef.current = false
     clearTimer()
     timerRef.current = setTimeout(() => {
