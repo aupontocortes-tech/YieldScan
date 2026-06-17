@@ -24,6 +24,7 @@ import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } 
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import { isStandalonePwa } from '@/lib/mic-permission'
+import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { GfBrowserVoiceButton } from '@/components/gestao-financeira/gf-browser-voice-button'
 import { cn } from '@/lib/utils'
 import {
@@ -158,21 +159,15 @@ export function GestaoFinanceiraPage() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const openVoice = useCallback((autoStart = false) => {
-    dispatchGfVoiceOpen({
-      autoStart: autoStart && !isStandalonePwa(),
-      setupMic: autoStart && !isStandalonePwa(),
-    })
+  const openVoice = useCallback(() => {
+    dispatchGfVoiceOpen()
   }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get('voz') !== '1' && params.get('mic') !== '1') return
-    dispatchGfVoiceOpen({
-      autoStart: params.get('mic') === '1' && !isStandalonePwa(),
-      setupMic: params.get('mic') === '1',
-    })
+    dispatchGfVoiceOpen()
     window.history.replaceState({}, '', '/news/gestao-financeira')
   }, [])
 
@@ -303,13 +298,13 @@ export function GestaoFinanceiraPage() {
             <Badge className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0">Premium</Badge>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Voz grátis pelo navegador · dados no SQLite local · confirmação antes de salvar.
+            Digite uma frase para registrar · dados no SQLite local · confirmação antes de salvar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="default" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-500" onClick={() => openVoice(true)}>
+          <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => openVoice()}>
             <Mic className="h-4 w-4" />
-            Falar agora
+            Microfone
           </Button>
           <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void gf.reload()}>
             <RefreshCw className={cn('h-4 w-4', gf.pricesLoading && 'animate-spin')} />
@@ -318,28 +313,13 @@ export function GestaoFinanceiraPage() {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => openVoice(true)}
-        className="flex w-full items-center gap-3 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 to-teal-950/20 px-4 py-3 text-left transition-colors hover:border-emerald-400/50 active:scale-[0.99]"
-      >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-white shadow-lg">
-          <Mic className="h-5 w-5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-foreground">Comando de voz grátis</span>
-          <span className="block text-xs text-muted-foreground line-clamp-1">
-            Digite ou fale — ex.: &quot;Ontem gastei 50 de mercado&quot;
-          </span>
-        </span>
-        <span className="hidden text-xs font-medium text-emerald-400 sm:inline">Segure Gestão no menu ↑</span>
-      </button>
+      <GfQuickRegister />
 
       {isStandalonePwa() ? (
         <div className="rounded-2xl border border-blue-500/30 bg-blue-950/20 p-4">
           <p className="mb-3 text-sm text-muted-foreground">
-            Para usar <strong className="text-foreground">comando de voz</strong> no celular, abra no navegador uma vez e
-            permita o microfone.
+            Para usar o <strong className="text-foreground">microfone</strong> no app instalado, abra no navegador. Para
+            registrar, use o campo acima — não precisa de microfone.
           </p>
           <GfBrowserVoiceButton size="lg" />
         </div>
@@ -448,14 +428,10 @@ export function GestaoFinanceiraPage() {
             </form>
 
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
-              <h3 className="font-semibold">Registro por voz</h3>
+              <h3 className="font-semibold">Registrar em uma frase</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Toque em Voz ou segure o botão Gestão Financeira no menu superior para falar.
+                Use o campo no topo da página — digite ex.: &quot;Ontem gastei 50 de mercado&quot; e toque Salvar.
               </p>
-              <Button type="button" className="mt-4 gap-2" onClick={() => openVoice(true)}>
-                <Mic className="h-4 w-4" />
-                Abrir gravador
-              </Button>
             </div>
           </div>
 

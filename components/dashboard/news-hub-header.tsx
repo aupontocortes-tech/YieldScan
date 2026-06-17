@@ -69,7 +69,7 @@ function HubNavLink({
 
   const openVoiceAfterNav = useCallback(() => {
     const onGestao = pathname === href || pathname.startsWith(`${href}/`)
-    const open = () => openGfVoiceFromUserGesture({ autoStart: !isStandalonePwa() })
+    const open = () => openGfVoiceFromUserGesture()
     if (onGestao) {
       open()
       return

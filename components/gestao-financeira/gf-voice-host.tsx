@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { GfVoiceDialog } from '@/components/gestao-financeira/gf-voice-dialog'
 import { saveGfParsedVoiceEntry } from '@/lib/gestao-financeira/save-parsed-voice'
-import { GF_VOICE_EVENT, type GfVoiceOpenDetail } from '@/lib/gestao-financeira/voice-bridge'
+import { GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import type { GfParsedVoiceEntry } from '@/lib/gestao-financeira/types'
 
 /**
@@ -12,16 +12,9 @@ import type { GfParsedVoiceEntry } from '@/lib/gestao-financeira/types'
  */
 export function GfVoiceHost() {
   const [open, setOpen] = useState(false)
-  const [autoStart, setAutoStart] = useState(false)
-  const [setupMic, setSetupMic] = useState(false)
 
   useEffect(() => {
-    const onVoice = (e: Event) => {
-      const detail = (e as CustomEvent<GfVoiceOpenDetail>).detail
-      setAutoStart(Boolean(detail?.autoStart))
-      setSetupMic(Boolean(detail?.setupMic))
-      setOpen(true)
-    }
+    const onVoice = () => setOpen(true)
     window.addEventListener(GF_VOICE_EVENT, onVoice)
     return () => window.removeEventListener(GF_VOICE_EVENT, onVoice)
   }, [])
@@ -32,12 +25,6 @@ export function GfVoiceHost() {
   }, [])
 
   return (
-    <GfVoiceDialog
-      open={open}
-      onOpenChange={setOpen}
-      onConfirm={onConfirm}
-      autoStartMic={autoStart}
-      setupMic={setupMic}
-    />
+    <GfVoiceDialog open={open} onOpenChange={setOpen} onConfirm={onConfirm} />
   )
 }

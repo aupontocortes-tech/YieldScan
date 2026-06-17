@@ -22,11 +22,9 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (parsed: GfParsedVoiceEntry) => Promise<void>
-  autoStartMic?: boolean
-  setupMic?: boolean
 }
 
-export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic, setupMic }: Props) {
+export function GfVoiceDialog({ open, onOpenChange, onConfirm }: Props) {
   const { supported, listening, transcript, error, micReady, start, stop, setTranscript } =
     useSpeechRecognition()
   const [parsed, setParsed] = useState<GfParsedVoiceEntry | null>(null)
@@ -34,9 +32,8 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic, set
   const [requestingMic, setRequestingMic] = useState(false)
   const [manual, setManual] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const autoStartedRef = useRef(false)
   const installedApp = typeof window !== 'undefined' && isStandalonePwa()
-  const showBrowserCta = installedApp || setupMic
+  const showBrowserCta = installedApp
 
   useEffect(() => {
     if (!open) {
@@ -44,20 +41,11 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic, set
       setParsed(null)
       setManual('')
       setTranscript('')
-      autoStartedRef.current = false
       return
     }
-    if (installedApp) return
-    const t = window.setTimeout(() => {
-      if (!setupMic && !autoStartMic) textareaRef.current?.focus()
-    }, 150)
-    if (autoStartedRef.current) return
-    autoStartedRef.current = true
-    if ((autoStartMic || setupMic) && supported && !installedApp) {
-      window.setTimeout(() => void start(true), 350)
-    }
+    const t = window.setTimeout(() => textareaRef.current?.focus(), 150)
     return () => window.clearTimeout(t)
-  }, [open, autoStartMic, setupMic, supported, installedApp, start, stop, setTranscript])
+  }, [open, stop, setTranscript])
 
   useEffect(() => {
     const text = manual.trim() || transcript.trim()
@@ -90,28 +78,39 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic, set
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mic className="h-5 w-5 text-emerald-400" />
-            Comando de voz
+            Registrar rápido
           </DialogTitle>
           <DialogDescription>
             {installedApp
-              ? 'No ícone instalado a voz só funciona no navegador. Use o botão azul abaixo.'
-              : setupMic || !micReady
-                ? 'Toque em «Permitir microfone» — o celular vai mostrar um aviso. Toque em Permitir.'
-                : 'Fale ou digite. Ex.: «Ontem gastei 50 reais de mercado».'}
+              ? 'Digite abaixo (sempre funciona). Para microfone, use o botão azul.'
+              : 'Digite a frase abaixo — funciona sem microfone. Ex.: «Ontem gastei 50 de mercado».'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
+          <textarea
+            ref={textareaRef}
+            className="min-h-[88px] w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm"
+            placeholder="Ontem gastei 50 reais de mercado"
+            value={manual || transcript}
+            onChange={(e) => {
+              setManual(e.target.value)
+              setTranscript('')
+            }}
+          />
+
           {showBrowserCta ? (
             <GfBrowserVoiceButton size="lg" />
           ) : null}
 
           {!installedApp && supported ? (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 rounded-lg border border-border/40 bg-muted/15 p-3">
+              <p className="text-xs text-muted-foreground">Opcional — microfone:</p>
               {!micReady ? (
                 <Button
                   type="button"
-                  className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500"
+                  variant="outline"
+                  className="w-full gap-2"
                   disabled={requestingMic}
                   onClick={() => void handleAllowAndRecord()}
                 >
@@ -121,7 +120,7 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic, set
               ) : null}
               <Button
                 type="button"
-                variant={listening ? 'destructive' : micReady ? 'default' : 'outline'}
+                variant={listening ? 'destructive' : 'outline'}
                 className="w-full gap-2"
                 onClick={() => (listening ? stop() : void start(!micReady))}
               >
@@ -130,17 +129,6 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic, set
               </Button>
             </div>
           ) : null}
-
-          <textarea
-            ref={textareaRef}
-            className="min-h-[88px] w-full rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm"
-            placeholder="Ou digite: Ontem gastei 50 reais de mercado"
-            value={manual || transcript}
-            onChange={(e) => {
-              setManual(e.target.value)
-              setTranscript('')
-            }}
-          />
 
           {error ? <p className="text-xs text-amber-200/90">{error}</p> : null}
 
