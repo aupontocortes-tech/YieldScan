@@ -42,7 +42,8 @@ const LINKS = [
   },
 ] as const
 
-const LONG_PRESS_MS = 550
+const LONG_PRESS_MS = 600
+const VOICE_DISPATCH_DELAY_MS = 450
 
 function HubNavLink({
   href,
@@ -54,6 +55,7 @@ function HubNavLink({
   voiceOnLongPress,
 }: (typeof LINKS)[number] & { active: boolean }) {
   const router = useRouter()
+  const pathname = usePathname()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressRef = useRef(false)
 
@@ -64,21 +66,55 @@ function HubNavLink({
     }
   }, [])
 
-  const onPointerDown = useCallback(() => {
+  const openVoiceAfterNav = useCallback(() => {
+    const onGestao = pathname === href || pathname.startsWith(`${href}/`)
+    const open = () => dispatchGfVoiceOpen({ autoStart: true })
+    if (onGestao) {
+      open()
+      return
+    }
+    router.push(href)
+    window.setTimeout(open, VOICE_DISPATCH_DELAY_MS)
+  }, [href, pathname, router])
+
+  const startLongPress = useCallback(() => {
     if (!voiceOnLongPress) return
     longPressRef.current = false
     clearTimer()
     timerRef.current = setTimeout(() => {
       longPressRef.current = true
       if (navigator.vibrate) navigator.vibrate(30)
-      router.push(href)
-      dispatchGfVoiceOpen({ autoStart: true })
+      openVoiceAfterNav()
     }, LONG_PRESS_MS)
-  }, [clearTimer, href, router, voiceOnLongPress])
+  }, [clearTimer, openVoiceAfterNav, voiceOnLongPress])
+
+  const onPointerDown = useCallback(() => {
+    startLongPress()
+  }, [startLongPress])
 
   const onPointerUp = useCallback(() => {
     clearTimer()
   }, [clearTimer])
+
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (!voiceOnLongPress) return
+      e.stopPropagation()
+      startLongPress()
+    },
+    [startLongPress, voiceOnLongPress],
+  )
+
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (longPressRef.current) {
+        e.preventDefault()
+        longPressRef.current = false
+      }
+      clearTimer()
+    },
+    [clearTimer],
+  )
 
   const onClick = useCallback(
     (e: React.MouseEvent) => {
@@ -98,6 +134,10 @@ function HubNavLink({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
       onPointerCancel={onPointerUp}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+      onContextMenu={voiceOnLongPress ? (e) => e.preventDefault() : undefined}
       onClick={onClick}
       className={cn(
         'flex flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition-all select-none touch-manipulation',

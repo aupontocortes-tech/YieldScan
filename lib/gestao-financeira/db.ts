@@ -401,6 +401,29 @@ export function insertGfTransaction(input: {
   return tx
 }
 
+export function deleteGfTransaction(id: string): boolean {
+  const row = sqlQuery<Record<string, unknown>>(
+    'SELECT * FROM gf_transactions WHERE id = ? LIMIT 1',
+    [id],
+  )[0]
+  if (!row) return false
+
+  const tx = rowTransaction(row)
+
+  if (tx.type === 'income') {
+    adjustCashBoxBalance(tx.cashBoxId, -tx.amount)
+  } else if (tx.type === 'expense') {
+    adjustCashBoxBalance(tx.cashBoxId, tx.amount)
+  } else if (tx.type === 'transfer' && tx.toCashBoxId) {
+    adjustCashBoxBalance(tx.cashBoxId, tx.amount)
+    adjustCashBoxBalance(tx.toCashBoxId, -tx.amount)
+  }
+
+  sqlRun('DELETE FROM gf_transactions WHERE id = ?', [id])
+  scheduleAutoBackup()
+  return true
+}
+
 export function listGfDebts(): GfDebt[] {
   return sqlQuery<Record<string, unknown>>(
     'SELECT * FROM gf_debts ORDER BY due_date ASC, name ASC',
@@ -447,6 +470,14 @@ export function updateGfDebtPayment(id: string, paidAmount: number, paidInstallm
     [paidAmount, paidInstallments ?? null, ts, paidAmount, id],
   )
   scheduleAutoBackup()
+}
+
+export function deleteGfDebt(id: string): boolean {
+  const row = sqlQuery<Record<string, unknown>>('SELECT id FROM gf_debts WHERE id = ? LIMIT 1', [id])[0]
+  if (!row) return false
+  sqlRun('DELETE FROM gf_debts WHERE id = ?', [id])
+  scheduleAutoBackup()
+  return true
 }
 
 export function listGfCryptoWallets(): GfCryptoWallet[] {
@@ -509,6 +540,17 @@ export function upsertGfCryptoHolding(input: {
   )
   scheduleAutoBackup()
   return holding
+}
+
+export function deleteGfCryptoHolding(id: string): boolean {
+  const row = sqlQuery<Record<string, unknown>>(
+    'SELECT id FROM gf_crypto_holdings WHERE id = ? LIMIT 1',
+    [id],
+  )[0]
+  if (!row) return false
+  sqlRun('DELETE FROM gf_crypto_holdings WHERE id = ?', [id])
+  scheduleAutoBackup()
+  return true
 }
 
 export function listGfInvestments(): GfInvestment[] {

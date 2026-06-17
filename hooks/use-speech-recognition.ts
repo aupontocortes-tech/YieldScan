@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ensureMicrophoneAccess } from '@/lib/mic-permission'
 
 type SpeechResultEvent = {
   results: { length: number; [i: number]: { [j: number]: { transcript: string } } }
@@ -33,6 +34,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
   const [listening, setListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [micReady, setMicReady] = useState(false)
   const recRef = useRef<InstanceType<SpeechCtor> | null>(null)
 
   const supported = typeof window !== 'undefined' && getSpeechRecognition() != null
@@ -42,12 +44,27 @@ export function useSpeechRecognition(lang = 'pt-BR') {
     setListening(false)
   }, [])
 
-  const start = useCallback(() => {
+  const requestMic = useCallback(async () => {
+    const ok = await ensureMicrophoneAccess()
+    setMicReady(ok)
+    if (!ok) {
+      setError('Permissão de microfone negada. Ative nas configurações do navegador.')
+    } else {
+      setError(null)
+    }
+    return ok
+  }, [])
+
+  const start = useCallback(async () => {
     const Ctor = getSpeechRecognition()
     if (!Ctor) {
       setError('Reconhecimento de voz não suportado neste navegador.')
       return
     }
+
+    const hasMic = micReady || (await requestMic())
+    if (!hasMic) return
+
     setError(null)
     setTranscript('')
     const rec = new Ctor()
@@ -74,9 +91,9 @@ export function useSpeechRecognition(lang = 'pt-BR') {
       setError('Não foi possível iniciar o microfone.')
       setListening(false)
     }
-  }, [lang])
+  }, [lang, micReady, requestMic])
 
   useEffect(() => () => recRef.current?.abort(), [])
 
-  return { supported, listening, transcript, error, start, stop, setTranscript }
+  return { supported, listening, transcript, error, micReady, start, stop, requestMic, setTranscript }
 }

@@ -1,5 +1,6 @@
 import { NewsHubHeader } from '@/components/dashboard/news-hub-header'
 import { NewsHubPrefetch } from '@/components/dashboard/news-hub-prefetch'
+import { GfVoiceHost } from '@/components/gestao-financeira/gf-voice-host'
 
 export default function NewsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function NewsLayout({ children }: { children: React.ReactNode }) 
         <NewsHubHeader />
         {children}
       </main>
+      <GfVoiceHost />
     </div>
   )
 }

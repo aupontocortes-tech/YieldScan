@@ -2,17 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { GfVoiceDialog } from '@/components/gestao-financeira/gf-voice-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
-import { GF_VOICE_EVENT, type GfVoiceOpenDetail } from '@/lib/gestao-financeira/voice-bridge'
+import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
+import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -25,6 +35,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
   TrendingUp,
   Upload,
   Wallet,
@@ -41,6 +52,11 @@ const GfCharts = dynamic(
 function fmtBrl(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
+
+type DeleteTarget =
+  | { kind: 'transaction'; id: string; label: string }
+  | { kind: 'debt'; id: string; label: string }
+  | { kind: 'crypto'; id: string; label: string }
 
 function CashBoxTransfer({
   cashBoxes,
@@ -136,14 +152,26 @@ function StatCard({
 
 export function GestaoFinanceiraPage() {
   const gf = useGestaoFinanceira()
-  const [voiceOpen, setVoiceOpen] = useState(false)
-  const [voiceAutoStart, setVoiceAutoStart] = useState(false)
   const [tab, setTab] = useState('dashboard')
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const openVoice = useCallback((autoStart = false) => {
-    setVoiceAutoStart(autoStart)
-    setVoiceOpen(true)
+    dispatchGfVoiceOpen({ autoStart })
   }, [])
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      if (deleteTarget.kind === 'transaction') await gf.removeTransaction(deleteTarget.id)
+      else if (deleteTarget.kind === 'debt') await gf.removeDebt(deleteTarget.id)
+      else await gf.removeCryptoHolding(deleteTarget.id)
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
+  }, [deleteTarget, gf])
 
   // Form manual
   const [formType, setFormType] = useState<'income' | 'expense'>('expense')
@@ -164,14 +192,16 @@ export function GestaoFinanceiraPage() {
   const [debtDue, setDebtDue] = useState('')
 
   useEffect(() => {
-    const onVoice = (e: Event) => {
-      const detail = (e as CustomEvent<GfVoiceOpenDetail>).detail
-      setTab('movimentos')
-      openVoice(Boolean(detail?.autoStart))
-    }
+    const onVoice = () => setTab('movimentos')
     window.addEventListener(GF_VOICE_EVENT, onVoice)
     return () => window.removeEventListener(GF_VOICE_EVENT, onVoice)
-  }, [openVoice])
+  }, [])
+
+  useEffect(() => {
+    const onDataChanged = () => void gf.reload()
+    window.addEventListener(GF_DATA_CHANGED_EVENT, onDataChanged)
+    return () => window.removeEventListener(GF_DATA_CHANGED_EVENT, onDataChanged)
+  }, [gf.reload])
 
   useEffect(() => {
     if (gf.cryptoWallets[0] && !cryptoWallet) setCryptoWallet(gf.cryptoWallets[0]!.id)
@@ -244,13 +274,6 @@ export function GestaoFinanceiraPage() {
     setDebtTotal('')
     setDebtDue('')
   }
-
-  const onVoiceConfirm = useCallback(
-    async (parsed: Parameters<typeof gf.addFromParsed>[0]) => {
-      await gf.addFromParsed(parsed)
-    },
-    [gf],
-  )
 
   const s = gf.stats
 
@@ -415,16 +438,32 @@ export function GestaoFinanceiraPage() {
             <div className="max-h-80 overflow-y-auto divide-y divide-border/30">
               {gf.transactions.slice(0, 40).map((t) => {
                 const cat = gf.categories.find((c) => c.id === t.categoryId)
+                const label = t.description ?? cat?.name ?? t.type
                 return (
                   <div key={t.id} className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{t.description ?? cat?.name ?? t.type}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{label}</p>
                       <p className="text-xs text-muted-foreground">{new Date(t.occurredAt).toLocaleString('pt-BR')}</p>
                     </div>
-                    <span className={cn('shrink-0 font-semibold', t.type === 'income' ? 'text-emerald-400' : 'text-red-400')}>
-                      {t.type === 'income' ? '+' : '-'}
+                    <span
+                      className={cn(
+                        'shrink-0 font-semibold',
+                        t.type === 'income' ? 'text-emerald-400' : t.type === 'expense' ? 'text-red-400' : 'text-blue-300',
+                      )}
+                    >
+                      {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : '↔'}
                       {fmtBrl(t.amount)}
                     </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-400"
+                      aria-label={`Excluir ${label}`}
+                      onClick={() => setDeleteTarget({ kind: 'transaction', id: t.id, label })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 )
               })}
@@ -477,7 +516,19 @@ export function GestaoFinanceiraPage() {
                 <div key={d.id} className="rounded-2xl border border-border/50 bg-card/40 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold">{d.name}</p>
-                    <Badge variant={d.status === 'paid' ? 'secondary' : 'outline'}>{d.status}</Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={d.status === 'paid' ? 'secondary' : 'outline'}>{d.status}</Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                        aria-label={`Excluir dívida ${d.name}`}
+                        onClick={() => setDeleteTarget({ kind: 'debt', id: d.id, label: d.name })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <p className="mt-2 text-lg font-bold text-red-300">{fmtBrl(remaining)}</p>
                   <p className="text-xs text-muted-foreground">
@@ -552,7 +603,19 @@ export function GestaoFinanceiraPage() {
                 <div key={h.id} className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
                   <div className="flex justify-between gap-2">
                     <p className="font-bold">{h.symbol}</p>
-                    <Badge variant="outline">{wallet?.name}</Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline">{wallet?.name}</Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                        aria-label={`Excluir posição ${h.symbol}`}
+                        onClick={() => setDeleteTarget({ kind: 'crypto', id: h.id, label: h.symbol })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <p className="mt-1 text-lg font-semibold">{fmtBrl(current)}</p>
                   <p className="text-xs text-muted-foreground">
@@ -630,12 +693,36 @@ export function GestaoFinanceiraPage() {
         </>
       )}
 
-      <GfVoiceDialog
-        open={voiceOpen}
-        onOpenChange={setVoiceOpen}
-        onConfirm={onVoiceConfirm}
-        autoStartMic={voiceAutoStart}
-      />
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir registro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `“${deleteTarget.label}” será removido permanentemente.${
+                    deleteTarget.kind === 'transaction'
+                      ? ' O saldo da caixa será ajustado automaticamente.'
+                      : ''
+                  }`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-500"
+              onClick={(e) => {
+                e.preventDefault()
+                void confirmDelete()
+              }}
+            >
+              {deleting ? 'Excluindo…' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   )
 }

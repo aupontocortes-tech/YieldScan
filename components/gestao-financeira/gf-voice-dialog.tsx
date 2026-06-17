@@ -25,7 +25,7 @@ type Props = {
 }
 
 export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: Props) {
-  const { supported, listening, transcript, error, start, stop, setTranscript } = useSpeechRecognition()
+  const { supported, listening, transcript, error, start, stop, requestMic, setTranscript } = useSpeechRecognition()
   const [parsed, setParsed] = useState<GfParsedVoiceEntry | null>(null)
   const [saving, setSaving] = useState(false)
   const [manual, setManual] = useState('')
@@ -40,12 +40,13 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
       autoStartedRef.current = false
       return
     }
+    void requestMic()
     if (autoStartMic && supported && !autoStartedRef.current) {
       autoStartedRef.current = true
-      const t = window.setTimeout(() => start(), 400)
+      const t = window.setTimeout(() => void start(), 400)
       return () => window.clearTimeout(t)
     }
-  }, [open, autoStartMic, supported, start, stop, setTranscript])
+  }, [open, autoStartMic, supported, start, stop, setTranscript, requestMic])
 
   useEffect(() => {
     const text = manual.trim() || transcript.trim()
@@ -87,7 +88,7 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
                 type="button"
                 variant={listening ? 'destructive' : 'default'}
                 className="flex-1 gap-2"
-                onClick={() => (listening ? stop() : start())}
+                onClick={() => (listening ? stop() : void start())}
               >
                 {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 {listening ? 'Parar' : 'Gravar'}

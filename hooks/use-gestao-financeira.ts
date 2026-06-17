@@ -7,6 +7,10 @@ import {
 } from '@/lib/gestao-financeira/calculations'
 import { fetchGfCryptoPrices } from '@/lib/gestao-financeira/crypto-prices'
 import {
+  createGfCategory,
+  deleteGfCryptoHolding,
+  deleteGfDebt,
+  deleteGfTransaction,
   ensureGfDb,
   exportGfBackup,
   importGfBackup,
@@ -25,10 +29,10 @@ import {
   upsertGfInvestment,
   insertGfDebt,
   updateGfDebtPayment,
-  createGfCategory,
   findGfCategoryByName,
   getDefaultCashBox,
 } from '@/lib/gestao-financeira/db'
+import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { generateGfInsights } from '@/lib/gestao-financeira/insights'
 import { resolveCashBoxId } from '@/lib/gestao-financeira/voice-parser'
 import type {
@@ -191,6 +195,45 @@ export function useGestaoFinanceira() {
     [reload],
   )
 
+  const notifyDataChanged = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(GF_DATA_CHANGED_EVENT))
+    }
+  }, [])
+
+  const removeTransaction = useCallback(
+    async (id: string) => {
+      const ok = deleteGfTransaction(id)
+      if (!ok) return false
+      await reload()
+      notifyDataChanged()
+      return true
+    },
+    [reload, notifyDataChanged],
+  )
+
+  const removeDebt = useCallback(
+    async (id: string) => {
+      const ok = deleteGfDebt(id)
+      if (!ok) return false
+      await reload()
+      notifyDataChanged()
+      return true
+    },
+    [reload, notifyDataChanged],
+  )
+
+  const removeCryptoHolding = useCallback(
+    async (id: string) => {
+      const ok = deleteGfCryptoHolding(id)
+      if (!ok) return false
+      await reload()
+      notifyDataChanged()
+      return true
+    },
+    [reload, notifyDataChanged],
+  )
+
   return {
     ready,
     categories,
@@ -209,6 +252,9 @@ export function useGestaoFinanceira() {
     reload,
     addTransaction,
     addFromParsed,
+    removeTransaction,
+    removeDebt,
+    removeCryptoHolding,
     exportBackup: exportGfBackup,
     importBackup: async (payload: Parameters<typeof importGfBackup>[0]) => {
       importGfBackup(payload)
