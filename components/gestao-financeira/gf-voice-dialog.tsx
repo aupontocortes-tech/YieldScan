@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Mic, MicOff, Loader2, ShieldAlert } from 'lucide-react'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
-import { micPermissionHelpLines } from '@/lib/mic-permission'
+import { micPermissionHelpLines, isStandalonePwa } from '@/lib/mic-permission'
 import { parseGfVoiceText } from '@/lib/gestao-financeira/voice-parser'
 import type { GfParsedVoiceEntry } from '@/lib/gestao-financeira/types'
 
@@ -45,7 +45,7 @@ export function GfVoiceDialog({ open, onOpenChange, onConfirm, autoStartMic }: P
   const [manual, setManual] = useState('')
   const autoStartedRef = useRef(false)
   const showMicHelp = !micReady && (micState === 'denied' || Boolean(error))
-  const helpLines = micPermissionHelpLines(micPlatform)
+  const helpLines = micPermissionHelpLines(micPlatform, isStandalonePwa())
 
   const handleAllowMic = useCallback(
     async (andStart = false) => {

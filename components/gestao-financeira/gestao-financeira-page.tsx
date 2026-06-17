@@ -24,7 +24,7 @@ import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfVoiceOpen, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
-import { requestMicrophoneAccess } from '@/lib/mic-permission'
+import { requestMicrophoneAccess, isStandalonePwa, detectMicPlatform } from '@/lib/mic-permission'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -160,13 +160,18 @@ export function GestaoFinanceiraPage() {
   const [deleting, setDeleting] = useState(false)
 
   const openVoice = useCallback((autoStart = false) => {
+    const micPath = `/news/gestao-financeira/microfone${autoStart ? '?voz=1' : ''}`
+    if (isStandalonePwa() && detectMicPlatform() === 'android') {
+      router.push(micPath)
+      return
+    }
     const micPromise = requestMicrophoneAccess()
     void micPromise.then((result) => {
       if (result.ok) {
         dispatchGfVoiceOpen({ autoStart })
         return
       }
-      router.push(`/news/gestao-financeira/microfone${autoStart ? '?voz=1' : ''}`)
+      router.push(micPath)
     })
   }, [router])
 
