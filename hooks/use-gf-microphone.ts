@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { prefersKeyboardDictation } from '@/lib/gestao-financeira/voice-input-mode'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 
 type Options = {
@@ -9,55 +8,76 @@ type Options = {
   onFocusKeyboard?: () => void
 }
 
-/** Microfone 100% grátis: Web Speech API do navegador ou microfone do teclado. */
+/** Voz grátis via Web Speech API — pede permissão ao Chrome no gesto do utilizador. */
 export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
   const [hint, setHint] = useState<string | null>(null)
+  const [requesting, setRequesting] = useState(false)
+  const startingRef = useRef(false)
   const speech = useSpeechRecognition()
-  const mobile = prefersKeyboardDictation()
 
   const focusKeyboard = useCallback(() => {
     onFocusKeyboard?.()
     setHint('Toque no ícone do microfone no teclado do celular e fale.')
   }, [onFocusKeyboard])
 
-  const toggle = useCallback(async () => {
+  const startListening = useCallback(async () => {
+    if (startingRef.current || speech.listening || requesting) return false
     setHint(null)
 
     if (!speech.supported) {
       focusKeyboard()
-      return
+      return false
     }
 
-    if (speech.listening) {
-      speech.stop()
-      if (speech.transcript.trim()) onTranscript(speech.transcript.trim())
+    startingRef.current = true
+    setRequesting(true)
+    try {
+      // Sempre pede permissão no gesto (Chrome / getUserMedia + SpeechRecognition)
+      const ok = await speech.start(true)
+      if (!ok) focusKeyboard()
+      return ok
+    } finally {
+      setRequesting(false)
+      startingRef.current = false
+    }
+  }, [focusKeyboard, requesting, speech])
+
+  const stopListening = useCallback(() => {
+    if (!speech.listening && !requesting) return
+    speech.stop()
+    const text = speech.transcript.trim()
+    if (text) onTranscript(text)
+  }, [onTranscript, requesting, speech])
+
+  const toggle = useCallback(async () => {
+    if (speech.listening || requesting) {
+      stopListening()
       return
     }
-
-    const ok = await speech.start(!mobile)
-    if (!ok) {
-      focusKeyboard()
-    }
-  }, [focusKeyboard, mobile, onTranscript, speech])
+    await startListening()
+  }, [requesting, speech.listening, startListening, stopListening])
 
   useEffect(() => {
-    if (!speech.transcript) return
+    if (!speech.transcript || !speech.listening) return
     onTranscript(speech.transcript)
-  }, [onTranscript, speech.transcript])
+  }, [onTranscript, speech.listening, speech.transcript])
 
   useEffect(() => {
     if (!speech.error) return
     if (speech.error.includes('teclado') || speech.error.includes('digite')) {
       setHint(speech.error)
-      focusKeyboard()
     }
-  }, [focusKeyboard, speech.error])
+  }, [speech.error])
 
   return {
     webspeech: speech.supported,
     recording: speech.listening,
+    requesting,
+    micReady: speech.micReady,
     error: speech.error,
     hint,
+    startListening,
+    stopListening,
     toggle,
   }
 }

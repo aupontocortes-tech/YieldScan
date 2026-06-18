@@ -66,8 +66,8 @@ export function useSpeechRecognition(lang = 'pt-BR') {
     if (!result.ok) {
       setError(
         result.state === 'denied'
-          ? 'Microfone bloqueado — permita no aviso ou use o microfone do teclado.'
-          : 'Não foi possível ativar o microfone — use o microfone do teclado ou digite.',
+          ? 'Microfone bloqueado — toque no cadeado do Chrome e permita o microfone.'
+          : 'Não foi possível ativar o microfone — permita no aviso do Chrome.',
       )
     } else {
       setError(null)
@@ -105,7 +105,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
         if (ev.error === 'not-allowed') {
           setMicState('denied')
           setMicReady(false)
-          setError('Microfone bloqueado — permita no aviso ou use o microfone do teclado.')
+          setError('Microfone bloqueado — permita no aviso do Chrome ou no cadeado da barra.')
         } else if (ev.error === 'no-speech') {
           setError('Não ouvi nada. Fale de novo ou digite acima.')
         } else {
