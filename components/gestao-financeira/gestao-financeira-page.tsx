@@ -22,7 +22,7 @@ import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
-import { dispatchGfStartAppMic, GF_VOICE_EVENT } from '@/lib/gestao-financeira/voice-bridge'
+import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { cn } from '@/lib/utils'
 import {
@@ -161,7 +161,7 @@ export function GestaoFinanceiraPage() {
     const params = new URLSearchParams(window.location.search)
     if (params.get('voz') !== '1' && params.get('mic') !== '1') return
     window.history.replaceState({}, '', '/news/gestao-financeira')
-    const t = window.setTimeout(() => dispatchGfStartAppMic(), 250)
+    const t = window.setTimeout(() => dispatchGfFocusPhrase(), 250)
     return () => window.clearTimeout(t)
   }, [])
 
@@ -195,12 +195,6 @@ export function GestaoFinanceiraPage() {
   const [debtName, setDebtName] = useState('')
   const [debtTotal, setDebtTotal] = useState('')
   const [debtDue, setDebtDue] = useState('')
-
-  useEffect(() => {
-    const onVoice = () => setTab('movimentos')
-    window.addEventListener(GF_VOICE_EVENT, onVoice)
-    return () => window.removeEventListener(GF_VOICE_EVENT, onVoice)
-  }, [])
 
   useEffect(() => {
     const onDataChanged = () => void gf.reload()
@@ -292,7 +286,7 @@ export function GestaoFinanceiraPage() {
             <Badge className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0">Premium</Badge>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Fale, use o teclado ou digite · confirmação antes de salvar · dados locais.
+            Digite ou fale pelo teclado · confirmação antes de salvar · dados locais.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -408,9 +402,9 @@ export function GestaoFinanceiraPage() {
             </form>
 
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
-              <h3 className="font-semibold">Falar ou digitar</h3>
+              <h3 className="font-semibold">Registrar em uma frase</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Microfone verde, microfone do teclado ou digite — ex.: «Ontem gastei 50 de mercado».
+                Use o campo no topo — digite ou fale pelo microfone do teclado.
               </p>
             </div>
           </div>

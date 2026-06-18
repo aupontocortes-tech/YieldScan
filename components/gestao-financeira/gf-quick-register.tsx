@@ -6,9 +6,9 @@ import { GfParsedPreview } from '@/components/gestao-financeira/gf-parsed-previe
 import { GfPhraseInput } from '@/components/gestao-financeira/gf-phrase-input'
 import { parseGfVoiceText } from '@/lib/gestao-financeira/voice-parser'
 import { saveGfParsedVoiceEntry } from '@/lib/gestao-financeira/save-parsed-voice'
-import { Loader2, Mic } from 'lucide-react'
+import { Loader2, PenLine } from 'lucide-react'
 
-/** Registro por frase — digitar ou falar pelo microfone do teclado do celular. */
+/** Registro por frase — digitar ou falar pelo microfone do teclado. */
 export function GfQuickRegister() {
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
@@ -29,12 +29,12 @@ export function GfQuickRegister() {
     <div className="rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-950/35 to-teal-950/15 p-4">
       <div className="mb-3 flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-white">
-          <Mic className="h-5 w-5" />
+          <PenLine className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h3 className="font-semibold text-foreground">Falar ou digitar</h3>
+          <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
           <p className="text-xs text-muted-foreground">
-            Grátis: microfone do app, microfone do teclado ou digitar. Confirmação antes de salvar.
+            Digite ou fale pelo teclado. Ex.: «Ontem gastei 50 de mercado»
           </p>
         </div>
       </div>
