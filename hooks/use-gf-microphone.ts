@@ -83,6 +83,7 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     recording: speech.listening,
     requesting,
     micReady: speech.micReady,
+    micBlocked: speech.micState === 'denied',
     liveText: speech.transcript,
     error: speech.error,
     hint,

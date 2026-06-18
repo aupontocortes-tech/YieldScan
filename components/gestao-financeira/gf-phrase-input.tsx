@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { Mic, Square } from 'lucide-react'
 import { GF_FOCUS_PHRASE_EVENT, GF_START_APP_MIC_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import { GfMicConnectDialog } from '@/components/gestao-financeira/gf-mic-connect-dialog'
+import { GfMicBlockedHelp } from '@/components/gestao-financeira/gf-mic-blocked-help'
 import { useGfMicrophone } from '@/hooks/use-gf-microphone'
 import { cn } from '@/lib/utils'
 
@@ -61,6 +62,14 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
       window.removeEventListener(GF_START_APP_MIC_EVENT, onStartMic)
     }
   }, [focusField, handleMicTap])
+
+  const retryPermission = useCallback(async () => {
+    const ok = await mic.requestPermission()
+    if (ok) await mic.startListening()
+  }, [mic])
+
+  const showBlocked =
+    mic.micBlocked || Boolean(mic.error?.includes('bloqueado') || mic.hint?.includes('bloqueado'))
 
   const displayValue = mic.recording && mic.liveText ? mic.liveText : value
 
@@ -128,6 +137,8 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
         <p className="text-xs text-amber-200/90">
           Este navegador não suporta voz pelo app. Toque no campo e use o <strong>microfone do teclado</strong>.
         </p>
+      ) : showBlocked ? (
+        <GfMicBlockedHelp requesting={mic.requesting} onRetry={() => void retryPermission()} />
       ) : mic.hint ? (
         <p className="text-xs text-amber-200/90">{mic.hint}</p>
       ) : mic.micReady ? (

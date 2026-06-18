@@ -107,7 +107,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
       setMicReady(false)
       setError(
         denied
-          ? 'Microfone bloqueado — permita no aviso do Chrome ou no cadeado da barra.'
+          ? 'Microfone bloqueado — ⋮ → Informações do site → Microfone → Permitir.'
           : 'Não foi possível aceder ao microfone.',
       )
       return false
@@ -131,7 +131,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
         if (ev.error === 'not-allowed') {
           setMicState('denied')
           setMicReady(false)
-          setError('Microfone bloqueado — permita no aviso do Chrome.')
+          setError('Microfone bloqueado — ⋮ → Informações do site → Microfone → Permitir.')
           activeRef.current = false
           setListening(false)
         } else if (ev.error === 'no-speech') {

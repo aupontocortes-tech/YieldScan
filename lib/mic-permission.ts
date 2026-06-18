@@ -145,10 +145,10 @@ export function micPermissionHelpLines(platform: MicPlatform, standalone: boolea
   }
   if (platform === 'android') {
     return [
-      'Toque em «Permitir microfone» — o celular deve mostrar «Permitir microfone?».',
-      'Se não aparecer: toque no cadeado na barra do site → Microfone → Permitir.',
-      'Ou: Ajustes → Apps → seu navegador → Permissões → Microfone → Permitir.',
-      'Feche o app, abra de novo e tente outra vez.',
+      'Toque em «Tentar permitir de novo» abaixo — se aparecer o aviso, escolha Permitir.',
+      'Se não aparecer: ⋮ (três pontos do Chrome) → Informações do site → Microfone → Permitir.',
+      'Recarregue a página depois de permitir.',
+      'Ou: Ajustes do Android → Apps → Chrome → Permissões → Microfone → Permitir.',
     ]
   }
   if (platform === 'ios') {
