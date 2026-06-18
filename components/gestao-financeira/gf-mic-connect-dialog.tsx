@@ -16,11 +16,12 @@ type Props = {
   onOpenChange: (open: boolean) => void
   requesting: boolean
   error: string | null
+  webspeech?: boolean
   onAllow: () => Promise<boolean>
 }
 
 /** Área de conexão — pede permissão do microfone ao Chrome no gesto do utilizador. */
-export function GfMicConnectDialog({ open, onOpenChange, requesting, error, onAllow }: Props) {
+export function GfMicConnectDialog({ open, onOpenChange, requesting, error, webspeech = true, onAllow }: Props) {
   const handleAllow = async () => {
     const ok = await onAllow()
     if (ok) onOpenChange(false)
@@ -45,9 +46,15 @@ export function GfMicConnectDialog({ open, onOpenChange, requesting, error, onAl
           <ol className="mt-1.5 list-decimal space-y-1 pl-4">
             <li>Toque em <strong className="text-foreground">Permitir microfone</strong> abaixo</li>
             <li>No aviso do Chrome, escolha <strong className="text-foreground">Permitir</strong></li>
-            <li>Segure o botão verde e fale a frase</li>
+            <li>Toque em <strong className="text-foreground">Falar</strong>, diga a frase e toque de novo para parar</li>
           </ol>
         </div>
+
+        {!webspeech ? (
+          <p className="text-xs text-amber-200/90">
+            Este navegador não suporta voz pelo app. Use o <strong>microfone do teclado</strong> no campo de texto.
+          </p>
+        ) : null}
 
         {error ? <p className="text-xs text-amber-200/90">{error}</p> : null}
 
@@ -55,7 +62,7 @@ export function GfMicConnectDialog({ open, onOpenChange, requesting, error, onAl
           <Button
             type="button"
             className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500"
-            disabled={requesting}
+            disabled={requesting || !webspeech}
             onClick={() => void handleAllow()}
           >
             {requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}

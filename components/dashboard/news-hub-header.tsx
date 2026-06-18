@@ -184,7 +184,7 @@ export function NewsHubHeader() {
       </h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         {onGestao
-          ? 'Segure Gestão para falar — o Chrome pede permissão do microfone e começa a ouvir.'
+          ? 'Segure Gestão para falar — toque em Falar e diga a frase.'
           : 'Preços (cripto e ações US), notícias e análise inteligente — escolhe a secção abaixo.'}
       </p>
 

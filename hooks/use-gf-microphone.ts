@@ -46,9 +46,11 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     startingRef.current = true
     setRequesting(true)
     try {
-      // Sempre pede permissão no gesto (Chrome / getUserMedia + SpeechRecognition)
-      const ok = await speech.start(true)
-      if (!ok) focusKeyboard()
+      // Se permissão já está ativa, inicia direto sem pedir de novo
+      const ok = await speech.start(!speech.micReady)
+      if (!ok) {
+        setHint('Não foi possível ouvir. Tente de novo ou use o microfone do teclado.')
+      }
       return ok
     } finally {
       setRequesting(false)
@@ -57,19 +59,11 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
   }, [focusKeyboard, requesting, speech])
 
   const stopListening = useCallback(() => {
-    if (!speech.listening && !requesting) return
+    if (!speech.listening) return
     speech.stop()
     const text = speech.transcript.trim()
     if (text) onTranscript(text)
-  }, [onTranscript, requesting, speech])
-
-  const toggle = useCallback(async () => {
-    if (speech.listening || requesting) {
-      stopListening()
-      return
-    }
-    await startListening()
-  }, [requesting, speech.listening, startListening, stopListening])
+  }, [onTranscript, speech])
 
   useEffect(() => {
     if (!speech.transcript || !speech.listening) return
@@ -78,9 +72,7 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
 
   useEffect(() => {
     if (!speech.error) return
-    if (speech.error.includes('teclado') || speech.error.includes('digite')) {
-      setHint(speech.error)
-    }
+    setHint(speech.error)
   }, [speech.error])
 
   return {
@@ -93,6 +85,5 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     startListening,
     stopListening,
     requestPermission,
-    toggle,
   }
 }

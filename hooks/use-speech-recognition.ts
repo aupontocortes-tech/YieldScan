@@ -44,15 +44,37 @@ export function useSpeechRecognition(lang = 'pt-BR') {
   const [micState, setMicState] = useState<MicPermissionState>('prompt')
   const [micPlatform] = useState<MicPlatform>(() => detectMicPlatform())
   const recRef = useRef<InstanceType<SpeechCtor> | null>(null)
+  const mobile = micPlatform === 'android' || micPlatform === 'ios'
 
   const supported = typeof window !== 'undefined' && getSpeechRecognition() != null
 
-  useEffect(() => {
-    void queryMicrophonePermission().then((state) => {
-      setMicState(state)
-      setMicReady(state === 'granted')
-    })
+  const syncPermission = useCallback(async () => {
+    const state = await queryMicrophonePermission()
+    setMicState(state)
+    setMicReady(state === 'granted')
+    return state
   }, [])
+
+  useEffect(() => {
+    void syncPermission()
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return
+    let cancelled = false
+    void navigator.permissions
+      .query({ name: 'microphone' as PermissionName })
+      .then((result) => {
+        const apply = () => {
+          if (cancelled) return
+          setMicState(result.state as MicPermissionState)
+          setMicReady(result.state === 'granted')
+        }
+        apply()
+        result.onchange = apply
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [syncPermission])
 
   const stop = useCallback(() => {
     recRef.current?.stop()
@@ -79,7 +101,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
     async (requestPermissionFirst = false) => {
       const Ctor = getSpeechRecognition()
       if (!Ctor) {
-        setError('Voz indisponível — use o microfone do teclado ou digite no campo.')
+        setError('Voz indisponível neste navegador — use o microfone do teclado.')
         return false
       }
 
@@ -88,11 +110,13 @@ export function useSpeechRecognition(lang = 'pt-BR') {
         if (!ok) return false
       }
 
+      recRef.current?.abort()
       setError(null)
       setTranscript('')
+
       const rec = new Ctor()
       rec.lang = lang
-      rec.continuous = true
+      rec.continuous = !mobile
       rec.interimResults = true
       rec.onresult = (ev) => {
         let text = ''
@@ -107,9 +131,9 @@ export function useSpeechRecognition(lang = 'pt-BR') {
           setMicReady(false)
           setError('Microfone bloqueado — permita no aviso do Chrome ou no cadeado da barra.')
         } else if (ev.error === 'no-speech') {
-          setError('Não ouvi nada. Fale de novo ou digite acima.')
-        } else {
-          setError('Erro ao ouvir — tente de novo ou digite acima.')
+          setError('Não ouvi nada. Toque em Falar e fale de novo.')
+        } else if (ev.error !== 'aborted') {
+          setError('Erro ao ouvir — toque em Falar e tente de novo.')
         }
         setListening(false)
       }
@@ -120,12 +144,12 @@ export function useSpeechRecognition(lang = 'pt-BR') {
         setListening(true)
         return true
       } catch {
-        setError('Não foi possível gravar — use o microfone do teclado ou digite.')
+        setError('Não foi possível iniciar a voz — toque em Falar de novo.')
         setListening(false)
         return false
       }
     },
-    [lang, micReady, requestMic],
+    [lang, micReady, mobile, requestMic],
   )
 
   useEffect(() => () => recRef.current?.abort(), [])

@@ -17,8 +17,6 @@ type Props = {
 export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? internalRef
-  const holdingRef = useRef(false)
-  const eventStartedRef = useRef(false)
   const [connectOpen, setConnectOpen] = useState(false)
 
   const focusField = useCallback(() => {
@@ -36,92 +34,58 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
     setConnectOpen(true)
   }, [focusField])
 
-  const beginHold = useCallback(() => {
-    if (holdingRef.current) return
+  const handleMicTap = useCallback(() => {
+    if (!mic.webspeech) {
+      focusField()
+      return
+    }
     if (!mic.micReady) {
       openConnect()
       return
     }
-    holdingRef.current = true
-    eventStartedRef.current = false
-    focusField()
-    void mic.startListening()
-  }, [focusField, mic, openConnect])
-
-  const startFromEvent = useCallback(() => {
-    if (!mic.micReady) {
-      openConnect()
-      return
-    }
-    eventStartedRef.current = true
-    holdingRef.current = false
-    focusField()
-    void mic.startListening()
-  }, [focusField, mic, openConnect])
-
-  const endHold = useCallback(() => {
-    if (holdingRef.current) {
-      holdingRef.current = false
+    if (mic.recording) {
       mic.stopListening()
       return
     }
-    if (eventStartedRef.current && mic.recording) {
-      eventStartedRef.current = false
-      mic.stopListening()
-    }
-  }, [mic])
+    void mic.startListening()
+  }, [focusField, mic, openConnect])
 
   useEffect(() => {
     const onFocus = () => focusField()
-    const onStartMic = () => startFromEvent()
+    const onStartMic = () => handleMicTap()
     window.addEventListener(GF_FOCUS_PHRASE_EVENT, onFocus)
     window.addEventListener(GF_START_APP_MIC_EVENT, onStartMic)
     return () => {
       window.removeEventListener(GF_FOCUS_PHRASE_EVENT, onFocus)
       window.removeEventListener(GF_START_APP_MIC_EVENT, onStartMic)
     }
-  }, [focusField, startFromEvent])
+  }, [focusField, handleMicTap])
 
-  const active = mic.recording || mic.requesting
   const label = mic.requesting
-    ? 'Permita o microfone…'
+    ? 'A ligar microfone…'
     : mic.recording
-      ? eventStartedRef.current && !holdingRef.current
-        ? 'Ouvindo… toque para parar'
-        : 'Ouvindo… solte para parar'
-      : mic.micReady
-        ? 'Segure para falar'
-        : 'Toque para conectar microfone'
+      ? 'Ouvindo… toque para parar'
+      : !mic.webspeech
+        ? 'Voz indisponível — use o teclado'
+        : mic.micReady
+          ? 'Toque para falar'
+          : 'Toque para conectar microfone'
 
   return (
     <div className={cn('space-y-2', className)}>
       <button
         type="button"
-        aria-pressed={active}
+        aria-pressed={mic.recording || mic.requesting}
         aria-label={label}
         className={cn(
-          'flex w-full select-none items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-semibold text-white transition-colors touch-none',
+          'flex w-full items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-semibold text-white transition-colors',
           mic.requesting
             ? 'bg-amber-600 hover:bg-amber-500'
             : mic.recording
               ? 'bg-red-600 hover:bg-red-500'
               : 'bg-emerald-600 hover:bg-emerald-500',
         )}
-        onClick={() => {
-          if (!mic.micReady && !mic.recording) openConnect()
-        }}
-        onPointerDown={(e) => {
-          e.preventDefault()
-          if (!mic.micReady) return
-          if (eventStartedRef.current && mic.recording) {
-            endHold()
-            return
-          }
-          beginHold()
-        }}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
+        onClick={handleMicTap}
       >
         <span className="relative flex h-6 w-6 items-center justify-center">
           {mic.recording ? (
@@ -139,7 +103,7 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
       <textarea
         ref={ref}
         className="min-h-[72px] w-full rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-sm"
-        placeholder="Segure o botão e fale, ou digite: Ontem gastei 50 de mercado"
+        placeholder="Toque em Falar, diga a frase, toque de novo para parar — ou digite aqui"
         value={value}
         enterKeyHint="done"
         autoComplete="off"
@@ -149,22 +113,25 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
       />
 
       {mic.requesting ? (
-        <p className="text-xs text-amber-200/90">
-          O Chrome vai pedir permissão de microfone — toque em <strong>Permitir</strong>.
-        </p>
+        <p className="text-xs text-amber-200/90">A ligar ao microfone…</p>
       ) : mic.recording ? (
-        <p className="text-xs text-red-300/90">Fale agora e solte o botão quando terminar.</p>
+        <p className="text-xs text-red-300/90">Fale agora. Quando terminar, toque no botão vermelho.</p>
+      ) : !mic.webspeech ? (
+        <p className="text-xs text-amber-200/90">
+          Este navegador não suporta voz pelo app. Toque no campo e use o <strong>microfone do teclado</strong>.
+        </p>
       ) : mic.hint ? (
         <p className="text-xs text-emerald-200/90">{mic.hint}</p>
       ) : mic.error ? (
         <p className="text-xs text-amber-200/90">{mic.error}</p>
-      ) : !mic.micReady ? (
+      ) : mic.micReady ? (
         <p className="text-[11px] text-muted-foreground">
-          Toque no botão verde para abrir a conexão do microfone com o Chrome.
+          Microfone permitido — toque em <strong className="text-foreground">Falar</strong>, diga a frase e toque de
+          novo para parar.
         </p>
       ) : (
         <p className="text-[11px] text-muted-foreground">
-          Microfone conectado — segure o botão verde e fale. Também pode digitar no campo.
+          Toque no botão verde para permitir o microfone no Chrome.
         </p>
       )}
 
@@ -173,6 +140,7 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
         onOpenChange={setConnectOpen}
         requesting={mic.requesting}
         error={mic.error}
+        webspeech={mic.webspeech}
         onAllow={mic.requestPermission}
       />
     </div>
