@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useRef } from 'react'
 import { cn } from '@/lib/utils'
-import { openGfVoiceFromUserGesture } from '@/lib/gestao-financeira/voice-bridge'
-import { isStandalonePwa } from '@/lib/mic-permission'
+import { openGfVoiceFromUserGesture, dispatchGfStartAppMic } from '@/lib/gestao-financeira/voice-bridge'
+import { prefersKeyboardDictation } from '@/lib/gestao-financeira/voice-input-mode'
 import { Building2, LineChart, Newspaper, Sparkles } from 'lucide-react'
 
 const LINKS = [
@@ -37,7 +37,7 @@ const LINKS = [
     href: '/news/gestao-financeira',
     label: 'Gestão Financeira',
     shortLabel: 'Gestão',
-    description: 'Patrimônio, receitas, despesas, caixas, dívidas e cripto — segure para falar.',
+    description: 'Patrimônio, receitas, despesas — segure Gestão para falar (grátis).',
     icon: Building2,
     voiceOnLongPress: true,
   },
@@ -69,13 +69,17 @@ function HubNavLink({
 
   const openVoiceAfterNav = useCallback(() => {
     const onGestao = pathname === href || pathname.startsWith(`${href}/`)
-    const open = () => openGfVoiceFromUserGesture()
+    const delay = onGestao ? 0 : VOICE_DISPATCH_DELAY_MS
+    const open = () => {
+      if (prefersKeyboardDictation()) dispatchGfStartAppMic()
+      else openGfVoiceFromUserGesture()
+    }
     if (onGestao) {
       open()
       return
     }
     router.push(href)
-    window.setTimeout(open, VOICE_DISPATCH_DELAY_MS)
+    window.setTimeout(open, delay)
   }, [href, pathname, router])
 
   const startLongPress = useCallback(() => {
@@ -180,7 +184,7 @@ export function NewsHubHeader() {
       </h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         {onGestao
-          ? 'Controle patrimônio, receitas, despesas, caixas, dívidas e criptomoedas — segure o botão Gestão para registrar por voz.'
+          ? 'Segure Gestão para falar — microfone do app, do teclado ou digite. Tudo grátis.'
           : 'Preços (cripto e ações US), notícias e análise inteligente — escolhe a secção abaixo.'}
       </p>
 

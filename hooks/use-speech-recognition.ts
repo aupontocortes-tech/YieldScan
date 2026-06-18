@@ -66,8 +66,8 @@ export function useSpeechRecognition(lang = 'pt-BR') {
     if (!result.ok) {
       setError(
         result.state === 'denied'
-          ? 'Microfone bloqueado — permita no aviso do celular ou use o botão azul «Abrir no navegador».'
-          : 'Não foi possível ativar o microfone. Tente no navegador.',
+          ? 'Microfone bloqueado — permita no aviso ou use o microfone do teclado.'
+          : 'Não foi possível ativar o microfone — use o microfone do teclado ou digite.',
       )
     } else {
       setError(null)
@@ -79,7 +79,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
     async (requestPermissionFirst = false) => {
       const Ctor = getSpeechRecognition()
       if (!Ctor) {
-        setError('Voz indisponível — digite no campo ou abra no navegador.')
+        setError('Voz indisponível — use o microfone do teclado ou digite no campo.')
         return false
       }
 
@@ -105,7 +105,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
         if (ev.error === 'not-allowed') {
           setMicState('denied')
           setMicReady(false)
-          setError('Microfone bloqueado — use «Abrir no navegador» (botão azul).')
+          setError('Microfone bloqueado — permita no aviso ou use o microfone do teclado.')
         } else if (ev.error === 'no-speech') {
           setError('Não ouvi nada. Fale de novo ou digite acima.')
         } else {
@@ -120,7 +120,7 @@ export function useSpeechRecognition(lang = 'pt-BR') {
         setListening(true)
         return true
       } catch {
-        setError('Não foi possível gravar — use o botão azul para abrir no navegador.')
+        setError('Não foi possível gravar — use o microfone do teclado ou digite.')
         setListening(false)
         return false
       }

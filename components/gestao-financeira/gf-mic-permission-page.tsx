@@ -1,10 +1,10 @@
 'use client'
 
-import { GfBrowserVoiceButton } from '@/components/gestao-financeira/gf-browser-voice-button'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Mic } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
-/** Atalho: abre Gestão no navegador com voz e permissão de microfone. */
+/** Atalho para Gestão — voz grátis (app, teclado ou digitar). */
 export function GfMicPermissionPage() {
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-4">
@@ -15,15 +15,17 @@ export function GfMicPermissionPage() {
         <ArrowLeft className="h-4 w-4" />
         Voltar à Gestão
       </Link>
-      <div className="rounded-2xl border border-blue-500/30 bg-blue-950/25 p-6 text-center">
-        <h2 className="text-xl font-bold">Ativar voz no navegador</h2>
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/25 p-6 text-center">
+        <h2 className="text-xl font-bold">Falar grátis</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Toque abaixo para abrir o YieldScan no navegador do celular. Lá você permite o microfone e usa o comando de
-          voz.
+          Use o microfone verde do app, o microfone do teclado do celular, ou digite a frase. Tudo sem custo.
         </p>
-        <div className="mt-6">
-          <GfBrowserVoiceButton size="lg" />
-        </div>
+        <Button asChild className="mt-6 w-full gap-2 bg-emerald-600 hover:bg-emerald-500">
+          <Link href="/news/gestao-financeira?voz=1">
+            <Mic className="h-5 w-5" />
+            Ir para Gestão Financeira
+          </Link>
+        </Button>
       </div>
     </div>
   )
