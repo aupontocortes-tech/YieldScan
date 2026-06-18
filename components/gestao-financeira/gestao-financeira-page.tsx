@@ -31,7 +31,6 @@ import {
   Bitcoin,
   Download,
   Landmark,
-  Mic,
   PiggyBank,
   Plus,
   RefreshCw,
@@ -297,16 +296,6 @@ export function GestaoFinanceiraPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="gap-2 bg-emerald-600 hover:bg-emerald-500"
-            onClick={() => dispatchGfStartAppMic()}
-          >
-            <Mic className="h-4 w-4" />
-            Falar
-          </Button>
           <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void gf.reload()}>
             <RefreshCw className={cn('h-4 w-4', gf.pricesLoading && 'animate-spin')} />
             Actualizar
