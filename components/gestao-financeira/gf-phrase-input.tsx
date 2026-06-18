@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { Mic, Square } from 'lucide-react'
 import { GF_FOCUS_PHRASE_EVENT, GF_START_APP_MIC_EVENT } from '@/lib/gestao-financeira/voice-bridge'
+import { GfMicConnectDialog } from '@/components/gestao-financeira/gf-mic-connect-dialog'
 import { useGfMicrophone } from '@/hooks/use-gf-microphone'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +19,7 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
   const ref = inputRef ?? internalRef
   const holdingRef = useRef(false)
   const eventStartedRef = useRef(false)
+  const [connectOpen, setConnectOpen] = useState(false)
 
   const focusField = useCallback(() => {
     ref.current?.focus()
@@ -29,20 +31,33 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
     onFocusKeyboard: focusField,
   })
 
+  const openConnect = useCallback(() => {
+    focusField()
+    setConnectOpen(true)
+  }, [focusField])
+
   const beginHold = useCallback(() => {
     if (holdingRef.current) return
+    if (!mic.micReady) {
+      openConnect()
+      return
+    }
     holdingRef.current = true
     eventStartedRef.current = false
     focusField()
     void mic.startListening()
-  }, [focusField, mic])
+  }, [focusField, mic, openConnect])
 
   const startFromEvent = useCallback(() => {
+    if (!mic.micReady) {
+      openConnect()
+      return
+    }
     eventStartedRef.current = true
     holdingRef.current = false
     focusField()
     void mic.startListening()
-  }, [focusField, mic])
+  }, [focusField, mic, openConnect])
 
   const endHold = useCallback(() => {
     if (holdingRef.current) {
@@ -74,7 +89,9 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
       ? eventStartedRef.current && !holdingRef.current
         ? 'Ouvindo… toque para parar'
         : 'Ouvindo… solte para parar'
-      : 'Segure para falar'
+      : mic.micReady
+        ? 'Segure para falar'
+        : 'Toque para conectar microfone'
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -90,8 +107,12 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
               ? 'bg-red-600 hover:bg-red-500'
               : 'bg-emerald-600 hover:bg-emerald-500',
         )}
+        onClick={() => {
+          if (!mic.micReady && !mic.recording) openConnect()
+        }}
         onPointerDown={(e) => {
           e.preventDefault()
+          if (!mic.micReady) return
           if (eventStartedRef.current && mic.recording) {
             endHold()
             return
@@ -137,11 +158,23 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
         <p className="text-xs text-emerald-200/90">{mic.hint}</p>
       ) : mic.error ? (
         <p className="text-xs text-amber-200/90">{mic.error}</p>
+      ) : !mic.micReady ? (
+        <p className="text-[11px] text-muted-foreground">
+          Toque no botão verde para abrir a conexão do microfone com o Chrome.
+        </p>
       ) : (
         <p className="text-[11px] text-muted-foreground">
-          Segure o botão verde — o navegador pede permissão e começa a ouvir. Também pode digitar no campo.
+          Microfone conectado — segure o botão verde e fale. Também pode digitar no campo.
         </p>
       )}
+
+      <GfMicConnectDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        requesting={mic.requesting}
+        error={mic.error}
+        onAllow={mic.requestPermission}
+      />
     </div>
   )
 }

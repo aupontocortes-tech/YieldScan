@@ -20,6 +20,20 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     setHint('Toque no ícone do microfone no teclado do celular e fale.')
   }, [onFocusKeyboard])
 
+  const requestPermission = useCallback(async () => {
+    if (!speech.supported) {
+      focusKeyboard()
+      return false
+    }
+    setHint(null)
+    setRequesting(true)
+    try {
+      return await speech.requestMic()
+    } finally {
+      setRequesting(false)
+    }
+  }, [focusKeyboard, speech])
+
   const startListening = useCallback(async () => {
     if (startingRef.current || speech.listening || requesting) return false
     setHint(null)
@@ -78,6 +92,7 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     hint,
     startListening,
     stopListening,
+    requestPermission,
     toggle,
   }
 }
