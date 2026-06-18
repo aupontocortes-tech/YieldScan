@@ -8,7 +8,6 @@ type Options = {
   onFocusKeyboard?: () => void
 }
 
-/** Voz grátis via Web Speech API — pede permissão ao Chrome no gesto do utilizador. */
 export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
   const [hint, setHint] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
@@ -35,7 +34,7 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
   }, [focusKeyboard, speech])
 
   const startListening = useCallback(async () => {
-    if (startingRef.current || speech.listening || requesting) return false
+    if (startingRef.current || speech.listening) return false
     setHint(null)
 
     if (!speech.supported) {
@@ -46,24 +45,28 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     startingRef.current = true
     setRequesting(true)
     try {
-      // Se permissão já está ativa, inicia direto sem pedir de novo
-      const ok = await speech.start(!speech.micReady)
+      const ok = await speech.start()
       if (!ok) {
-        setHint('Não foi possível ouvir. Tente de novo ou use o microfone do teclado.')
+        setHint(speech.error ?? 'Não foi possível ouvir. Tente de novo.')
       }
       return ok
     } finally {
       setRequesting(false)
       startingRef.current = false
     }
-  }, [focusKeyboard, requesting, speech])
+  }, [focusKeyboard, speech])
 
-  const stopListening = useCallback(() => {
-    if (!speech.listening) return
-    speech.stop()
-    const text = speech.transcript.trim()
-    if (text) onTranscript(text)
-  }, [onTranscript, speech])
+  const stopListening = useCallback(async () => {
+    if (!speech.listening && !requesting) return
+    setRequesting(true)
+    try {
+      const text = await speech.stop()
+      if (text) onTranscript(text)
+      else if (speech.transcript.trim()) onTranscript(speech.transcript.trim())
+    } finally {
+      setRequesting(false)
+    }
+  }, [onTranscript, requesting, speech])
 
   useEffect(() => {
     if (!speech.transcript || !speech.listening) return
@@ -80,6 +83,7 @@ export function useGfMicrophone({ onTranscript, onFocusKeyboard }: Options) {
     recording: speech.listening,
     requesting,
     micReady: speech.micReady,
+    liveText: speech.transcript,
     error: speech.error,
     hint,
     startListening,

@@ -34,25 +34,26 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
     setConnectOpen(true)
   }, [focusField])
 
-  const handleMicTap = useCallback(() => {
+  const handleMicTap = useCallback(async () => {
     if (!mic.webspeech) {
       focusField()
       return
     }
-    if (!mic.micReady) {
-      openConnect()
-      return
-    }
     if (mic.recording) {
-      mic.stopListening()
+      await mic.stopListening()
       return
     }
-    void mic.startListening()
+    if (!mic.micReady) {
+      const ok = await mic.startListening()
+      if (!ok) openConnect()
+      return
+    }
+    await mic.startListening()
   }, [focusField, mic, openConnect])
 
   useEffect(() => {
     const onFocus = () => focusField()
-    const onStartMic = () => handleMicTap()
+    const onStartMic = () => void handleMicTap()
     window.addEventListener(GF_FOCUS_PHRASE_EVENT, onFocus)
     window.addEventListener(GF_START_APP_MIC_EVENT, onStartMic)
     return () => {
@@ -60,6 +61,8 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
       window.removeEventListener(GF_START_APP_MIC_EVENT, onStartMic)
     }
   }, [focusField, handleMicTap])
+
+  const displayValue = mic.recording && mic.liveText ? mic.liveText : value
 
   const label = mic.requesting
     ? 'A ligar microfone…'
@@ -85,7 +88,7 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
               ? 'bg-red-600 hover:bg-red-500'
               : 'bg-emerald-600 hover:bg-emerald-500',
         )}
-        onClick={handleMicTap}
+        onClick={() => void handleMicTap()}
       >
         <span className="relative flex h-6 w-6 items-center justify-center">
           {mic.recording ? (
@@ -104,7 +107,8 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
         ref={ref}
         className="min-h-[72px] w-full rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-sm"
         placeholder="Toque em Falar, diga a frase, toque de novo para parar — ou digite aqui"
-        value={value}
+        value={displayValue}
+        readOnly={mic.recording}
         enterKeyHint="done"
         autoComplete="off"
         autoCorrect="on"
@@ -113,25 +117,27 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
       />
 
       {mic.requesting ? (
-        <p className="text-xs text-amber-200/90">A ligar ao microfone…</p>
+        <p className="text-xs text-amber-200/90">A ligar ao microfone… permita se o Chrome pedir.</p>
       ) : mic.recording ? (
-        <p className="text-xs text-red-300/90">Fale agora. Quando terminar, toque no botão vermelho.</p>
+        <p className="text-xs text-red-300/90">
+          {mic.liveText
+            ? 'A ouvir… o texto aparece acima. Toque no botão vermelho para parar.'
+            : 'Fale agora. Toque no botão vermelho quando terminar.'}
+        </p>
       ) : !mic.webspeech ? (
         <p className="text-xs text-amber-200/90">
           Este navegador não suporta voz pelo app. Toque no campo e use o <strong>microfone do teclado</strong>.
         </p>
       ) : mic.hint ? (
-        <p className="text-xs text-emerald-200/90">{mic.hint}</p>
-      ) : mic.error ? (
-        <p className="text-xs text-amber-200/90">{mic.error}</p>
+        <p className="text-xs text-amber-200/90">{mic.hint}</p>
       ) : mic.micReady ? (
         <p className="text-[11px] text-muted-foreground">
-          Microfone permitido — toque em <strong className="text-foreground">Falar</strong>, diga a frase e toque de
+          Microfone conectado — toque em <strong className="text-foreground">Falar</strong>, diga a frase e toque de
           novo para parar.
         </p>
       ) : (
         <p className="text-[11px] text-muted-foreground">
-          Toque no botão verde para permitir o microfone no Chrome.
+          Toque em Falar — o Chrome vai pedir permissão do microfone.
         </p>
       )}
 
@@ -141,7 +147,11 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
         requesting={mic.requesting}
         error={mic.error}
         webspeech={mic.webspeech}
-        onAllow={mic.requestPermission}
+        onAllow={async () => {
+          const ok = await mic.requestPermission()
+          if (ok) await mic.startListening()
+          return ok
+        }}
       />
     </div>
   )
