@@ -34,7 +34,7 @@ export function GfQuickRegister() {
         <div className="min-w-0">
           <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
           <p className="text-xs text-muted-foreground">
-            Digite ou fale pelo teclado. Ex.: «Ontem gastei 50 de mercado»
+            Digite ou fale pelo teclado. Ex.: «Ganhei 500», «Gastei 80 no mercado», «Guardei 200 na reserva»
           </p>
         </div>
       </div>
@@ -46,7 +46,9 @@ export function GfQuickRegister() {
           <GfParsedPreview parsed={parsed} />
         </div>
       ) : text.trim() ? (
-        <p className="mt-2 text-xs text-amber-200/90">Inclua valor e tipo — ex.: gastei 30, recebi 500 salário.</p>
+        <p className="mt-2 text-xs text-amber-200/90">
+          Inclua valor e ação — ex.: ganhei 500, gastei 30 no mercado, guardei 200, aportei 1000.
+        </p>
       ) : null}
 
       <Button

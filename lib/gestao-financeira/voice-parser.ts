@@ -1,38 +1,53 @@
 import type { GfParsedVoiceEntry, GfTransactionType } from '@/lib/gestao-financeira/types'
 
 const INCOME_WORDS =
-  /\b(recebi|ganhei|entrada|entrou|salário|salario|depositou|depósito|deposito|renda|adicionar|adicionei|coloquei|depositei|creditei|lucrei|vendi)\b/i
+  /\b(recebi|ganhei|entrada|entrou|entrou\s+dinheiro|caiu|salário|salario|folha|depositou|depósito|deposito|renda|rendeu|adicionar|adicionei|coloquei|depositei|creditei|lucrei|vendi|dividendo|dividendos|cashback|estorno|reembolso|devolução|devolucao|herança|heranca|presente|gorjeta|bônus|bonus|gratificação|gratificacao|13º|décimo\s+terceiro|decimo\s+terceiro|pix\s+recebido)\b/i
 const EXPENSE_WORDS =
-  /\b(gastei|paguei|comprei|saí|sai|despesa|pagamento|pago|gasto|tirei|retirei|debitou|débito|debito)\b/i
-const TRANSFER_WORDS = /\b(transferi|transferência|transferencia|movi|mudei|passar|passei)\b/i
+  /\b(gastei|paguei|comprei|saí|sai|saquei|despesa|pagamento|pago|gasto|tirei|retirei|debitou|débito|debito|assinei|renovei|renovação|renovacao|multa|parcela|parcelas|anuidade|mensalidade|taxa|juros|boleto|fatura|cartão|cartao|débito\s+automático|debito\s+automatico)\b/i
+const TRANSFER_WORDS =
+  /\b(transferi|transferência|transferencia|movi|mudei|passar|passei|mandei|enviei)\b/i
+/** Poupança / reserva — move da caixa principal para outra caixa. */
+const SAVINGS_WORDS =
+  /\b(guardei|guardar|guardo|poupei|poupar|poupo|economizei|economizar|economizo|separei|separar|separo|reservei|reservar|reservo|juntei|juntar|junto|guarde|poupe|economize|reserve|separe|junte)\b/i
+/** Aporte / investimento interno — caixa principal → investimentos. */
+const INVESTMENT_MOVE_WORDS =
+  /\b(investi|investir|aportei|aportar|aporto|apliquei|aplicar|aplico|comprei\s+ações|comprei\s+acoes|comprei\s+fii|comprei\s+tesouro|comprei\s+cdb)\b/i
+/** Entrada direta em caixa sem dizer «ganhei». */
+const DEPOSIT_WORDS =
+  /\b(adicionar|adicionei|adiciona|coloquei|colocar|coloca|depositei|depositar|deposita|entrou|creditei)\b/i
 
 const CATEGORY_HINTS: { pattern: RegExp; category: string }[] = [
-  { pattern: /\b(supermercado|mercado|compras|extra|carrefour|pão de açúcar)\b/i, category: 'Mercado' },
-  { pattern: /\b(alimenta|restaurante|lanche|ifood|delivery|padaria)\b/i, category: 'Alimentação' },
-  { pattern: /\b(combustível|combustivel|gasolina|posto|etanol|alcool)\b/i, category: 'Combustível' },
-  { pattern: /\b(uber|99|transporte|ônibus|onibus|metrô|metro|taxi|táxi|passagem)\b/i, category: 'Transporte' },
-  { pattern: /\b(aluguel|moradia|condomínio|condominio|iptu|aluguei)\b/i, category: 'Moradia' },
-  { pattern: /\b(internet|wi-?fi|wifi|fibra|claro|vivo|tim)\b/i, category: 'Internet' },
-  { pattern: /\b(água|agua|sabesp)\b/i, category: 'Água' },
-  { pattern: /\b(energia|luz|eletricidade|enel|cpfl)\b/i, category: 'Energia' },
-  { pattern: /\b(saúde|saude|médico|medico|farmácia|farmacia|plano de saúde|hospital)\b/i, category: 'Saúde' },
-  { pattern: /\b(educação|educacao|curso|faculdade|escola|matrícula|matricula)\b/i, category: 'Educação' },
-  { pattern: /\b(lazer|cinema|viagem|festa|jogo|netflix|spotify)\b/i, category: 'Lazer' },
-  { pattern: /\b(salário|salario|folha|pagamento mensal)\b/i, category: 'Salário' },
-  { pattern: /\b(freelance|freela|projeto|cliente|bico)\b/i, category: 'Freelance' },
-  { pattern: /\b(bitcoin|btc|ethereum|eth|cripto|crypto|binance|solana)\b/i, category: 'Criptomoedas' },
-  { pattern: /\b(investi|investimento|ações|acoes|fii|tesouro|cdb|lci)\b/i, category: 'Investimentos' },
+  { pattern: /\b(supermercado|mercado|compras|extra|carrefour|pão de açúcar|pao de acucar|atacadão|atacadao|assai)\b/i, category: 'Mercado' },
+  { pattern: /\b(alimenta|restaurante|lanche|ifood|delivery|padaria|mcdonald|burger)\b/i, category: 'Alimentação' },
+  { pattern: /\b(combustível|combustivel|gasolina|posto|etanol|álcool|alcool|abasteci)\b/i, category: 'Combustível' },
+  { pattern: /\b(uber|99|transporte|ônibus|onibus|metrô|metro|taxi|táxi|passagem|estacionamento|pedágio|pedagio)\b/i, category: 'Transporte' },
+  { pattern: /\b(aluguel|moradia|condomínio|condominio|iptu|aluguei|financiamento\s+imobiliário|financiamento\s+imobiliario)\b/i, category: 'Moradia' },
+  { pattern: /\b(internet|wi-?fi|wifi|fibra|claro|vivo|tim|oi\s+internet)\b/i, category: 'Internet' },
+  { pattern: /\b(água|agua|sabesp|copasa)\b/i, category: 'Água' },
+  { pattern: /\b(energia|luz|eletricidade|enel|cpfl|cemig|conta\s+de\s+luz)\b/i, category: 'Energia' },
+  { pattern: /\b(saúde|saude|médico|medico|farmácia|farmacia|plano de saúde|hospital|dentista|consulta)\b/i, category: 'Saúde' },
+  { pattern: /\b(educação|educacao|curso|faculdade|escola|matrícula|matricula|mensalidade\s+escolar)\b/i, category: 'Educação' },
+  { pattern: /\b(lazer|cinema|viagem|festa|jogo|netflix|spotify|disney|amazon\s+prime|bar|pub)\b/i, category: 'Lazer' },
+  { pattern: /\b(salário|salario|folha|pagamento mensal|holerite|contracheque)\b/i, category: 'Salário' },
+  { pattern: /\b(freelance|freela|projeto|cliente|bico|nota\s+fiscal)\b/i, category: 'Freelance' },
+  { pattern: /\b(bitcoin|btc|ethereum|eth|cripto|crypto|binance|solana|usdt|stablecoin)\b/i, category: 'Criptomoedas' },
+  { pattern: /\b(investi|investimento|investimentos|ações|acoes|fii|tesouro|cdb|lci|lca|poupança\s+bancária|poupanca\s+bancaria)\b/i, category: 'Investimentos' },
+  { pattern: /\b(petshop|ração|racao|veterinário|veterinario)\b/i, category: 'Outros' },
+  { pattern: /\b(academia|gym|musculação|musculacao|personal)\b/i, category: 'Lazer' },
+  { pattern: /\b(manicure|cabeleireiro|salão|salao|beleza)\b/i, category: 'Outros' },
 ]
 
-/** Mapeia fala → nome da caixa padrão do app. */
+/** Mapeia fala → nome da caixa padrão do app (ordem: mais específico primeiro). */
 const CASH_BOX_HINTS: { pattern: RegExp; name: string }[] = [
-  { pattern: /\b(reserva de emergência|reserva|emergência|emergencia)\b/i, name: 'Reserva de Emergência' },
-  { pattern: /\b(caixa de trade|trade|operações|operacoes)\b/i, name: 'Caixa de Trade' },
-  { pattern: /\b(oportunidades|caixa de oportunidades)\b/i, name: 'Caixa de Oportunidades' },
-  { pattern: /\b(investimentos|caixa de investimentos)\b/i, name: 'Caixa de Investimentos' },
-  { pattern: /\b(longo prazo|caixa longo prazo)\b/i, name: 'Caixa Longo Prazo' },
-  { pattern: /\b(viagem|caixa viagem)\b/i, name: 'Caixa Viagem' },
-  { pattern: /\b(caixa principal|principal|carteira|conta)\b/i, name: 'Caixa Principal' },
+  { pattern: /\b(reserva de emergência|reserva de emergencia|fundo de emergência|fundo de emergencia)\b/i, name: 'Reserva de Emergência' },
+  { pattern: /\b(caixa de trade|trade|day\s*trade|swing\s*trade|operações|operacoes|trading)\b/i, name: 'Caixa de Trade' },
+  { pattern: /\b(caixa de oportunidades|oportunidades)\b/i, name: 'Caixa de Oportunidades' },
+  { pattern: /\b(caixa de investimentos|investimentos|aportes|ações|acoes|fii|tesouro|cdb)\b/i, name: 'Caixa de Investimentos' },
+  { pattern: /\b(caixa longo prazo|longo prazo|aposentadoria|previdência|previdencia)\b/i, name: 'Caixa Longo Prazo' },
+  { pattern: /\b(caixa viagem|viagem|férias|ferias|passagens)\b/i, name: 'Caixa Viagem' },
+  { pattern: /\b(poupança|poupanca|guardar\s+dinheiro)\b/i, name: 'Reserva de Emergência' },
+  { pattern: /\b(caixa principal|principal|carteira|conta\s+corrente|conta|caixa|dinheiro\s+vivo|espécie|especie)\b/i, name: 'Caixa Principal' },
+  { pattern: /\b(reserva)\b/i, name: 'Reserva de Emergência' },
 ]
 
 function parseAmount(text: string): number | null {
@@ -69,11 +84,79 @@ function parseAmount(text: string): number | null {
 
 function detectType(text: string): GfTransactionType {
   if (TRANSFER_WORDS.test(text)) return 'transfer'
-  if (/\b(adicionar|adicionei|coloquei|depositei).*\b(carteira|caixa|conta)\b/i.test(text)) return 'income'
+  if (SAVINGS_WORDS.test(text) && !INCOME_WORDS.test(text) && !EXPENSE_WORDS.test(text)) return 'transfer'
+  if (INVESTMENT_MOVE_WORDS.test(text)) return 'transfer'
+  if (/\b(coloquei|colocar|coloca|depositei|depositar|deposita|mandei|passei).*\b(para|pra|na|no|em)\b/i.test(text)) {
+    const dest = detectCashBox(text)
+    if (dest && dest !== 'Caixa Principal') return 'transfer'
+  }
+  if (DEPOSIT_WORDS.test(text) && /\b(carteira|caixa|conta|principal)\b/i.test(text)) return 'income'
   if (INCOME_WORDS.test(text) && !EXPENSE_WORDS.test(text)) return 'income'
   if (EXPENSE_WORDS.test(text)) return 'expense'
   if (INCOME_WORDS.test(text)) return 'income'
+  const cat = detectCategory(text)
+  if (cat === 'Salário' || cat === 'Freelance') return 'income'
+  if (cat) return 'expense'
   return 'expense'
+}
+
+/** Encaminha automaticamente para a caixa certa sem o utilizador escolher. */
+function applySmartRouting(
+  text: string,
+  type: GfTransactionType,
+  categoryName: string | null,
+  cashBoxName: string | null,
+  toCashBoxName: string | null,
+): { type: GfTransactionType; cashBoxName: string | null; toCashBoxName: string | null } {
+  let t = type
+  let from = cashBoxName
+  let to = toCashBoxName
+
+  if (t === 'transfer') {
+    from = from ?? 'Caixa Principal'
+    if (!to) {
+      to = detectCashBox(text)
+      if (!to || to === from) {
+        if (SAVINGS_WORDS.test(text)) to = 'Reserva de Emergência'
+        else if (INVESTMENT_MOVE_WORDS.test(text) || categoryName === 'Investimentos') to = 'Caixa de Investimentos'
+        else if (categoryName === 'Criptomoedas') to = 'Caixa de Trade'
+        else if (categoryName === 'Lazer' && /\b(viagem|férias|ferias)\b/i.test(text)) to = 'Caixa Viagem'
+        else to = 'Reserva de Emergência'
+      }
+    }
+    return { type: t, cashBoxName: from, toCashBoxName: to }
+  }
+
+  if (t === 'income') {
+    if (!from) {
+      if (categoryName === 'Investimentos') from = 'Caixa de Investimentos'
+      else if (categoryName === 'Criptomoedas') from = 'Caixa de Trade'
+      else if (categoryName === 'Salário' || categoryName === 'Freelance') from = 'Caixa Principal'
+      else if (DEPOSIT_WORDS.test(text) || INCOME_WORDS.test(text)) from = 'Caixa Principal'
+      else from = 'Caixa Principal'
+    }
+    return { type: t, cashBoxName: from, toCashBoxName: null }
+  }
+
+  // expense
+  if (!from) {
+    if (categoryName === 'Criptomoedas') from = 'Caixa de Trade'
+    else if (categoryName === 'Investimentos') from = 'Caixa de Investimentos'
+    else from = 'Caixa Principal'
+  }
+  return { type: t, cashBoxName: from, toCashBoxName: null }
+}
+
+function hasTransactionIntent(text: string, categoryName: string | null): boolean {
+  return (
+    INCOME_WORDS.test(text) ||
+    EXPENSE_WORDS.test(text) ||
+    TRANSFER_WORDS.test(text) ||
+    SAVINGS_WORDS.test(text) ||
+    INVESTMENT_MOVE_WORDS.test(text) ||
+    DEPOSIT_WORDS.test(text) ||
+    categoryName != null
+  )
 }
 
 function detectCategory(text: string): string | null {
@@ -139,6 +222,7 @@ function buildSummary(
   toCashBox: string | null,
   occurredAt: Date,
   referenceDate: Date,
+  savingsTransfer = false,
 ): string {
   const brl = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const dateSuffix = isSameCalendarDay(occurredAt, referenceDate)
@@ -146,9 +230,10 @@ function buildSummary(
     : ` · ${formatOccurredDate(occurredAt)}`
 
   if (type === 'transfer') {
-    const dest = toCashBox ?? 'outra caixa'
-    const orig = cashBox ?? 'caixa principal'
-    return `Transferir ${brl} de ${orig} para ${dest}${dateSuffix}`
+    const dest = toCashBox ?? 'Reserva de Emergência'
+    const orig = cashBox ?? 'Caixa Principal'
+    const action = savingsTransfer ? 'Guardar' : 'Transferir'
+    return `${action} ${brl} de ${orig} para ${dest}${dateSuffix}`
   }
   if (type === 'income') {
     const dest = cashBox ?? 'Caixa Principal'
@@ -298,30 +383,42 @@ export function parseGfVoiceText(text: string, referenceDate = new Date()): GfPa
   let toCashBoxName: string | null = null
   const occurredAt = parseOccurredAt(raw, referenceDate)
   const ref = atLocalNoon(referenceDate)
+  const savingsIntent = SAVINGS_WORDS.test(raw) && !INCOME_WORDS.test(raw) && !EXPENSE_WORDS.test(raw)
 
-  if (type === 'transfer') {
+  if (type === 'transfer' && TRANSFER_WORDS.test(raw)) {
     const boxes = detectTransferBoxes(raw)
     cashBoxName = boxes.from ?? cashBoxName
     toCashBoxName = boxes.to ?? detectCashBox(raw.replace(/transferi|transferência|transferencia|movi|mudei/gi, ''))
-  } else if (type === 'income' && !cashBoxName) {
-    if (/\b(carteira|caixa|conta)\b/i.test(raw)) cashBoxName = 'Caixa Principal'
   }
 
-  const hasIntent =
-    INCOME_WORDS.test(raw) || EXPENSE_WORDS.test(raw) || TRANSFER_WORDS.test(raw) || categoryName != null
+  const routed = applySmartRouting(raw, type, categoryName, cashBoxName, toCashBoxName)
+  const finalType = routed.type
+  cashBoxName = routed.cashBoxName
+  toCashBoxName = routed.toCashBoxName
+
+  const hasIntent = hasTransactionIntent(raw, categoryName)
 
   const confidence: GfParsedVoiceEntry['confidence'] =
-    categoryName && hasIntent && (cashBoxName || type !== 'transfer')
+    categoryName && hasIntent && (cashBoxName || finalType !== 'transfer')
       ? 'high'
       : hasIntent
         ? 'medium'
         : 'low'
 
   const description = buildDescription(raw, categoryName)
-  const summary = buildSummary(type, amount, categoryName, cashBoxName, toCashBoxName, occurredAt, ref)
+  const summary = buildSummary(
+    finalType,
+    amount,
+    categoryName,
+    cashBoxName,
+    toCashBoxName,
+    occurredAt,
+    ref,
+    savingsIntent || (finalType === 'transfer' && SAVINGS_WORDS.test(raw)),
+  )
 
   return {
-    type,
+    type: finalType,
     amount,
     categoryName,
     cashBoxName,

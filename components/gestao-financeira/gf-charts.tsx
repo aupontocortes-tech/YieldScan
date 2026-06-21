@@ -15,9 +15,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { GfPatrimonySnapshot, GfTransaction } from '@/lib/gestao-financeira/types'
+import type { GfDateRange, GfPatrimonySnapshot, GfTransaction } from '@/lib/gestao-financeira/types'
 import {
   categoryTotals,
+  flowSeriesForRange,
   monthlyFlowSeries,
   patrimonyEvolutionSeries,
 } from '@/lib/gestao-financeira/calculations'
@@ -35,12 +36,20 @@ type Props = {
     pendingDebts: number
   }
   cryptoBreakdown: { name: string; value: number }[]
+  /** Quando definido, gráficos de fluxo e categorias usam este intervalo. */
+  reportRange?: GfDateRange
+  periodLabel?: string
 }
 
-export function GfCharts({ transactions, categories, snapshots, stats, cryptoBreakdown }: Props) {
-  const expensePie = categoryTotals(transactions, categories, 'expense')
-  const incomePie = categoryTotals(transactions, categories, 'income')
-  const monthly = monthlyFlowSeries(transactions)
+export function GfCharts({ transactions, categories, snapshots, stats, cryptoBreakdown, reportRange, periodLabel }: Props) {
+  const rangeSuffix = periodLabel ? ` (${periodLabel})` : ' (mês)'
+  const expensePie = categoryTotals(transactions, categories, 'expense', reportRange)
+  const incomePie = categoryTotals(transactions, categories, 'income', reportRange)
+  const flow = reportRange ? flowSeriesForRange(transactions, reportRange) : monthlyFlowSeries(transactions).map((m) => ({
+    label: m.month,
+    income: m.income,
+    expense: m.expense,
+  }))
   const patrimony = patrimonyEvolutionSeries(snapshots)
 
   const patrimonyPie = [
@@ -51,7 +60,7 @@ export function GfCharts({ transactions, categories, snapshots, stats, cryptoBre
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <ChartCard title="Despesas por categoria (mês)">
+      <ChartCard title={`Despesas por categoria${rangeSuffix}`}>
         {expensePie.length ? (
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
@@ -102,11 +111,11 @@ export function GfCharts({ transactions, categories, snapshots, stats, cryptoBre
         )}
       </ChartCard>
 
-      <ChartCard title="Receitas vs despesas">
+      <ChartCard title={reportRange ? `Receitas vs despesas${rangeSuffix}` : 'Receitas vs despesas (últimos 6 meses)'}>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={monthly}>
+          <BarChart data={flow}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip formatter={(v: number) => `R$ ${v.toLocaleString('pt-BR')}`} />
             <Legend />
@@ -135,7 +144,7 @@ export function GfCharts({ transactions, categories, snapshots, stats, cryptoBre
       </ChartCard>
 
       {incomePie.length > 0 ? (
-        <ChartCard title="Receitas por categoria (mês)">
+        <ChartCard title={`Receitas por categoria${rangeSuffix}`}>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={incomePie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>

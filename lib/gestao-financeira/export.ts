@@ -10,19 +10,32 @@ export function downloadGfJsonBackup(payload: GfBackupPayload): void {
   URL.revokeObjectURL(url)
 }
 
-export function downloadGfCsv(transactions: GfBackupPayload['transactions'], categories: GfBackupPayload['categories']): void {
+export function downloadGfCsv(
+  transactions: GfBackupPayload['transactions'],
+  categories: GfBackupPayload['categories'],
+  range?: { start: Date; end: Date },
+): void {
   const catMap = new Map(categories.map((c) => [c.id, c.name]))
-  const header = 'data,tipo,valor,categoria,descricao,caixa\n'
-  const rows = transactions.map((t) => {
+  const rows = transactions
+    .filter((t) => {
+      if (!range) return true
+      const d = new Date(t.occurredAt)
+      return d >= range.start && d < range.end
+    })
+    .map((t) => {
     const cat = t.categoryId ? (catMap.get(t.categoryId) ?? '') : ''
     const desc = (t.description ?? '').replace(/"/g, '""')
     return `${t.occurredAt.slice(0, 10)},${t.type},${t.amount},"${cat}","${desc}",${t.cashBoxId}`
   })
+  const header = 'data,tipo,valor,categoria,descricao,caixa\n'
+  const suffix = range
+    ? `${range.start.toISOString().slice(0, 10)}_${new Date(range.end.getTime() - 86_400_000).toISOString().slice(0, 10)}`
+    : new Date().toISOString().slice(0, 10)
   const blob = new Blob([header + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `yieldscan-movimentacoes-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `yieldscan-movimentacoes-${suffix}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }

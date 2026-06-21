@@ -31,7 +31,7 @@ export function GfPhraseInput({ value, onChange, inputRef, className }: Props) {
         'min-h-[80px] w-full rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-sm',
         className,
       )}
-      placeholder="Digite ou use o microfone do teclado: Ontem gastei 50 de mercado"
+      placeholder="Ex.: Ganhei 500 · Gastei 80 no mercado · Guardei 200 · Aportei 1000 nos investimentos"
       value={value}
       enterKeyHint="done"
       autoComplete="off"

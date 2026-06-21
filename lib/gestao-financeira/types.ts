@@ -102,6 +102,23 @@ export type GfDashboardStats = {
   totalCrypto: number
 }
 
+/** Preset de relatório ou intervalo livre entre duas datas. */
+export type GfPeriodPreset = 'week' | 'month' | 'quarter' | 'custom'
+
+export type GfDateRange = {
+  start: Date
+  /** Fim exclusivo (meia-noite do dia seguinte ao último dia incluído). */
+  end: Date
+}
+
+export type GfPeriodSummary = {
+  income: number
+  expense: number
+  savings: number
+  transactionCount: number
+  label: string
+}
+
 export type GfParsedVoiceEntry = {
   type: GfTransactionType
   amount: number

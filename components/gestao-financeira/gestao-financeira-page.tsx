@@ -19,11 +19,22 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
-import { debtsDueSoon } from '@/lib/gestao-financeira/calculations'
+import {
+  buildPeriodSummary,
+  debtsDueSoon,
+  filterTransactionsByRange,
+  resolvePeriodRange,
+  shiftPeriodAnchor,
+} from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
+import {
+  defaultReportPeriodState,
+  GfPeriodSelector,
+  type GfReportPeriodState,
+} from '@/components/gestao-financeira/gf-period-selector'
 import { cn } from '@/lib/utils'
 import {
   ArrowDownLeft,
@@ -153,6 +164,7 @@ function StatCard({
 export function GestaoFinanceiraPage() {
   const gf = useGestaoFinanceira()
   const [tab, setTab] = useState('dashboard')
+  const [reportPeriod, setReportPeriod] = useState<GfReportPeriodState>(defaultReportPeriodState)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -216,6 +228,32 @@ export function GestaoFinanceiraPage() {
   }, [gf.cryptoHoldings, gf.cryptoPrices, gf.brlPerUsd])
 
   const dueSoon = useMemo(() => debtsDueSoon(gf.debts), [gf.debts])
+
+  const reportRange = useMemo(
+    () =>
+      resolvePeriodRange(reportPeriod.preset, reportPeriod.anchor, {
+        from: reportPeriod.customFrom,
+        to: reportPeriod.customTo,
+      }),
+    [reportPeriod],
+  )
+
+  const periodSummary = useMemo(
+    () => buildPeriodSummary(gf.transactions, reportPeriod.preset, reportRange),
+    [gf.transactions, reportPeriod.preset, reportRange],
+  )
+
+  const periodTransactions = useMemo(
+    () => filterTransactionsByRange(gf.transactions, reportRange),
+    [gf.transactions, reportRange],
+  )
+
+  const shiftReportPeriod = (delta: -1 | 1) => {
+    setReportPeriod((prev) => ({
+      ...prev,
+      anchor: shiftPeriodAnchor(prev.preset, prev.anchor, delta),
+    }))
+  }
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -611,6 +649,25 @@ export function GestaoFinanceiraPage() {
         </TabsContent>
 
         <TabsContent value="relatorios" className="mt-4 space-y-4">
+          <GfPeriodSelector
+            value={reportPeriod}
+            onChange={setReportPeriod}
+            onPrev={() => shiftReportPeriod(-1)}
+            onNext={() => shiftReportPeriod(1)}
+          />
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard label="Receitas no período" value={fmtBrl(periodSummary.income)} icon={ArrowDownLeft} tone="green" />
+            <StatCard label="Despesas no período" value={fmtBrl(periodSummary.expense)} icon={ArrowUpRight} tone="red" />
+            <StatCard
+              label="Saldo do período"
+              value={fmtBrl(periodSummary.savings)}
+              icon={PiggyBank}
+              tone={periodSummary.savings >= 0 ? 'green' : 'red'}
+            />
+            <StatCard label="Movimentações" value={String(periodSummary.transactionCount)} icon={Wallet} />
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -625,10 +682,10 @@ export function GestaoFinanceiraPage() {
               type="button"
               variant="outline"
               className="gap-2"
-              onClick={() => downloadGfCsv(gf.transactions, gf.categories)}
+              onClick={() => downloadGfCsv(gf.transactions, gf.categories, reportRange)}
             >
               <Download className="h-4 w-4" />
-              Exportar CSV / Excel
+              CSV do período
             </Button>
             <Button type="button" variant="outline" className="gap-2" onClick={printGfReport}>
               <Download className="h-4 w-4" />
@@ -663,7 +720,50 @@ export function GestaoFinanceiraPage() {
             snapshots={gf.snapshots}
             stats={s}
             cryptoBreakdown={cryptoBreakdown}
+            reportRange={reportRange}
+            periodLabel={periodSummary.label}
           />
+
+          {periodTransactions.length > 0 ? (
+            <div className="rounded-2xl border border-border/50 bg-card/40 p-4 backdrop-blur-sm">
+              <h3 className="mb-3 text-sm font-semibold">Movimentações no período</h3>
+              <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
+                {periodTransactions.map((t) => {
+                  const cat = t.categoryId
+                    ? (gf.categories.find((c) => c.id === t.categoryId)?.name ?? 'Outros')
+                    : '—'
+                  const box = gf.cashBoxes.find((b) => b.id === t.cashBoxId)?.name ?? ''
+                  return (
+                    <li
+                      key={t.id}
+                      className="flex flex-wrap items-center justify-between gap-2 border-b border-border/30 py-2 last:border-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground">
+                          {t.description || cat}
+                          <span className="ml-2 text-xs text-muted-foreground">{t.occurredAt.slice(0, 10)}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {cat} · {box}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          'shrink-0 font-mono font-semibold',
+                          t.type === 'income' ? 'text-emerald-400' : t.type === 'expense' ? 'text-red-400' : 'text-zinc-400',
+                        )}
+                      >
+                        {t.type === 'expense' ? '−' : t.type === 'income' ? '+' : ''}
+                        {fmtBrl(t.amount)}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma movimentação neste período.</p>
+          )}
         </TabsContent>
       </Tabs>
         </>

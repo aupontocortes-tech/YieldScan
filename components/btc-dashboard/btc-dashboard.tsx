@@ -399,14 +399,16 @@ export function BtcDashboard() {
       <header
         className={cn(
           'sticky top-0 isolate z-[500] grid shrink-0 gap-x-1.5 border-b border-white/[0.06] bg-[#050505] px-1.5 py-1.5 sm:gap-x-2 sm:px-3 sm:py-2',
-          chartExpanded
+          isPhone
             ? cn(
                 'grid-cols-[minmax(0,1fr)_auto]',
-                isPhone ? 'grid-rows-[auto_auto]' : 'grid-rows-1 items-center',
+                chartExpanded ? 'grid-rows-[auto_auto]' : 'grid-rows-[auto_auto_auto] gap-y-1',
               )
             : cn(
                 'grid-cols-[minmax(0,1fr)_auto]',
-                isPhone ? 'grid-rows-[auto_auto_auto] gap-y-1' : 'grid-rows-[auto_auto] gap-y-1.5',
+                chartExpanded
+                  ? 'grid-rows-1 items-center'
+                  : 'grid-rows-[auto_auto] gap-y-1.5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-1 sm:items-center sm:gap-x-2',
               ),
         )}
         data-no-swipe-nav
@@ -423,7 +425,12 @@ export function BtcDashboard() {
           <IndicatorPairSelector pair={pair} onSelect={setPair} />
         </div>
 
-        <div className="col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:gap-1" data-no-swipe-nav>
+        <div
+          className={cn(
+            'col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:col-start-3 sm:gap-1',
+          )}
+          data-no-swipe-nav
+        >
           <ChartLandscapeToggle showLabels />
           {!chartExpanded && !isPhone && (
             <>
@@ -441,7 +448,7 @@ export function BtcDashboard() {
                 title="Radar de Tendência — sinais BUY/SELL no gráfico"
               >
                 <Radar className="h-3.5 w-3.5" />
-                <span>Radar</span>
+                <span className="hidden sm:inline">Radar</span>
               </Button>
               <Button
                 type="button"
@@ -456,7 +463,7 @@ export function BtcDashboard() {
                 onClick={openIndicatorsPanel}
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" />
-                <span>Indicadores</span>
+                <span className="hidden sm:inline">Indicadores</span>
               </Button>
               <Button
                 type="button"
@@ -471,7 +478,7 @@ export function BtcDashboard() {
                 onClick={openDrawingsPanel}
               >
                 <PenLine className="h-3.5 w-3.5" />
-                <span>Desenhos</span>
+                <span className="hidden sm:inline">Desenhos</span>
               </Button>
               <Button
                 type="button"
@@ -482,7 +489,7 @@ export function BtcDashboard() {
                 title="Reajusta zoom dos gráficos"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span>Layout</span>
+                <span className="hidden sm:inline">Layout</span>
               </Button>
             </>
           )}
@@ -502,7 +509,7 @@ export function BtcDashboard() {
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 text-[11px] text-zinc-600 hover:text-zinc-300"
+              className="hidden h-8 text-[11px] text-zinc-600 hover:text-zinc-300 md:inline-flex"
               onClick={resetDefaults}
             >
               Repor tudo
@@ -514,10 +521,17 @@ export function BtcDashboard() {
           aria-label="Intervalo das velas"
           className={cn(
             'flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.06] bg-black/40 px-1 py-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]',
-            chartExpanded
-              ? cn('col-span-2 snap-x snap-mandatory', isPhone ? 'row-start-2' : 'col-span-2 row-start-2 -mx-0.5')
-              : 'col-span-2 row-start-2 snap-x snap-mandatory',
-            !isPhone && !chartExpanded && 'min-h-[36px] gap-0.5 px-0.5 py-0.5',
+            isPhone
+              ? cn(
+                  'col-span-2 snap-x snap-mandatory',
+                  chartExpanded ? 'row-start-2' : 'row-start-2',
+                )
+              : cn(
+                  'min-h-[36px] gap-0.5 px-0.5 py-0.5',
+                  chartExpanded
+                    ? 'col-span-2 col-start-1 row-start-2 -mx-0.5'
+                    : 'col-span-2 row-start-2 -mx-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:mx-0',
+                ),
           )}
         >
           {TF_PRESETS.map((tf) => (
@@ -539,7 +553,7 @@ export function BtcDashboard() {
           ))}
         </nav>
 
-        {!chartExpanded && isPhone ? (
+        {isPhone && !chartExpanded ? (
           <IndicatorMobileToolbar
             trendRadarOn={trendRadar.enabled}
             indicatorsOpen={drawerOpen}
