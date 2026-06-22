@@ -51,33 +51,13 @@ export async function copyBrowserVoiceLink(): Promise<boolean> {
 }
 
 /**
- * Abre o YieldScan no navegador do sistema para ativar microfone e voz.
- * Usa vários métodos (link, intent Android) porque PWAs instalados bloqueiam o microfone.
+ * Abre o YieldScan no navegador externo (Chrome) para o microfone funcionar no PWA.
+ * Não usa intent:// Android — isso gera erro «APP/APT não encontrado» em muitos telemóveis.
  */
 export function openVoiceInSystemBrowser(): void {
   if (typeof window === 'undefined') return
   const url = getBrowserVoiceUrl()
-
-  const link = document.createElement('a')
-  link.href = url
-  link.target = '_blank'
-  link.rel = 'noopener noreferrer'
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-
-  if (detectMicPlatform() === 'android') {
-    window.setTimeout(() => {
-      try {
-        const hostPath = url.replace(/^https?:\/\//, '')
-        window.location.assign(
-          `intent://${hostPath}#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`,
-        )
-      } catch {
-        window.open(url, '_blank', 'noopener,noreferrer')
-      }
-    }, 500)
-  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 /** @deprecated use openVoiceInSystemBrowser */
@@ -137,16 +117,16 @@ export async function ensureMicrophoneAccess(): Promise<boolean> {
 export function micPermissionHelpLines(platform: MicPlatform, standalone: boolean): string[] {
   if (platform === 'android' && standalone) {
     return [
-      'Toque em «Abrir no navegador» (botão azul acima) — é o jeito mais fácil no app instalado.',
-      'No navegador, toque outra vez em «Permitir microfone» e depois em Permitir no aviso do celular.',
-      'Se preferir manual: Ajustes → Apps → YieldScan → Permissões → Microfone → Permitir.',
-      'Também pode: Ajustes → Apps → Samsung Internet (ou seu navegador) → Microfone → Permitir.',
+      'Feche o ícone do app e abra o Chrome manualmente (não use «Abrir no Chrome» se der erro).',
+      'No Chrome, digite: yield-scan.vercel.app/news/gestao-financeira',
+      'Toque no cadeado (ou ⓘ) ao lado do endereço → Microfone → Permitir.',
+      'Ou: Ajustes → Apps → Chrome → Permissões → Microfone → Permitir.',
     ]
   }
   if (platform === 'android') {
     return [
-      'Toque em «Tentar permitir de novo» abaixo — se aparecer o aviso, escolha Permitir.',
-      'Se não aparecer: ⋮ (três pontos do Chrome) → Informações do site → Microfone → Permitir.',
+      'Toque em «Tentar de novo» abaixo — se aparecer o aviso, escolha Permitir.',
+      'Toque no cadeado (ou ⓘ) à esquerda do endereço → Microfone → Permitir.',
       'Recarregue a página depois de permitir.',
       'Ou: Ajustes do Android → Apps → Chrome → Permissões → Microfone → Permitir.',
     ]
