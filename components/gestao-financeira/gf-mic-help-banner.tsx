@@ -6,6 +6,7 @@ import {
   copyBrowserVoiceLink,
   getBrowserVoiceUrl,
   openVoiceInSystemBrowser,
+  requestMicrophoneAccess,
 } from '@/lib/mic-permission'
 import { Check, Copy, ExternalLink, Mic } from 'lucide-react'
 
@@ -17,12 +18,25 @@ type Props = {
 
 export function GfMicHelpBanner({ lines, standalone, onRetry }: Props) {
   const [copied, setCopied] = useState(false)
+  const [permMsg, setPermMsg] = useState<string | null>(null)
   const url = getBrowserVoiceUrl()
 
   const handleCopy = async () => {
     const ok = await copyBrowserVoiceLink()
     setCopied(ok)
     if (ok) setTimeout(() => setCopied(false), 2500)
+  }
+
+  const handleAllowMic = async () => {
+    setPermMsg(null)
+    const result = await requestMicrophoneAccess()
+    if (result.ok) {
+      setPermMsg('Microfone permitido. Toque no 🎤, fale e toque de novo para parar.')
+    } else if (result.state === 'denied') {
+      setPermMsg('Bloqueado. Vá em Ajustes → Apps → Chrome → Permissões → Microfone → Permitir.')
+    } else {
+      setPermMsg('O aviso não apareceu. Use Ajustes → Apps → Chrome → Permissões → Microfone.')
+    }
   }
 
   return (
@@ -41,7 +55,17 @@ export function GfMicHelpBanner({ lines, standalone, onRetry }: Props) {
           {url.replace(/^https:\/\//, '')}
         </p>
       ) : null}
+      {permMsg ? <p className="text-emerald-300/95">{permMsg}</p> : null}
       <div className="flex flex-wrap gap-2 pt-1">
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 gap-1.5 bg-emerald-700 hover:bg-emerald-600"
+          onClick={() => void handleAllowMic()}
+        >
+          <Mic className="h-3.5 w-3.5" />
+          Permitir microfone
+        </Button>
         {standalone ? (
           <>
             <Button
@@ -61,7 +85,7 @@ export function GfMicHelpBanner({ lines, standalone, onRetry }: Props) {
         ) : null}
         {onRetry ? (
           <Button type="button" size="sm" variant="outline" className="h-8" onClick={onRetry}>
-            Tentar de novo
+            Tentar gravar
           </Button>
         ) : null}
       </div>

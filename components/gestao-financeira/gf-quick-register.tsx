@@ -135,11 +135,6 @@ export function GfQuickRegister() {
             Toque no <Mic className="inline h-3.5 w-3.5" /> → fale 2–3 s → toque de novo para parar.
             {speech.mode === 'whisper' ? ' Voz via OpenAI (celular).' : null}
           </p>
-          {speech.isStandalonePwa ? (
-            <p className="mt-1 text-xs text-sky-300/90">
-              App instalado: se o microfone falhar, use «Abrir no Chrome» no aviso abaixo.
-            </p>
-          ) : null}
           {!loadGfOpenAiSettings().enabled || !loadGfOpenAiSettings().apiKey.trim() ? (
             <p className="mt-1 text-xs text-amber-200/90">
               No celular, configure primeiro: Uso da API → chave → Ativar IA → Guardar.
@@ -162,18 +157,20 @@ export function GfQuickRegister() {
       />
 
       {speech.micError ? <p className="mt-2 text-xs text-amber-200/90">{speech.micError}</p> : null}
-      {speech.isStandalonePwa && !speech.micError ? (
+      {speech.isMobile ? (
         <GfMicHelpBanner
-          lines={[
-            'App instalado: o microfone funciona melhor no Chrome.',
-            'Toque «Abrir no Chrome», permita o microfone e use 🎤 (2 toques: gravar e parar).',
-          ]}
-          standalone
-        />
-      ) : null}
-      {speech.micError && speech.micHelpLines ? (
-        <GfMicHelpBanner
-          lines={speech.micHelpLines}
+          lines={
+            speech.micHelpLines ??
+            (speech.isStandalonePwa
+              ? [
+                  'No cadeado só Notificações é normal.',
+                  'Use «Permitir microfone» abaixo ou o botão 🎤.',
+                ]
+              : [
+                  'No cadeado só Notificações é normal.',
+                  'Use «Permitir microfone» abaixo, depois 🎤 (2 toques).',
+                ])
+          }
           standalone={speech.isStandalonePwa}
           onRetry={() => {
             speech.clearError()

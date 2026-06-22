@@ -117,18 +117,18 @@ export async function ensureMicrophoneAccess(): Promise<boolean> {
 export function micPermissionHelpLines(platform: MicPlatform, standalone: boolean): string[] {
   if (platform === 'android' && standalone) {
     return [
-      'Feche o ícone do app e abra o Chrome manualmente (não use «Abrir no Chrome» se der erro).',
-      'No Chrome, digite: yield-scan.vercel.app/news/gestao-financeira',
-      'Toque no cadeado (ou ⓘ) ao lado do endereço → Microfone → Permitir.',
-      'Ou: Ajustes → Apps → Chrome → Permissões → Microfone → Permitir.',
+      'Normal: no cadeado só aparece Notificações — o microfone só surge depois que o site pede.',
+      'Toque «Permitir microfone» abaixo ou o botão 🎤 — deve aparecer um aviso do Android (não do Chrome).',
+      'Se não aparecer: Ajustes → Apps → Chrome (ou YieldScan) → Permissões → Microfone → Permitir.',
+      'Abra pelo Chrome: yield-scan.vercel.app/news/gestao-financeira (não use só o ícone do app).',
     ]
   }
   if (platform === 'android') {
     return [
-      'Toque em «Tentar de novo» abaixo — se aparecer o aviso, escolha Permitir.',
-      'Toque no cadeado (ou ⓘ) à esquerda do endereço → Microfone → Permitir.',
-      'Recarregue a página depois de permitir.',
-      'Ou: Ajustes do Android → Apps → Chrome → Permissões → Microfone → Permitir.',
+      'No cadeado/ⓘ costuma aparecer só Notificações — isso é normal no Android.',
+      'Toque «Permitir microfone» ou 🎤 primeiro; o Android mostra o aviso do sistema para gravar áudio.',
+      'Se bloqueou antes: Ajustes → Apps → Chrome → Permissões → Microfone → Permitir.',
+      'Chrome → ⋮ → Definições → Definições do site → Microfone → verifique se não está bloqueado.',
     ]
   }
   if (platform === 'ios') {
