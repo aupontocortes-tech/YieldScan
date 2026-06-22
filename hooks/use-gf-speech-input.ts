@@ -7,7 +7,11 @@ import {
 } from '@/lib/gestao-financeira/openai-config'
 import { transcribeGfVoiceWithOpenAi } from '@/lib/gestao-financeira/transcribe-with-openai'
 import {
+  detectMicPlatform,
+  isStandalonePwa,
   micFailureMessage,
+  micPermissionHelpLines,
+  openVoiceInSystemBrowser,
   requestMicrophoneAccess,
   type MicAccessResult,
 } from '@/lib/mic-permission'
@@ -58,11 +62,13 @@ function pickMimeType(): string | undefined {
 }
 
 function resolveSpeechMode(): GfSpeechMode {
+  const settings = loadGfOpenAiSettings()
+  const openAiReady = settings.enabled && settings.apiKey.trim()
+
+  // Com OpenAI activa, Whisper (getUserMedia) pede permissão melhor no Android.
+  if (openAiReady && canRecordAudio()) return 'whisper'
   if (getSpeechRecognition()) return 'browser'
-  if (canRecordAudio()) {
-    const s = loadGfOpenAiSettings()
-    if (s.enabled && s.apiKey.trim()) return 'whisper'
-  }
+  if (canRecordAudio() && openAiReady) return 'whisper'
   return 'none'
 }
 
@@ -284,6 +290,12 @@ export function useGfSpeechInput() {
     supported,
     mode,
     micError,
+    micHelpLines:
+      micError != null
+        ? micPermissionHelpLines(detectMicPlatform(), isStandalonePwa())
+        : null,
+    isStandalonePwa: isStandalonePwa(),
+    openInBrowser: openVoiceInSystemBrowser,
     toggle,
     clearError: () => setMicError(null),
   }

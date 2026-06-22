@@ -18,9 +18,11 @@ import {
   DEFAULT_GF_OPENAI_SETTINGS,
   loadGfOpenAiSettings,
   maskOpenAiKey,
+  registerGfOpenAiTestCall,
   saveGfOpenAiSettings,
   summarizeGfOpenAiUsage,
 } from '@/lib/gestao-financeira/openai-config'
+import { fetchBrlPerUsd } from '@/lib/gestao-financeira/fx-rate'
 import { GF_OPENAI_MODEL } from '@/lib/gestao-financeira/voice-llm-shared'
 import type { GfOpenAiSettings } from '@/lib/gestao-financeira/types'
 import { AlertTriangle, Gauge, KeyRound, Sparkles, Trash2 } from 'lucide-react'
@@ -28,6 +30,7 @@ import { AlertTriangle, Gauge, KeyRound, Sparkles, Trash2 } from 'lucide-react'
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Fallback se a cotação ainda não carregou. */
   brlPerUsd?: number
 }
 
@@ -39,12 +42,14 @@ function fmtBrl(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 4 })
 }
 
-export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd = 5.1 }: Props) {
+export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1 }: Props) {
   const [settings, setSettings] = useState<GfOpenAiSettings>(DEFAULT_GF_OPENAI_SETTINGS)
   const [keyInput, setKeyInput] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [saved, setSaved] = useState(false)
   const [usageTick, setUsageTick] = useState(0)
+  const [brlPerUsd, setBrlPerUsd] = useState(brlFallback)
+  const [showFineTune, setShowFineTune] = useState(false)
 
   const refresh = useCallback(() => {
     const s = loadGfOpenAiSettings()
@@ -54,8 +59,15 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd = 5.1 }: Props) {
   }, [])
 
   useEffect(() => {
-    if (open) refresh()
+    if (open) {
+      refresh()
+      void fetchBrlPerUsd().then(setBrlPerUsd)
+    }
   }, [open, refresh])
+
+  useEffect(() => {
+    if (brlFallback > 0) setBrlPerUsd((fx) => (fx === 5.1 ? brlFallback : fx))
+  }, [brlFallback])
 
   const summary = summarizeGfOpenAiUsage(settings, brlPerUsd)
   void usageTick
@@ -290,6 +302,33 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd = 5.1 }: Props) {
               <Trash2 className="h-3.5 w-3.5" />
               Limpar histórico de consumo
             </Button>
+
+            <details
+              className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2"
+              open={showFineTune}
+              onToggle={(e) => setShowFineTune((e.target as HTMLDetailsElement).open)}
+            >
+              <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">
+                Ajuste fino (só neste aparelho)
+              </summary>
+              <div className="mt-2 space-y-2">
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  O histórico não sincroniza entre PC e celular. Use isto para testar o contador aqui.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    registerGfOpenAiTestCall()
+                    refresh()
+                  }}
+                >
+                  +1 chamada de teste
+                </Button>
+              </div>
+            </details>
           </section>
 
           <p className="text-[11px] leading-relaxed text-muted-foreground">

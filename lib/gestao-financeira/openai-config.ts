@@ -105,6 +105,18 @@ export function clearGfOpenAiUsage(): void {
   writeJson(USAGE_KEY, [])
 }
 
+/** Regista uma chamada fictícia mínima (só neste dispositivo) para testar o contador. */
+export function registerGfOpenAiTestCall(): void {
+  appendGfOpenAiUsage({
+    at: new Date().toISOString(),
+    feature: 'parse-voice',
+    model: 'gpt-4o-mini',
+    promptTokens: 80,
+    completionTokens: 40,
+    estimatedUsd: 0.00004,
+  })
+}
+
 export function usdToBrl(usd: number, brlPerUsd: number): number {
   return usd * brlPerUsd
 }

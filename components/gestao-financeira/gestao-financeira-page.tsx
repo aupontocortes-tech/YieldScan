@@ -371,12 +371,7 @@ export function GestaoFinanceiraPage() {
             Uso da API
             {openAiUsage.callsToday > 0 ? (
               <Badge variant="secondary" className="text-[10px]">
-                {openAiUsage.callsToday} · {openAiUsage.todayEstimatedBrl.toLocaleString('pt-BR', {
-                  style: 'currency',
-                  currency: 'BRL',
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 4,
-                })}
+                {openAiUsage.callsToday}
               </Badge>
             ) : null}
           </Button>

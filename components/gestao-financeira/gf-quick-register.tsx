@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { GfMicHelpBanner } from '@/components/gestao-financeira/gf-mic-help-banner'
 import { GfParsedPreview } from '@/components/gestao-financeira/gf-parsed-preview'
 import { GfPhraseInput } from '@/components/gestao-financeira/gf-phrase-input'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
@@ -151,6 +152,16 @@ export function GfQuickRegister() {
       />
 
       {speech.micError ? <p className="mt-2 text-xs text-amber-200/90">{speech.micError}</p> : null}
+      {speech.micError && speech.micHelpLines ? (
+        <GfMicHelpBanner
+          lines={speech.micHelpLines}
+          standalone={speech.isStandalonePwa}
+          onRetry={() => {
+            speech.clearError()
+            handleMic()
+          }}
+        />
+      ) : null}
       {speech.transcribing ? (
         <p className="mt-2 text-xs text-violet-200/90">Transcrevendo áudio com OpenAI…</p>
       ) : speech.listening && speech.mode === 'whisper' ? (
