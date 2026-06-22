@@ -1,3 +1,4 @@
+import { audioFilenameForMime } from '@/lib/gestao-financeira/audio-mime'
 import {
   appendGfOpenAiUsage,
   checkGfOpenAiLimits,
@@ -25,7 +26,8 @@ export async function transcribeGfVoiceWithOpenAi(
 
   try {
     const form = new FormData()
-    form.append('audio', audio, 'gravacao.webm')
+    const filename = audioFilenameForMime(audio.type || 'audio/webm')
+    form.append('audio', audio, filename)
     form.append('durationSeconds', String(Math.max(1, Math.round(durationSeconds))))
 
     const res = await fetch('/api/gestao-financeira/transcribe', {

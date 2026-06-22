@@ -61,7 +61,7 @@ export function GfPhraseInput({
           size="icon"
           variant={listening ? 'destructive' : 'secondary'}
           className={cn(
-            'absolute bottom-2 right-2 h-10 w-10 shrink-0 rounded-full shadow-md',
+            'absolute bottom-2 right-2 h-12 w-12 shrink-0 rounded-full shadow-md sm:h-10 sm:w-10',
             listening && 'animate-pulse',
           )}
           aria-label={listening ? 'Parar de ouvir' : 'Falar frase'}

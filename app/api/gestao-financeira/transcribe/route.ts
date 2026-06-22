@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { audioFilenameForMime } from '@/lib/gestao-financeira/audio-mime'
 import { estimateWhisperCostUsd } from '@/lib/gestao-financeira/openai-config'
 
 export const runtime = 'nodejs'
@@ -36,8 +37,14 @@ export async function POST(req: Request) {
   const durationRaw = formData.get('durationSeconds')
   const durationSeconds = Number(durationRaw) > 0 ? Number(durationRaw) : 5
 
+  const audioType = audio.type || 'audio/webm'
+  const filename =
+    audio instanceof File && audio.name
+      ? audio.name
+      : audioFilenameForMime(audioType)
+
   const openaiForm = new FormData()
-  openaiForm.append('file', audio, 'gravacao.webm')
+  openaiForm.append('file', audio, filename)
   openaiForm.append('model', WHISPER_MODEL)
   openaiForm.append('language', 'pt')
   openaiForm.append('response_format', 'json')

@@ -132,9 +132,19 @@ export function GfQuickRegister() {
         <div className="min-w-0">
           <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
           <p className="text-xs text-muted-foreground">
-            Toque no <Mic className="inline h-3.5 w-3.5" /> para falar (toque de novo para parar), ou digite.
-            {speech.mode === 'whisper' ? ' Voz via OpenAI Whisper neste navegador.' : null}
+            Toque no <Mic className="inline h-3.5 w-3.5" /> → fale 2–3 s → toque de novo para parar.
+            {speech.mode === 'whisper' ? ' Voz via OpenAI (celular).' : null}
           </p>
+          {speech.isStandalonePwa ? (
+            <p className="mt-1 text-xs text-sky-300/90">
+              App instalado: se o microfone falhar, use «Abrir no Chrome» no aviso abaixo.
+            </p>
+          ) : null}
+          {!loadGfOpenAiSettings().enabled || !loadGfOpenAiSettings().apiKey.trim() ? (
+            <p className="mt-1 text-xs text-amber-200/90">
+              No celular, configure primeiro: Uso da API → chave → Ativar IA → Guardar.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -152,6 +162,15 @@ export function GfQuickRegister() {
       />
 
       {speech.micError ? <p className="mt-2 text-xs text-amber-200/90">{speech.micError}</p> : null}
+      {speech.isStandalonePwa && !speech.micError ? (
+        <GfMicHelpBanner
+          lines={[
+            'App instalado: o microfone funciona melhor no Chrome.',
+            'Toque «Abrir no Chrome», permita o microfone e use 🎤 (2 toques: gravar e parar).',
+          ]}
+          standalone
+        />
+      ) : null}
       {speech.micError && speech.micHelpLines ? (
         <GfMicHelpBanner
           lines={speech.micHelpLines}
