@@ -137,12 +137,33 @@ export function useGestaoFinanceira() {
     }
   }, [applyLocalData])
 
+  const refreshCryptoPrices = useCallback(async (extraCoinIds: string[] = []) => {
+    const holdings = listGfCryptoHoldings()
+    const coinIds = [...new Set([...holdings.map((h) => h.coinId), ...extraCoinIds].filter(Boolean))]
+    if (coinIds.length === 0) return
+    setPricesLoading(true)
+    try {
+      const { prices, brlPerUsd: fx } = await fetchGfCryptoPrices(coinIds)
+      applyLocalData(prices, fx)
+    } finally {
+      setPricesLoading(false)
+    }
+  }, [applyLocalData])
+
   useEffect(() => {
     void ensureGfDb().then(() => {
       if (!listGfCategories().length) restoreGfFromAutoBackup()
       void reload()
     })
   }, [reload])
+
+  useEffect(() => {
+    if (!ready || cryptoHoldings.length === 0) return
+    const timer = window.setInterval(() => {
+      void refreshCryptoPrices()
+    }, 45_000)
+    return () => window.clearInterval(timer)
+  }, [ready, cryptoHoldings.length, refreshCryptoPrices])
 
   const addTransaction = useCallback(
     async (input: Parameters<typeof insertGfTransaction>[0]) => {
@@ -250,6 +271,7 @@ export function useGestaoFinanceira() {
     insights,
     pricesLoading,
     reload,
+    refreshCryptoPrices,
     addTransaction,
     addFromParsed,
     removeTransaction,

@@ -30,6 +30,13 @@ import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } 
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
+import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
+import {
+  GfCryptoCoinPicker,
+  type GfCryptoCoinPick,
+} from '@/components/gestao-financeira/gf-crypto-coin-picker'
+import { GfCryptoHoldingCard } from '@/components/gestao-financeira/gf-crypto-holding-card'
+import { loadGfOpenAiSettings, summarizeGfOpenAiUsage } from '@/lib/gestao-financeira/openai-config'
 import {
   defaultReportPeriodState,
   GfPeriodSelector,
@@ -41,6 +48,7 @@ import {
   ArrowUpRight,
   Bitcoin,
   Download,
+  Gauge,
   Landmark,
   PiggyBank,
   Plus,
@@ -167,6 +175,13 @@ export function GestaoFinanceiraPage() {
   const [reportPeriod, setReportPeriod] = useState<GfReportPeriodState>(defaultReportPeriodState)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [openAiPanelOpen, setOpenAiPanelOpen] = useState(false)
+  const [usageRefresh, setUsageRefresh] = useState(0)
+
+  const openAiUsage = useMemo(() => {
+    void usageRefresh
+    return summarizeGfOpenAiUsage(loadGfOpenAiSettings(), gf.brlPerUsd)
+  }, [usageRefresh, gf.brlPerUsd])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -198,8 +213,11 @@ export function GestaoFinanceiraPage() {
 
   // Crypto form
   const [cryptoWallet, setCryptoWallet] = useState('')
-  const [cryptoCoin, setCryptoCoin] = useState('bitcoin')
-  const [cryptoSymbol, setCryptoSymbol] = useState('BTC')
+  const [cryptoCoin, setCryptoCoin] = useState<GfCryptoCoinPick | null>({
+    id: 'bitcoin',
+    name: 'Bitcoin',
+    symbol: 'BTC',
+  })
   const [cryptoQty, setCryptoQty] = useState('')
   const [cryptoAvg, setCryptoAvg] = useState('')
 
@@ -217,6 +235,11 @@ export function GestaoFinanceiraPage() {
   useEffect(() => {
     if (gf.cryptoWallets[0] && !cryptoWallet) setCryptoWallet(gf.cryptoWallets[0]!.id)
   }, [gf.cryptoWallets, cryptoWallet])
+
+  useEffect(() => {
+    if (!cryptoCoin?.id) return
+    void gf.refreshCryptoPrices([cryptoCoin.id])
+  }, [cryptoCoin?.id, gf.refreshCryptoPrices])
 
   const cryptoBreakdown = useMemo(() => {
     return gf.cryptoHoldings
@@ -283,17 +306,23 @@ export function GestaoFinanceiraPage() {
 
   const handleCryptoSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!cryptoWallet) return
+    if (!cryptoWallet || !cryptoCoin) return
     await gf.saveHolding({
       walletId: cryptoWallet,
-      coinId: cryptoCoin.trim().toLowerCase(),
-      symbol: cryptoSymbol.trim().toUpperCase(),
+      coinId: cryptoCoin.id,
+      symbol: cryptoCoin.symbol.trim().toUpperCase(),
       quantity: Number(cryptoQty.replace(',', '.')),
       avgPriceUsd: Number(cryptoAvg.replace(',', '.')),
     })
     setCryptoQty('')
     setCryptoAvg('')
   }
+
+  const selectedLiveUsd = cryptoCoin ? gf.cryptoPrices[cryptoCoin.id]?.usd : undefined
+  const selectedLiveBrl =
+    cryptoCoin != null
+      ? gf.cryptoPrices[cryptoCoin.id]?.brl ?? (selectedLiveUsd != null ? selectedLiveUsd * gf.brlPerUsd : undefined)
+      : undefined
 
   const handleDebtSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -328,6 +357,29 @@ export function GestaoFinanceiraPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2 border-violet-500/35"
+            onClick={() => {
+              setUsageRefresh((n) => n + 1)
+              setOpenAiPanelOpen(true)
+            }}
+          >
+            <Gauge className="h-4 w-4 text-violet-400" />
+            Uso da API
+            {openAiUsage.callsToday > 0 ? (
+              <Badge variant="secondary" className="text-[10px]">
+                {openAiUsage.callsToday} · {openAiUsage.todayEstimatedBrl.toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 4,
+                })}
+              </Badge>
+            ) : null}
+          </Button>
           <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void gf.reload()}>
             <RefreshCw className={cn('h-4 w-4', gf.pricesLoading && 'animate-spin')} />
             Actualizar
@@ -582,66 +634,68 @@ export function GestaoFinanceiraPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <Label>Moeda (CoinGecko id)</Label>
-              <Input value={cryptoCoin} onChange={(e) => setCryptoCoin(e.target.value)} placeholder="bitcoin" />
+            <div className="sm:col-span-2">
+              <GfCryptoCoinPicker value={cryptoCoin} onChange={setCryptoCoin} />
             </div>
-            <div>
-              <Label>Símbolo</Label>
-              <Input value={cryptoSymbol} onChange={(e) => setCryptoSymbol(e.target.value)} placeholder="BTC" />
-            </div>
+            {cryptoCoin && selectedLiveUsd != null ? (
+              <div className="sm:col-span-2 lg:col-span-3 rounded-lg border border-amber-500/25 bg-amber-950/15 px-3 py-2 text-sm">
+                <p className="text-xs text-muted-foreground">Preço ao vivo (CoinGecko · actualiza ~45s)</p>
+                <p className="font-semibold">
+                  {cryptoCoin.symbol.toUpperCase()}: ${selectedLiveUsd.toLocaleString('en-US', { maximumFractionDigits: selectedLiveUsd < 1 ? 6 : 2 })}
+                  {selectedLiveBrl != null ? (
+                    <span className="ml-2 text-muted-foreground">
+                      · {fmtBrl(selectedLiveBrl)} · USD/BRL {gf.brlPerUsd.toFixed(2)}
+                    </span>
+                  ) : null}
+                </p>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-xs text-amber-300"
+                  onClick={() => {
+                    if (selectedLiveUsd != null) setCryptoAvg(String(selectedLiveUsd))
+                  }}
+                >
+                  Usar preço actual como preço médio
+                </Button>
+              </div>
+            ) : null}
             <div>
               <Label>Quantidade</Label>
-              <Input value={cryptoQty} onChange={(e) => setCryptoQty(e.target.value)} />
+              <Input value={cryptoQty} onChange={(e) => setCryptoQty(e.target.value)} placeholder="0,5" />
             </div>
             <div>
               <Label>Preço médio (USD)</Label>
-              <Input value={cryptoAvg} onChange={(e) => setCryptoAvg(e.target.value)} />
+              <Input value={cryptoAvg} onChange={(e) => setCryptoAvg(e.target.value)} placeholder="65000" />
             </div>
             <div className="flex items-end">
-              <Button type="submit" className="w-full gap-2">
+              <Button type="submit" className="w-full gap-2" disabled={!cryptoCoin}>
                 <Bitcoin className="h-4 w-4" />
                 Guardar posição
               </Button>
             </div>
           </form>
 
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>Valores em tempo real via CoinGecko</span>
+            <Button type="button" variant="ghost" size="sm" className="h-7 gap-1" onClick={() => void gf.refreshCryptoPrices()}>
+              <RefreshCw className={cn('h-3.5 w-3.5', gf.pricesLoading && 'animate-spin')} />
+              Actualizar preços
+            </Button>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
-            {gf.cryptoHoldings.map((h) => {
-              const px = gf.cryptoPrices[h.coinId]?.usd ?? 0
-              const current = h.quantity * px * gf.brlPerUsd
-              const invested = h.quantity * h.avgPriceUsd * gf.brlPerUsd
-              const pnl = current - invested
-              const wallet = gf.cryptoWallets.find((w) => w.id === h.walletId)
-              return (
-                <div key={h.id} className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
-                  <div className="flex justify-between gap-2">
-                    <p className="font-bold">{h.symbol}</p>
-                    <div className="flex items-center gap-1">
-                      <Badge variant="outline">{wallet?.name}</Badge>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-red-400"
-                        aria-label={`Excluir posição ${h.symbol}`}
-                        onClick={() => setDeleteTarget({ kind: 'crypto', id: h.id, label: h.symbol })}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-lg font-semibold">{fmtBrl(current)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {h.quantity} · PM ${h.avgPriceUsd.toLocaleString('en-US')} · Atual ${px.toLocaleString('en-US')}
-                  </p>
-                  <p className={cn('mt-1 text-sm font-medium', pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                    {pnl >= 0 ? '+' : ''}
-                    {fmtBrl(pnl)} ({invested > 0 ? ((pnl / invested) * 100).toFixed(1) : '0'}%)
-                  </p>
-                </div>
-              )
-            })}
+            {gf.cryptoHoldings.map((h) => (
+              <GfCryptoHoldingCard
+                key={h.id}
+                holding={h}
+                wallet={gf.cryptoWallets.find((w) => w.id === h.walletId)}
+                prices={gf.cryptoPrices}
+                brlPerUsd={gf.brlPerUsd}
+                fmtBrl={fmtBrl}
+                onDelete={() => setDeleteTarget({ kind: 'crypto', id: h.id, label: h.symbol })}
+              />
+            ))}
             {gf.cryptoHoldings.length === 0 ? (
               <p className="text-sm text-muted-foreground sm:col-span-2">Adicione posições em BTC, ETH, SOL e outras moedas CoinGecko.</p>
             ) : null}
@@ -798,6 +852,15 @@ export function GestaoFinanceiraPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GfOpenAiPanel
+        open={openAiPanelOpen}
+        brlPerUsd={gf.brlPerUsd}
+        onOpenChange={(open) => {
+          setOpenAiPanelOpen(open)
+          if (!open) setUsageRefresh((n) => n + 1)
+        }}
+      />
 
     </div>
   )

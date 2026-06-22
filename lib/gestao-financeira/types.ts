@@ -134,6 +134,56 @@ export type GfParsedVoiceEntry = {
   summary: string
 }
 
+/** Resultado da interpretação de frase (local ou OpenAI). */
+export type GfVoiceParseResult =
+  | {
+      kind: 'transaction'
+      entry: GfParsedVoiceEntry
+      source: 'local' | 'openai'
+    }
+  | {
+      kind: 'balance'
+      answer: string
+      source: 'local' | 'openai'
+    }
+
+export type GfOpenAiSettings = {
+  /** Chave guardada só neste dispositivo (localStorage). */
+  apiKey: string
+  enabled: boolean
+  /** Orçamento mensal estimado em USD (controlo de gastos). */
+  monthlyBudgetUsd: number
+  /** Máximo de chamadas por dia. */
+  maxCallsPerDay: number
+}
+
+export type GfOpenAiUsageRecord = {
+  id: string
+  at: string
+  feature: 'parse-voice' | 'transcribe'
+  model: string
+  promptTokens: number
+  completionTokens: number
+  estimatedUsd: number
+}
+
+export type GfOpenAiUsageSummary = {
+  totalCalls: number
+  callsToday: number
+  monthEstimatedUsd: number
+  monthEstimatedBrl: number
+  todayEstimatedUsd: number
+  todayEstimatedBrl: number
+  avgCallCostUsdToday: number
+  avgCallCostBrlToday: number
+  monthPromptTokens: number
+  monthCompletionTokens: number
+  remainingCallsToday: number
+  remainingBudgetUsd: number
+  remainingBudgetBrl: number
+  records: GfOpenAiUsageRecord[]
+}
+
 export type GfBackupPayload = {
   version: number
   exportedAt: string
