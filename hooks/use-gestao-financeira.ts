@@ -24,7 +24,7 @@ import {
   listGfInvestments,
   listGfPatrimonySnapshots,
   listGfTransactions,
-  restoreGfFromAutoBackup,
+  restoreGfFromAutoBackupIfNeeded,
   upsertGfCryptoHolding,
   upsertGfInvestment,
   insertGfDebt,
@@ -152,7 +152,7 @@ export function useGestaoFinanceira() {
 
   useEffect(() => {
     void ensureGfDb().then(() => {
-      if (!listGfCategories().length) restoreGfFromAutoBackup()
+      restoreGfFromAutoBackupIfNeeded()
       void reload()
     })
   }, [reload])

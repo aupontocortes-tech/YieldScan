@@ -353,7 +353,7 @@ export function GestaoFinanceiraPage() {
             <Badge className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0">Premium</Badge>
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Digite ou fale pelo teclado · confirmação antes de salvar · dados locais.
+            Dados guardados neste dispositivo (SQLite) · sobrevivem a actualizações do app · confirmação antes de salvar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

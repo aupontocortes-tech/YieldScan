@@ -712,3 +712,32 @@ export function restoreGfFromAutoBackup(): boolean {
   importGfBackup(stored.payload)
   return true
 }
+
+/** True se o utilizador já tem movimentações ou saldos reais (não só caixas vazias por defeito). */
+export function hasGfUserData(): boolean {
+  const txCount = sqlQuery<{ c: number }>('SELECT COUNT(*) as c FROM gf_transactions')[0]?.c ?? 0
+  if (txCount > 0) return true
+  const debtCount = sqlQuery<{ c: number }>('SELECT COUNT(*) as c FROM gf_debts')[0]?.c ?? 0
+  if (debtCount > 0) return true
+  const cryptoCount = sqlQuery<{ c: number }>('SELECT COUNT(*) as c FROM gf_crypto_holdings')[0]?.c ?? 0
+  if (cryptoCount > 0) return true
+  const boxBalance = sqlQuery<{ c: number }>(
+    'SELECT COUNT(*) as c FROM gf_cash_boxes WHERE balance != 0',
+  )[0]?.c ?? 0
+  return boxBalance > 0
+}
+
+function backupHasUserData(payload: GfBackupPayload): boolean {
+  if ((payload.transactions?.length ?? 0) > 0) return true
+  if ((payload.debts?.length ?? 0) > 0) return true
+  if ((payload.cryptoHoldings?.length ?? 0) > 0) return true
+  return (payload.cashBoxes ?? []).some((b) => b.balance !== 0)
+}
+
+/** Restaura backup automático só se a base actual estiver vazia mas o backup tiver dados. */
+export function restoreGfFromAutoBackupIfNeeded(): boolean {
+  if (hasGfUserData()) return false
+  const stored = kvGetJson<{ payload: GfBackupPayload }>(AUTO_BACKUP_KEY)
+  if (!stored?.payload || !backupHasUserData(stored.payload)) return false
+  return restoreGfFromAutoBackup()
+}

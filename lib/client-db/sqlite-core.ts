@@ -15,6 +15,9 @@ const MIGRATION_FLAG = 'yieldscan-sqlite-migrated-v1'
 
 let db: Database | null = null
 let initPromise: Promise<void> | null = null
+/** True se o ficheiro veio do IndexedDB (evita sobrescrever dados numa falha de leitura). */
+let loadedFromIdb = false
+let persistListenersInstalled = false
 
 const pendingWrites: Array<{ key: string; value: string }> = []
 let persistTimer: ReturnType<typeof setTimeout> | null = null
@@ -50,6 +53,30 @@ async function idbLoad(): Promise<Uint8Array | null> {
   } catch {
     return null
   }
+}
+
+async function idbLoadWithRetry(maxAttempts = 4): Promise<Uint8Array | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const buf = await idbLoad()
+    if (buf?.byteLength) return buf
+    if (attempt < maxAttempts - 1) {
+      await new Promise((r) => setTimeout(r, 120 * (attempt + 1)))
+    }
+  }
+  return null
+}
+
+function installPersistListeners(): void {
+  if (persistListenersInstalled || typeof window === 'undefined') return
+  persistListenersInstalled = true
+  const flush = () => {
+    void flushYieldscanSqlitePersist()
+  }
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush()
+  })
+  window.addEventListener('pagehide', flush)
+  window.addEventListener('beforeunload', flush)
 }
 
 async function idbSave(data: Uint8Array): Promise<void> {
@@ -115,7 +142,15 @@ async function persistToIdb() {
   if (!db) return
   try {
     const data = db.export()
+    // Protecção: não substituir base existente por uma vazia após falha de leitura.
+    if (!loadedFromIdb) {
+      const existing = await idbLoad()
+      if (existing?.byteLength && existing.byteLength > data.byteLength + 4096) {
+        return
+      }
+    }
     await idbSave(data)
+    loadedFromIdb = true
   } catch {
     /* ignore quota / modo privado */
   }
@@ -146,13 +181,15 @@ export async function openYieldscanSqlite(): Promise<void> {
       const initSqlJs = (await import('sql.js')).default
       const SQL = await initSqlJs({ locateFile: wasmUrl })
 
-      const buf = await idbLoad()
+      const buf = await idbLoadWithRetry()
+      loadedFromIdb = !!(buf?.byteLength)
       db = buf?.byteLength ? new SQL.Database(buf) : new SQL.Database()
 
       db.run(`CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
 
       migrateFromLocalStorage()
       flushPending()
+      installPersistListeners()
     })()
 
     initPromise = Promise.race([
