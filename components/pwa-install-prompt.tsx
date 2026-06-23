@@ -1,17 +1,20 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Download, Share, X } from 'lucide-react'
+import { Download, MoreVertical, Share, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'yieldscan-pwa-install-dismissed'
-const DISMISS_MS = 1000 * 60 * 60 * 24 * 5
+/** Reaparece no dia seguinte se o utilizador fechar «Agora não». */
+const DISMISS_MS = 1000 * 60 * 60 * 24
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
+
+type HintMode = 'none' | 'ios' | 'android'
 
 function isStandaloneDisplay(): boolean {
   if (typeof window === 'undefined') return false
@@ -19,6 +22,7 @@ function isStandaloneDisplay(): boolean {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
     nav.standalone === true
   )
 }
@@ -32,6 +36,11 @@ function isIosDevice(): boolean {
   return false
 }
 
+function isAndroidDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /Android/i.test(navigator.userAgent)
+}
+
 function readDismissedAt(): number {
   try {
     return parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10) || 0
@@ -42,7 +51,7 @@ function readDismissedAt(): number {
 
 export function PwaInstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
-  const [iosHint, setIosHint] = useState(false)
+  const [hintMode, setHintMode] = useState<HintMode>('none')
   const [open, setOpen] = useState(false)
 
   const dismiss = useCallback(() => {
@@ -72,7 +81,7 @@ export function PwaInstallPrompt() {
     const onBeforeInstall = (e: Event) => {
       e.preventDefault()
       receivedBrowserInstall = true
-      setIosHint(false)
+      setHintMode('none')
       setDeferred(e as BeforeInstallPromptEvent)
       setOpen(true)
     }
@@ -80,12 +89,17 @@ export function PwaInstallPrompt() {
     window.addEventListener('beforeinstallprompt', onBeforeInstall)
 
     const timer = window.setTimeout(() => {
-      if (receivedBrowserInstall) return
-      if (isIosDevice() && !isStandaloneDisplay()) {
-        setIosHint(true)
+      if (receivedBrowserInstall || isStandaloneDisplay()) return
+      if (isIosDevice()) {
+        setHintMode('ios')
+        setOpen(true)
+        return
+      }
+      if (isAndroidDevice()) {
+        setHintMode('android')
         setOpen(true)
       }
-    }, 2800)
+    }, 1800)
 
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstall)
@@ -111,7 +125,7 @@ export function PwaInstallPrompt() {
     <div
       className={cn(
         'fixed inset-x-0 bottom-0 z-[100] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]',
-        'pointer-events-none flex justify-center'
+        'pointer-events-none flex justify-center',
       )}
       role="dialog"
       aria-labelledby="pwa-install-title"
@@ -120,33 +134,34 @@ export function PwaInstallPrompt() {
       <div
         className={cn(
           'pointer-events-auto w-full max-w-md rounded-xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur-md',
-          'animate-in slide-in-from-bottom-4 fade-in duration-300'
+          'animate-in slide-in-from-bottom-4 fade-in duration-300',
         )}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2
-              id="pwa-install-title"
-              className="text-base font-semibold text-foreground"
-            >
+            <h2 id="pwa-install-title" className="text-base font-semibold text-foreground">
               Instalar YieldScan
             </h2>
-            <p
-              id="pwa-install-desc"
-              className="mt-1 text-sm text-muted-foreground"
-            >
-              {iosHint ? (
+            <p id="pwa-install-desc" className="mt-1 text-sm text-muted-foreground">
+              {hintMode === 'ios' ? (
                 <>
                   No iPhone ou iPad: toque em{' '}
                   <Share className="mx-0.5 inline size-4 align-text-bottom text-cyan" />{' '}
                   <strong className="text-foreground">Compartilhar</strong> e depois em{' '}
                   <strong className="text-foreground">Adicionar à Tela de Início</strong>.
-                  Assim o app abre como no celular, em tela cheia.
+                </>
+              ) : hintMode === 'android' ? (
+                <>
+                  No Android: toque em{' '}
+                  <MoreVertical className="mx-0.5 inline size-4 align-text-bottom text-cyan" />{' '}
+                  <strong className="text-foreground">menu do Chrome</strong> →{' '}
+                  <strong className="text-foreground">Instalar aplicativo</strong> ou{' '}
+                  <strong className="text-foreground">Adicionar à tela inicial</strong>.
                 </>
               ) : (
                 <>
-                  Instale no computador ou Android para abrir o YieldScan como aplicativo,
-                  com ícone na área de trabalho ou na gaveta de apps.
+                  Instale no telemóvel ou computador para abrir como aplicativo, com ícone na gaveta
+                  de apps.
                 </>
               )}
             </p>
@@ -164,7 +179,7 @@ export function PwaInstallPrompt() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {!iosHint && deferred ? (
+          {deferred ? (
             <Button type="button" className="gap-2 bg-cyan text-background hover:bg-cyan/90" onClick={install}>
               <Download className="size-4" />
               Instalar agora

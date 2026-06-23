@@ -18,7 +18,7 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['finance', 'productivity'],
     lang: 'pt-BR',
     dir: 'ltr',
-    permissions: ['microphone'],
+    prefer_related_applications: false,
     icons: [
       {
         src: '/icon-192.png',
