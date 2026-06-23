@@ -8,16 +8,13 @@ export function isPhoneViewport(width = window.innerWidth, height = window.inner
 }
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState(() => {
-    if (typeof window === 'undefined') return false
-    return isPhoneViewport()
-  })
+  const [isMobile, setIsMobile] = React.useState(false)
 
   React.useEffect(() => {
     const onChange = () => setIsMobile(isPhoneViewport())
+    onChange()
     window.addEventListener('resize', onChange)
     window.addEventListener('orientationchange', onChange)
-    onChange()
     return () => {
       window.removeEventListener('resize', onChange)
       window.removeEventListener('orientationchange', onChange)

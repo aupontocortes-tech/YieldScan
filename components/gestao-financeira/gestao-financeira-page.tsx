@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import dynamic from 'next/dynamic'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +28,7 @@ import {
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
+import { GfCharts } from '@/components/gestao-financeira/gf-charts'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
 import {
@@ -59,14 +59,6 @@ import {
   Upload,
   Wallet,
 } from 'lucide-react'
-
-const GfCharts = dynamic(
-  () => import('@/components/gestao-financeira/gf-charts').then((m) => ({ default: m.GfCharts })),
-  {
-    loading: () => <div className="h-48 animate-pulse rounded-2xl bg-muted/15" aria-hidden />,
-    ssr: false,
-  },
-)
 
 function fmtBrl(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

@@ -431,6 +431,7 @@ function HighlightEmptyCard({
 
 export function DashbuddyCryptoMarket() {
   const isMobile = useIsMobile()
+  const [clientMounted, setClientMounted] = useState(false)
   const [highlightIds, setHighlightIds] = useState<string[]>(
     () => readStoredHighlightIds() ?? [...DEFAULT_MARKET_HIGHLIGHT_IDS],
   )
@@ -438,6 +439,10 @@ export function DashbuddyCryptoMarket() {
   const [displayPrefs, setDisplayPrefs] = useState(() => readMercadoDisplayPrefs())
   const [iconRefresh, setIconRefresh] = useState(0)
   const iconsFetchedFor = useRef('')
+
+  useEffect(() => {
+    setClientMounted(true)
+  }, [])
 
   useEffect(() => {
     void whenYieldscanSqliteReady().then(() => {
@@ -469,12 +474,12 @@ export function DashbuddyCryptoMarket() {
   const pricesCacheKey = `${favoriteQueryKey}|prices`
 
   const pricesPlaceholder = useMemo(
-    () => readMercadoPricesPlaceholder(highlightIds),
-    [highlightIds],
+    () => (clientMounted ? readMercadoPricesPlaceholder(highlightIds) : undefined),
+    [highlightIds, clientMounted],
   )
   const pricesCacheUpdatedAt = useMemo(
-    () => readMercadoCacheUpdatedAt(pricesCacheKey),
-    [pricesCacheKey],
+    () => (clientMounted ? readMercadoCacheUpdatedAt(pricesCacheKey) : undefined),
+    [pricesCacheKey, clientMounted],
   )
 
   const [fullFetchReady, setFullFetchReady] = useState(true)
@@ -498,9 +503,11 @@ export function DashbuddyCryptoMarket() {
       isMobile
         ? Math.min(6_000, 800 * 2 ** attempt)
         : Math.min(12_000, 1_500 * 2 ** attempt),
-    initialData: pricesPlaceholder,
-    initialDataUpdatedAt: pricesCacheUpdatedAt,
-    placeholderData: (prev) => prev ?? readMercadoPricesPlaceholder(highlightIds),
+    initialData: clientMounted ? pricesPlaceholder : undefined,
+    initialDataUpdatedAt: clientMounted ? pricesCacheUpdatedAt : undefined,
+    placeholderData: clientMounted
+      ? (prev) => prev ?? readMercadoPricesPlaceholder(highlightIds)
+      : undefined,
   })
 
   const {
@@ -524,7 +531,9 @@ export function DashbuddyCryptoMarket() {
       isMobile
         ? Math.min(8_000, 1_200 * 2 ** attempt)
         : Math.min(12_000, 2_000 * 2 ** attempt),
-    placeholderData: () => readMercadoFullPlaceholder(allMarketIds),
+    placeholderData: clientMounted
+      ? () => readMercadoFullPlaceholder(allMarketIds)
+      : undefined,
   })
 
   useEffect(() => {

@@ -167,7 +167,7 @@ export function MobileSidebarEdgeOpenStrip() {
     }
   }, [])
 
-  if (!isMobile || openMobile) return null
+  if (!mounted || !isMobile || openMobile) return null
 
   const edgeHitStrip = (
     <div
@@ -203,8 +203,6 @@ export function MobileSidebarEdgeOpenStrip() {
         />
       </>
     ) : null
-
-  if (!mounted) return edgeHitStrip
 
   return (
     <>
