@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { GfMicHelpBanner } from '@/components/gestao-financeira/gf-mic-help-banner'
+import { GfMobileVoiceAlternatives } from '@/components/gestao-financeira/gf-mobile-voice-alternatives'
 import { GfParsedPreview } from '@/components/gestao-financeira/gf-parsed-preview'
 import { GfPhraseInput } from '@/components/gestao-financeira/gf-phrase-input'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
@@ -132,8 +133,9 @@ export function GfQuickRegister() {
         <div className="min-w-0">
           <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
           <p className="text-xs text-muted-foreground">
-            Toque no <Mic className="inline h-3.5 w-3.5" /> → fale 2–3 s → toque de novo para parar.
-            {speech.mode === 'whisper' ? ' Voz via OpenAI (celular).' : null}
+            {speech.isMobile
+              ? 'No celular, o jeito mais fácil é falar pelo microfone do teclado (ver abaixo).'
+              : 'Toque no 🎤 → fale → toque de novo para parar, ou digite a frase.'}
           </p>
           {!loadGfOpenAiSettings().enabled || !loadGfOpenAiSettings().apiKey.trim() ? (
             <p className="mt-1 text-xs text-amber-200/90">
@@ -142,6 +144,8 @@ export function GfQuickRegister() {
           ) : null}
         </div>
       </div>
+
+      {speech.isMobile ? <GfMobileVoiceAlternatives /> : null}
 
       <GfPhraseInput
         value={text}
@@ -157,20 +161,9 @@ export function GfQuickRegister() {
       />
 
       {speech.micError ? <p className="mt-2 text-xs text-amber-200/90">{speech.micError}</p> : null}
-      {speech.isMobile ? (
+      {speech.isMobile && speech.micError && speech.micHelpLines ? (
         <GfMicHelpBanner
-          lines={
-            speech.micHelpLines ??
-            (speech.isStandalonePwa
-              ? [
-                  'No cadeado só Notificações é normal.',
-                  'Use «Permitir microfone» abaixo ou o botão 🎤.',
-                ]
-              : [
-                  'No cadeado só Notificações é normal.',
-                  'Use «Permitir microfone» abaixo, depois 🎤 (2 toques).',
-                ])
-          }
+          lines={speech.micHelpLines}
           standalone={speech.isStandalonePwa}
           onRetry={() => {
             speech.clearError()
