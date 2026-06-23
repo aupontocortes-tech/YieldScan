@@ -27,9 +27,11 @@ import type {
 const SCHEMA_VERSION = 1
 const SCHEMA_KEY = 'gf_schema_version'
 const AUTO_BACKUP_KEY = 'gf_auto_backup_v1'
-const AUTO_BACKUP_INTERVAL_MS = 6 * 60 * 60_000
+/** Cópia extra fora do SQLite — sobrevive se o Android limpar o IndexedDB. */
+const EMERGENCY_LS_KEY = 'yieldscan_gf_emergency_backup_v1'
 
 let migrated = false
+let backupTimer: ReturnType<typeof setTimeout> | null = null
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -287,12 +289,39 @@ export async function ensureGfDb(): Promise<void> {
   }
 }
 
-function scheduleAutoBackup(): void {
-  const last = kvGetJson<{ at: number }>(AUTO_BACKUP_KEY)
-  if (last && Date.now() - last.at < AUTO_BACKUP_INTERVAL_MS) return
-  const payload = exportGfBackup()
+function writeEmergencyBackup(payload: GfBackupPayload): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(EMERGENCY_LS_KEY, JSON.stringify({ at: Date.now(), payload }))
+  } catch {
+    /* quota */
+  }
+}
+
+function readEmergencyBackup(): GfBackupPayload | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(EMERGENCY_LS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { payload?: GfBackupPayload }
+    return parsed.payload ?? null
+  } catch {
+    return null
+  }
+}
+
+function persistAutoBackup(payload: GfBackupPayload): void {
   kvSetJson(AUTO_BACKUP_KEY, { at: Date.now(), payload })
+  writeEmergencyBackup(payload)
   void flushYieldscanSqlitePersist()
+}
+
+function scheduleAutoBackup(): void {
+  if (backupTimer) clearTimeout(backupTimer)
+  backupTimer = setTimeout(() => {
+    backupTimer = null
+    persistAutoBackup(exportGfBackup())
+  }, 2000)
 }
 
 export function listGfCategories(): GfCategory[] {
@@ -702,8 +731,7 @@ export function importGfBackup(payload: GfBackupPayload): void {
       [s.id, s.totalAssets, s.netWorth, s.cashTotal, s.investmentsTotal, s.cryptoTotal, s.debtsTotal, s.recordedAt],
     )
   }
-  kvSetJson(AUTO_BACKUP_KEY, { at: Date.now(), payload: exportGfBackup() })
-  void flushYieldscanSqlitePersist()
+  persistAutoBackup(exportGfBackup())
 }
 
 export function restoreGfFromAutoBackup(): boolean {
@@ -737,7 +765,18 @@ function backupHasUserData(payload: GfBackupPayload): boolean {
 /** Restaura backup automático só se a base actual estiver vazia mas o backup tiver dados. */
 export function restoreGfFromAutoBackupIfNeeded(): boolean {
   if (hasGfUserData()) return false
+
   const stored = kvGetJson<{ payload: GfBackupPayload }>(AUTO_BACKUP_KEY)
-  if (!stored?.payload || !backupHasUserData(stored.payload)) return false
-  return restoreGfFromAutoBackup()
+  if (stored?.payload && backupHasUserData(stored.payload)) {
+    importGfBackup(stored.payload)
+    return true
+  }
+
+  const emergency = readEmergencyBackup()
+  if (emergency && backupHasUserData(emergency)) {
+    importGfBackup(emergency)
+    return true
+  }
+
+  return false
 }
