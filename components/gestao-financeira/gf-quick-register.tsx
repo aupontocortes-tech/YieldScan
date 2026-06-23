@@ -49,8 +49,6 @@ export function GfQuickRegister() {
   const [interpreting, setInterpreting] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const localHint = text.trim() ? parseGfVoiceText(text.trim()) : null
-
   const handleInterpret = async (overrideText?: string) => {
     const phrase = (overrideText ?? text).trim()
     if (!phrase) return
@@ -105,9 +103,7 @@ export function GfQuickRegister() {
       setError(null)
       void interpretRef.current(transcript)
     }
-    // Pedido ao navegador no mesmo instante do clique (exigência Android/PWA).
-    const micPromise = requestMicStreamSync()
-    speech.toggle(onFinal, micPromise)
+    speech.toggle(onFinal, requestMicStreamSync())
   }
 
   const handleSave = async () => {
@@ -133,7 +129,6 @@ export function GfQuickRegister() {
         </span>
         <div className="min-w-0">
           <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
-          <p className="text-xs text-muted-foreground">🎤 para falar · ou digite abaixo</p>
         </div>
       </div>
 
@@ -191,9 +186,6 @@ export function GfQuickRegister() {
       ) : null}
 
       {error ? <p className="mt-2 text-xs text-amber-200/90">{error}</p> : null}
-      {localHint && !parsed ? (
-        <p className="mt-2 text-xs text-muted-foreground">{localHint.summary}</p>
-      ) : null}
     </div>
   )
 }

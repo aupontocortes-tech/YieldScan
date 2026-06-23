@@ -32,10 +32,7 @@ type SpeechRecognitionEventLike = {
 
 const MAX_RECORD_SECONDS = 25
 
-const MIC_CONSTRAINTS: MediaStreamConstraints = {
-  audio: { echoCancellation: true, noiseSuppression: true },
-  video: false,
-}
+const MIC_CONSTRAINTS: MediaStreamConstraints = { audio: true, video: false }
 
 function getSpeechRecognition(): SpeechRecognitionCtor | null {
   if (typeof window === 'undefined') return null
@@ -78,13 +75,11 @@ function resolveSpeechMode(): GfSpeechMode {
 
 function micErrorFromException(err: unknown): string {
   if (err instanceof DOMException) {
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      return 'Microfone bloqueado. Toque no 🎤 e escolha Permitir.'
-    }
-    if (err.name === 'NotFoundError') return 'Nenhum microfone encontrado.'
-    if (err.name === 'NotReadableError') return 'Microfone em uso por outra app.'
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') return 'Microfone bloqueado.'
+    if (err.name === 'NotFoundError') return 'Microfone não encontrado.'
+    if (err.name === 'NotReadableError') return 'Microfone em uso.'
   }
-  return 'Não foi possível usar o microfone.'
+  return 'Erro no microfone.'
 }
 
 function releaseStream(stream: MediaStream | null): void {
@@ -188,7 +183,7 @@ export function useGfSpeechInput() {
           void finishWhisper(blob, durationSeconds)
         } else {
           setListening(false)
-          setMicError('Gravação vazia. Fale mais perto e toque no 🎤 de novo.')
+          setMicError('Gravação vazia.')
         }
       }
 
@@ -282,7 +277,7 @@ export function useGfSpeechInput() {
       }
 
       releaseStream(stream)
-      setMicError('Ative a IA em Uso da API para usar o microfone.')
+      setMicError('Configure Uso da API.')
     },
     [beginWhisperRecording, startBrowser],
   )
