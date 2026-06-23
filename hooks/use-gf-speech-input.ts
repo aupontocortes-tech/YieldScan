@@ -7,12 +7,11 @@ import {
 } from '@/lib/gestao-financeira/openai-config'
 import {
   createAudioRecorder,
-  isLiveAudioStream,
   MIN_AUDIO_BLOB_BYTES,
   recordingTimesliceMs,
 } from '@/lib/gestao-financeira/mic-recorder'
 import { transcribeGfVoiceWithOpenAi } from '@/lib/gestao-financeira/transcribe-with-openai'
-import { isStandalonePwa } from '@/lib/mic-permission'
+import { isStandalonePwa, openVoiceInSystemBrowser } from '@/lib/mic-permission'
 
 export type GfSpeechMode = 'browser' | 'whisper' | 'none'
 
@@ -39,8 +38,6 @@ type SpeechRecognitionEventLike = {
 const MAX_RECORD_SECONDS = 25
 const MIN_RECORD_MS = 400
 
-const MIC_CONSTRAINTS: MediaStreamConstraints = { audio: true, video: false }
-
 function getSpeechRecognition(): SpeechRecognitionCtor | null {
   if (typeof window === 'undefined') return null
   const w = window as Window & {
@@ -54,10 +51,10 @@ function canRecordAudio(): boolean {
   return typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 }
 
-/** Chamado de forma síncrona no clique — abre o aviso do navegador. */
+/** Chamado de forma síncrona no toque — abre o aviso do navegador. */
 export function requestMicStreamSync(): Promise<MediaStream> | null {
   if (!canRecordAudio()) return null
-  return navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS)
+  return navigator.mediaDevices.getUserMedia({ audio: true, video: false })
 }
 
 function resolveSpeechMode(): GfSpeechMode {
@@ -80,6 +77,11 @@ function micErrorFromException(err: unknown): string {
 
 function releaseStream(stream: MediaStream | null): void {
   stream?.getTracks().forEach((t) => t.stop())
+}
+
+function prepareStream(stream: MediaStream): MediaStream {
+  for (const t of stream.getAudioTracks()) t.enabled = true
+  return stream
 }
 
 export function useGfSpeechInput() {
@@ -145,17 +147,18 @@ export function useGfSpeechInput() {
 
   const beginWhisperRecording = useCallback(
     (stream: MediaStream) => {
-      if (!isLiveAudioStream(stream)) {
-        releaseStream(stream)
-        setMicError('Microfone bloqueado.')
+      const active = prepareStream(stream)
+      if (active.getAudioTracks().length === 0) {
+        releaseStream(active)
+        setMicError('Microfone não encontrado.')
         return
       }
 
-      streamRef.current = stream
+      streamRef.current = active
       chunksRef.current = []
       recordStartRef.current = Date.now()
 
-      const { recorder, mime } = createAudioRecorder(stream)
+      const { recorder, mime } = createAudioRecorder(active)
       mediaRecorderRef.current = recorder
 
       recorder.ondataavailable = (ev) => {
@@ -313,15 +316,18 @@ export function useGfSpeechInput() {
       void streamPromise
         .then((stream) => {
           setRequestingPermission(false)
-          if (isStandalonePwa() && !isLiveAudioStream(stream)) {
-            releaseStream(stream)
-            setMicError('Microfone bloqueado.')
-            return
-          }
-          continueWithStream(stream, onFinal)
+          continueWithStream(prepareStream(stream), onFinal)
         })
         .catch((err: unknown) => {
           setRequestingPermission(false)
+          if (
+            isStandalonePwa() &&
+            err instanceof DOMException &&
+            (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+          ) {
+            openVoiceInSystemBrowser()
+            return
+          }
           setMicError(micErrorFromException(err))
         })
     },

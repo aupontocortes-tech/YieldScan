@@ -27,6 +27,8 @@ export function pickRecorderMimeType(): string | undefined {
 }
 
 export function createAudioRecorder(stream: MediaStream): { recorder: MediaRecorder; mime?: string } {
+  for (const t of stream.getAudioTracks()) t.enabled = true
+
   const mime = pickRecorderMimeType()
   try {
     const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
@@ -36,7 +38,3 @@ export function createAudioRecorder(stream: MediaStream): { recorder: MediaRecor
   }
 }
 
-export function isLiveAudioStream(stream: MediaStream): boolean {
-  const track = stream.getAudioTracks()[0]
-  return !!track && track.readyState === 'live' && track.enabled && !track.muted
-}

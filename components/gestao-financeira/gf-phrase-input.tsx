@@ -29,6 +29,7 @@ export function GfPhraseInput({
 }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? internalRef
+  const micHandledRef = useRef(false)
 
   useEffect(() => {
     const onFocus = () => {
@@ -68,7 +69,17 @@ export function GfPhraseInput({
           aria-label={listening ? 'Parar' : 'Falar'}
           title={listening ? 'Parar' : micSupported ? 'Falar' : 'Microfone indisponível'}
           disabled={requestingPermission}
-          onClick={onMicClick}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || !onMicClick || requestingPermission) return
+            micHandledRef.current = true
+            onMicClick()
+          }}
+          onClick={(e) => {
+            if (micHandledRef.current) {
+              e.preventDefault()
+              micHandledRef.current = false
+            }
+          }}
         >
           {requestingPermission ? (
             <Loader2 className="h-5 w-5 animate-spin" />
