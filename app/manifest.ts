@@ -1,16 +1,25 @@
 import type { MetadataRoute } from 'next'
 
+function getSiteUrl(): string {
+  const raw =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
+    'http://localhost:3000'
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/\/$/, '')
+  return `https://${raw.replace(/^\/+/, '')}`
+}
+
 export default function manifest(): MetadataRoute.Manifest {
+  const origin = getSiteUrl()
   return {
-    id: '/',
-    name: 'YieldScan — DeFi Intelligence',
+    id: `${origin}/`,
+    name: 'YieldScan DeFi',
     short_name: 'YieldScan',
     description:
       'Agregador DeFi em tempo real: APR de pools, TVL e oportunidades em varias chains.',
-    start_url: '/',
-    scope: '/',
+    start_url: `${origin}/`,
+    scope: `${origin}/`,
     display: 'standalone',
-    display_override: ['standalone', 'browser'],
     /** Permite rodar o telemóvel sem o PWA fechar ou forçar retrato. */
     orientation: 'any',
     background_color: '#07090f',
@@ -33,7 +42,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any',
       },
       {
-        src: '/icon-512.png',
+        src: '/icon-maskable-512.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

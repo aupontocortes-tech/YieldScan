@@ -53,6 +53,7 @@ export function PwaInstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
   const [hintMode, setHintMode] = useState<HintMode>('none')
   const [open, setOpen] = useState(false)
+  const [installed, setInstalled] = useState(false)
 
   const dismiss = useCallback(() => {
     setOpen(false)
@@ -86,7 +87,15 @@ export function PwaInstallPrompt() {
       setOpen(true)
     }
 
+    const onAppInstalled = () => {
+      setInstalled(true)
+      setDeferred(null)
+      setHintMode('none')
+      setOpen(true)
+    }
+
     window.addEventListener('beforeinstallprompt', onBeforeInstall)
+    window.addEventListener('appinstalled', onAppInstalled)
 
     const timer = window.setTimeout(() => {
       if (receivedBrowserInstall || isStandaloneDisplay()) return
@@ -103,6 +112,7 @@ export function PwaInstallPrompt() {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+      window.removeEventListener('appinstalled', onAppInstalled)
       window.clearTimeout(timer)
     }
   }, [])
@@ -111,12 +121,14 @@ export function PwaInstallPrompt() {
     if (!deferred) return
     try {
       await deferred.prompt()
-      await deferred.userChoice
+      const { outcome } = await deferred.userChoice
+      if (outcome === 'accepted') {
+        setInstalled(true)
+      }
     } catch {
       /* ignore */
     }
     setDeferred(null)
-    setOpen(false)
   }
 
   if (!open) return null
@@ -140,10 +152,17 @@ export function PwaInstallPrompt() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h2 id="pwa-install-title" className="text-base font-semibold text-foreground">
-              Instalar YieldScan
+              {installed ? 'YieldScan instalado' : 'Instalar YieldScan'}
             </h2>
             <p id="pwa-install-desc" className="mt-1 text-sm text-muted-foreground">
-              {hintMode === 'ios' ? (
+              {installed ? (
+                <>
+                  Procure <strong className="text-foreground">YieldScan</strong> na{' '}
+                  <strong className="text-foreground">lista de apps</strong> do telefone (gaveta de
+                  aplicativos). Para atalho na tela inicial: segure o ícone lá →{' '}
+                  <strong className="text-foreground">Adicionar à tela inicial</strong>.
+                </>
+              ) : hintMode === 'ios' ? (
                 <>
                   No iPhone ou iPad: toque em{' '}
                   <Share className="mx-0.5 inline size-4 align-text-bottom text-cyan" />{' '}
@@ -152,11 +171,11 @@ export function PwaInstallPrompt() {
                 </>
               ) : hintMode === 'android' ? (
                 <>
-                  No Android: toque em{' '}
-                  <MoreVertical className="mx-0.5 inline size-4 align-text-bottom text-cyan" />{' '}
-                  <strong className="text-foreground">menu do Chrome</strong> →{' '}
-                  <strong className="text-foreground">Instalar aplicativo</strong> ou{' '}
-                  <strong className="text-foreground">Adicionar à tela inicial</strong>.
+                  No Android: menu{' '}
+                  <MoreVertical className="mx-0.5 inline size-4 align-text-bottom text-cyan" /> →{' '}
+                  <strong className="text-foreground">Instalar app</strong>. O ícone vai para a{' '}
+                  <strong className="text-foreground">lista de apps</strong>, não direto na tela
+                  inicial.
                 </>
               ) : (
                 <>
@@ -179,15 +198,27 @@ export function PwaInstallPrompt() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {deferred ? (
-            <Button type="button" className="gap-2 bg-cyan text-background hover:bg-cyan/90" onClick={install}>
-              <Download className="size-4" />
-              Instalar agora
+          {installed ? (
+            <Button type="button" className="bg-cyan text-background hover:bg-cyan/90" onClick={dismiss}>
+              Entendi
             </Button>
-          ) : null}
-          <Button type="button" variant="secondary" onClick={dismiss}>
-            Agora não
-          </Button>
+          ) : (
+            <>
+              {deferred ? (
+                <Button
+                  type="button"
+                  className="gap-2 bg-cyan text-background hover:bg-cyan/90"
+                  onClick={install}
+                >
+                  <Download className="size-4" />
+                  Instalar agora
+                </Button>
+              ) : null}
+              <Button type="button" variant="secondary" onClick={dismiss}>
+                Agora não
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
