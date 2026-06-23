@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +20,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
+import { useIsMobile } from '@/hooks/use-mobile'
 import {
   buildPeriodSummary,
   debtsDueSoon,
@@ -28,7 +30,7 @@ import {
 } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
-import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
+import { dispatchGfFocusPhrase, dispatchGfRequestMic } from '@/lib/gestao-financeira/voice-bridge'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
 import {
@@ -49,6 +51,7 @@ import {
   Bitcoin,
   Download,
   Gauge,
+  HelpCircle,
   Landmark,
   PiggyBank,
   Plus,
@@ -171,6 +174,7 @@ function StatCard({
 
 export function GestaoFinanceiraPage() {
   const gf = useGestaoFinanceira()
+  const isMobile = useIsMobile()
   const [tab, setTab] = useState('dashboard')
   const [reportPeriod, setReportPeriod] = useState<GfReportPeriodState>(defaultReportPeriodState)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
@@ -187,8 +191,12 @@ export function GestaoFinanceiraPage() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get('voz') !== '1' && params.get('mic') !== '1') return
+    const wantsMic = params.get('mic') === '1'
     window.history.replaceState({}, '', '/news/gestao-financeira')
-    const t = window.setTimeout(() => dispatchGfFocusPhrase(), 250)
+    const t = window.setTimeout(() => {
+      dispatchGfFocusPhrase()
+      if (wantsMic) dispatchGfRequestMic()
+    }, 250)
     return () => window.clearTimeout(t)
   }, [])
 
@@ -357,6 +365,14 @@ export function GestaoFinanceiraPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isMobile ? (
+            <Button type="button" variant="outline" size="sm" className="gap-2 border-sky-500/35" asChild>
+              <Link href="/news/gestao-financeira/microfone">
+                <HelpCircle className="h-4 w-4 text-sky-400" />
+                Ajuda voz
+              </Link>
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -489,7 +505,7 @@ export function GestaoFinanceiraPage() {
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
               <h3 className="font-semibold">Registrar em uma frase</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Use o campo no topo — digite ou fale pelo microfone do teclado.
+                Use o campo no topo da página. No celular, veja «Ajuda voz» para microfone e teclado.
               </p>
             </div>
           </div>

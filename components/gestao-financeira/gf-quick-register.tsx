@@ -1,9 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { GfMicHelpBanner } from '@/components/gestao-financeira/gf-mic-help-banner'
-import { GfMobileVoiceAlternatives } from '@/components/gestao-financeira/gf-mobile-voice-alternatives'
 import { GfParsedPreview } from '@/components/gestao-financeira/gf-parsed-preview'
 import { GfPhraseInput } from '@/components/gestao-financeira/gf-phrase-input'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
@@ -16,8 +15,9 @@ import {
 } from '@/lib/gestao-financeira/parse-with-openai'
 import { saveGfParsedVoiceEntry } from '@/lib/gestao-financeira/save-parsed-voice'
 import { parseGfVoiceText } from '@/lib/gestao-financeira/voice-parser'
+import { GF_REQUEST_MIC_EVENT } from '@/lib/gestao-financeira/voice-bridge'
 import type { GfVoiceParseResult } from '@/lib/gestao-financeira/types'
-import { Loader2, Mic, PenLine, Sparkles } from 'lucide-react'
+import { HelpCircle, Loader2, PenLine, Sparkles } from 'lucide-react'
 
 function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfParseVoiceContext {
   const cashBoxes = gf.cashBoxes.map((b) => ({ name: b.name, balance: b.balance }))
@@ -40,7 +40,9 @@ function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfParseVoiceC
   }
 }
 
-/** Registro por frase — digitar, falar pelo teclado ou interpretar com OpenAI. */
+const VOICE_HELP_HREF = '/news/gestao-financeira/microfone'
+
+/** Registro por frase — digitar, falar ou interpretar com OpenAI. */
 export function GfQuickRegister() {
   const gf = useGestaoFinanceira()
   const speech = useGfSpeechInput()
@@ -50,6 +52,13 @@ export function GfQuickRegister() {
   const [error, setError] = useState<string | null>(null)
   const [interpreting, setInterpreting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [highlightMic, setHighlightMic] = useState(false)
+
+  useEffect(() => {
+    const onRequestMic = () => setHighlightMic(true)
+    window.addEventListener(GF_REQUEST_MIC_EVENT, onRequestMic)
+    return () => window.removeEventListener(GF_REQUEST_MIC_EVENT, onRequestMic)
+  }, [])
 
   const localHint = text.trim() ? parseGfVoiceText(text.trim()) : null
 
@@ -100,6 +109,7 @@ export function GfQuickRegister() {
   interpretRef.current = handleInterpret
 
   const handleMic = () => {
+    setHighlightMic(false)
     speech.clearError()
     void speech.toggle((transcript) => {
       setText(transcript)
@@ -124,28 +134,38 @@ export function GfQuickRegister() {
     }
   }
 
+  const statusLine = speech.requestingPermission
+    ? 'A pedir permissão do microfone…'
+    : speech.transcribing
+      ? 'Transcrevendo áudio…'
+      : speech.listening && speech.mode === 'whisper'
+        ? 'Gravando… toque no 🎤 para parar.'
+        : null
+
   return (
     <div className="rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-950/35 to-teal-950/15 p-4">
       <div className="mb-3 flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-white">
           <PenLine className="h-5 w-5" />
         </span>
-        <div className="min-w-0">
-          <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold text-foreground">Registrar em uma frase</h3>
+            {speech.isMobile ? (
+              <Link
+                href={VOICE_HELP_HREF}
+                className="inline-flex shrink-0 items-center gap-1 text-[11px] text-sky-400/90 hover:text-sky-300"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                Ajuda
+              </Link>
+            ) : null}
+          </div>
           <p className="text-xs text-muted-foreground">
-            {speech.isMobile
-              ? 'No celular, o jeito mais fácil é falar pelo microfone do teclado (ver abaixo).'
-              : 'Toque no 🎤 → fale → toque de novo para parar, ou digite a frase.'}
+            Toque no 🎤, fale e toque de novo para parar — ou digite a frase.
           </p>
-          {!loadGfOpenAiSettings().enabled || !loadGfOpenAiSettings().apiKey.trim() ? (
-            <p className="mt-1 text-xs text-amber-200/90">
-              No celular, configure primeiro: Uso da API → chave → Ativar IA → Guardar.
-            </p>
-          ) : null}
         </div>
       </div>
-
-      {speech.isMobile ? <GfMobileVoiceAlternatives /> : null}
 
       <GfPhraseInput
         value={text}
@@ -156,31 +176,26 @@ export function GfQuickRegister() {
           speech.clearError()
         }}
         listening={speech.listening}
+        requestingPermission={speech.requestingPermission}
+        highlightMic={highlightMic}
         micSupported={speech.supported}
         onMicClick={handleMic}
       />
 
-      {speech.micError ? <p className="mt-2 text-xs text-amber-200/90">{speech.micError}</p> : null}
-      {speech.isMobile && speech.micError && speech.micHelpLines ? (
-        <GfMicHelpBanner
-          lines={speech.micHelpLines}
-          standalone={speech.isStandalonePwa}
-          onRetry={() => {
-            speech.clearError()
-            handleMic()
-          }}
-        />
-      ) : null}
-      {speech.transcribing ? (
-        <p className="mt-2 text-xs text-violet-200/90">Transcrevendo áudio com OpenAI…</p>
-      ) : speech.listening && speech.mode === 'whisper' ? (
-        <p className="mt-2 text-xs text-red-200/90">Gravando… toque no microfone de novo quando terminar de falar.</p>
+      {statusLine ? <p className="mt-2 text-xs text-muted-foreground">{statusLine}</p> : null}
+      {speech.micError ? (
+        <p className="mt-2 text-xs text-amber-200/90">
+          {speech.micError}{' '}
+          {speech.isMobile ? (
+            <Link href={VOICE_HELP_HREF} className="text-sky-300 underline underline-offset-2">
+              Ver ajuda
+            </Link>
+          ) : null}
+        </p>
       ) : null}
 
       {localHint && !parsed ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Pré-visualização local: {localHint.summary}
-        </p>
+        <p className="mt-2 text-xs text-muted-foreground">Pré-visualização local: {localHint.summary}</p>
       ) : null}
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -227,12 +242,6 @@ export function GfQuickRegister() {
       ) : null}
 
       {error ? <p className="mt-2 text-xs text-amber-200/90">{error}</p> : null}
-
-      {!loadGfOpenAiSettings().enabled && text.trim() && !parsed ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Consultas de saldo e frases complexas: abra «Uso da API» e configure a chave OpenAI.
-        </p>
-      ) : null}
     </div>
   )
 }
