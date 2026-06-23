@@ -6,6 +6,7 @@ import {
   loadGfOpenAiSettings,
 } from '@/lib/gestao-financeira/openai-config'
 import { transcribeGfVoiceWithOpenAi } from '@/lib/gestao-financeira/transcribe-with-openai'
+import { detectMicPlatform } from '@/lib/mic-permission'
 
 export type GfSpeechMode = 'browser' | 'whisper' | 'none'
 
@@ -31,6 +32,11 @@ type SpeechRecognitionEventLike = {
 
 const MAX_RECORD_SECONDS = 25
 
+const MIC_CONSTRAINTS: MediaStreamConstraints = {
+  audio: { echoCancellation: true, noiseSuppression: true },
+  video: false,
+}
+
 function getSpeechRecognition(): SpeechRecognitionCtor | null {
   if (typeof window === 'undefined') return null
   const w = window as Window & {
@@ -44,8 +50,17 @@ function canRecordAudio(): boolean {
   return typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 }
 
+/** Deve ser chamado de forma síncrona no clique — abre o aviso do navegador. */
+export function requestMicStreamSync(): Promise<MediaStream> | null {
+  if (!canRecordAudio()) return null
+  return navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS)
+}
+
 function pickMimeType(): string | undefined {
-  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/aac']
+  const android = detectMicPlatform() === 'android'
+  const types = android
+    ? ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/aac', 'audio/ogg;codecs=opus']
+    : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/aac']
   for (const t of types) {
     if (MediaRecorder.isTypeSupported(t)) return t
   }
@@ -137,27 +152,6 @@ export function useGfSpeechInput() {
     }
   }, [])
 
-  const acquireMicrophoneStream = useCallback(async (): Promise<MediaStream | null> => {
-    if (!canRecordAudio()) {
-      setMicError('Microfone indisponível neste navegador.')
-      return null
-    }
-
-    setRequestingPermission(true)
-    setMicError(null)
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-        video: false,
-      })
-    } catch (err) {
-      setMicError(micErrorFromException(err))
-      return null
-    } finally {
-      setRequestingPermission(false)
-    }
-  }, [])
-
   const beginWhisperRecording = useCallback(
     (stream: MediaStream) => {
       streamRef.current = stream
@@ -208,59 +202,57 @@ export function useGfSpeechInput() {
     [finishWhisper, stopStream, stopWhisperRecording],
   )
 
-  const startBrowser = useCallback(
-    async (onFinal: (text: string) => void, existingStream?: MediaStream): Promise<boolean> => {
-      setMicError(null)
-      const Ctor = getSpeechRecognition()
-      if (!Ctor) return false
-
-      const stream = existingStream ?? (await acquireMicrophoneStream())
-      if (!stream) return false
+  const startBrowser = useCallback((onFinal: (text: string) => void, stream: MediaStream): boolean => {
+    setMicError(null)
+    const Ctor = getSpeechRecognition()
+    if (!Ctor) {
       releaseStream(stream)
+      return false
+    }
 
-      recRef.current?.abort()
-      const rec = new Ctor()
-      rec.lang = 'pt-BR'
-      rec.continuous = false
-      rec.interimResults = true
-      rec.maxAlternatives = 1
+    releaseStream(stream)
 
-      wantListenRef.current = true
-      setListening(true)
+    recRef.current?.abort()
+    const rec = new Ctor()
+    rec.lang = 'pt-BR'
+    rec.continuous = false
+    rec.interimResults = true
+    rec.maxAlternatives = 1
 
-      rec.onresult = (ev) => {
-        let transcript = ''
-        for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          transcript += ev.results[i]![0].transcript
-        }
-        if (ev.results[ev.results.length - 1]?.isFinal) {
-          const final = transcript.trim()
-          if (final) onFinal(final)
-        }
+    wantListenRef.current = true
+    setListening(true)
+
+    rec.onresult = (ev) => {
+      let transcript = ''
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        transcript += ev.results[i]![0].transcript
       }
-
-      rec.onerror = (ev) => {
-        if (ev.error === 'aborted' || ev.error === 'no-speech') return
-        setMicError(ev.error === 'not-allowed' ? 'Microfone bloqueado.' : `Erro: ${ev.error}`)
+      if (ev.results[ev.results.length - 1]?.isFinal) {
+        const final = transcript.trim()
+        if (final) onFinal(final)
       }
+    }
 
-      rec.onend = () => {
-        setListening(false)
-        wantListenRef.current = false
-      }
+    rec.onerror = (ev) => {
+      if (ev.error === 'aborted' || ev.error === 'no-speech') return
+      setMicError(ev.error === 'not-allowed' ? 'Microfone bloqueado.' : `Erro: ${ev.error}`)
+    }
 
-      recRef.current = rec
-      try {
-        rec.start()
-        return true
-      } catch {
-        setListening(false)
-        setMicError('Não foi possível iniciar o microfone.')
-        return false
-      }
-    },
-    [acquireMicrophoneStream],
-  )
+    rec.onend = () => {
+      setListening(false)
+      wantListenRef.current = false
+    }
+
+    recRef.current = rec
+    try {
+      rec.start()
+      return true
+    } catch {
+      setListening(false)
+      setMicError('Não foi possível iniciar o microfone.')
+      return false
+    }
+  }, [])
 
   const stopBrowser = useCallback(() => {
     wantListenRef.current = false
@@ -268,20 +260,10 @@ export function useGfSpeechInput() {
     setListening(false)
   }, [])
 
-  const toggle = useCallback(
-    async (onFinal: (text: string) => void) => {
-      onFinalRef.current = onFinal
+  const continueWithStream = useCallback(
+    (stream: MediaStream, onFinal: (text: string) => void) => {
       const currentMode = resolveSpeechMode()
       setMode(currentMode)
-
-      if (listening || transcribing) {
-        if (currentMode === 'whisper') stopWhisperRecording()
-        else stopBrowser()
-        return
-      }
-
-      const stream = await acquireMicrophoneStream()
-      if (!stream) return
 
       if (currentMode === 'whisper') {
         const limit = checkGfOpenAiLimits(loadGfOpenAiSettings())
@@ -295,22 +277,54 @@ export function useGfSpeechInput() {
       }
 
       if (currentMode === 'browser') {
-        await startBrowser(onFinal, stream)
+        startBrowser(onFinal, stream)
         return
       }
 
       releaseStream(stream)
       setMicError('Ative a IA em Uso da API para usar o microfone.')
     },
-    [
-      listening,
-      transcribing,
-      acquireMicrophoneStream,
-      beginWhisperRecording,
-      startBrowser,
-      stopBrowser,
-      stopWhisperRecording,
-    ],
+    [beginWhisperRecording, startBrowser],
+  )
+
+  const toggle = useCallback(
+    (onFinal: (text: string) => void, micPromise?: Promise<MediaStream> | null) => {
+      onFinalRef.current = onFinal
+      const currentMode = resolveSpeechMode()
+      setMode(currentMode)
+
+      if (listening || transcribing) {
+        if (currentMode === 'whisper') stopWhisperRecording()
+        else stopBrowser()
+        return
+      }
+
+      if (!canRecordAudio()) {
+        setMicError('Microfone indisponível neste navegador.')
+        return
+      }
+
+      setMicError(null)
+
+      const streamPromise = micPromise ?? requestMicStreamSync()
+      if (!streamPromise) {
+        setMicError('Microfone indisponível neste navegador.')
+        return
+      }
+
+      setRequestingPermission(true)
+
+      void streamPromise
+        .then((stream) => {
+          setRequestingPermission(false)
+          continueWithStream(stream, onFinal)
+        })
+        .catch((err: unknown) => {
+          setRequestingPermission(false)
+          setMicError(micErrorFromException(err))
+        })
+    },
+    [listening, transcribing, continueWithStream, stopBrowser, stopWhisperRecording],
   )
 
   return {

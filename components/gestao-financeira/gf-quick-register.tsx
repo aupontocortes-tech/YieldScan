@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { GfParsedPreview } from '@/components/gestao-financeira/gf-parsed-preview'
 import { GfPhraseInput } from '@/components/gestao-financeira/gf-phrase-input'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
-import { useGfSpeechInput } from '@/hooks/use-gf-speech-input'
+import { useGfSpeechInput, requestMicStreamSync } from '@/hooks/use-gf-speech-input'
 import { loadGfOpenAiSettings } from '@/lib/gestao-financeira/openai-config'
 import {
   parseGfVoiceWithOpenAi,
@@ -99,12 +99,15 @@ export function GfQuickRegister() {
 
   const handleMic = () => {
     speech.clearError()
-    void speech.toggle((transcript) => {
+    const onFinal = (transcript: string) => {
       setText(transcript)
       setParsed(null)
       setError(null)
       void interpretRef.current(transcript)
-    })
+    }
+    // Pedido ao navegador no mesmo instante do clique (exigência Android/PWA).
+    const micPromise = requestMicStreamSync()
+    speech.toggle(onFinal, micPromise)
   }
 
   const handleSave = async () => {
