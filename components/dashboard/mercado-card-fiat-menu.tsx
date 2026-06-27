@@ -48,7 +48,7 @@ export function MercadoCardFiatMenu({
   const effective = effectiveDisplayFiatForCoin(slug, mercadoPrefs)
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -63,10 +63,8 @@ export function MercadoCardFiatMenu({
           )}
           title="Moeda do preço (engrenagem)"
           aria-label="Engrenagem — escolher moeda do preço"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
+          data-mercado-card-control=""
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <Settings2 className="h-4 w-4 text-muted-foreground" />
         </Button>

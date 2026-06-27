@@ -222,6 +222,7 @@ function AssetSearch({
                     key={c.id}
                     value={c.id}
                     disabled={added || atLimit}
+                    onPointerDown={(e) => e.preventDefault()}
                     onSelect={() => onAdd(c.id, c.image)}
                     className="gap-2"
                   >
@@ -348,6 +349,7 @@ export function MercadoFavoritesSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        data-no-swipe-nav=""
         className="flex h-full w-full flex-col gap-0 border-l border-yellow-500/20 bg-background p-0 sm:max-w-md"
       >
         <SheetHeader className="border-b border-border/60 px-5 py-4 text-left">

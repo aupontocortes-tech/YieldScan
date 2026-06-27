@@ -263,8 +263,26 @@ function HighlightCard({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="absolute inset-0 z-0 rounded-2xl"
+        className="sr-only"
+        tabIndex={-1}
+      >
+        {coin.name}
+      </a>
+      <div
+        role="link"
+        tabIndex={0}
+        className="absolute inset-0 z-[5] rounded-2xl"
         aria-label={`Abrir ${coin.name} na CoinGecko`}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('[data-mercado-card-control]')) return
+          window.open(href, '_blank', 'noopener,noreferrer')
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            window.open(href, '_blank', 'noopener,noreferrer')
+          }
+        }}
       />
       <div className="relative z-10 pointer-events-none flex items-start gap-1.5 sm:gap-3">
         <div className="min-w-0 flex-1">
@@ -314,7 +332,7 @@ function HighlightCard({
           Capitalização · {formatMercadoCap(q.market_cap, displayFiat)}
         </p>
       )}
-      <div className="relative z-20 mt-2 flex justify-end sm:mt-3">
+      <div className="relative z-20 mt-2 flex justify-end sm:mt-3" data-mercado-card-control="">
         <MercadoCardFiatMenu
           coinId={coin.id}
           mercadoPrefs={mercadoPrefs}
@@ -422,7 +440,7 @@ function HighlightEmptyCard({
         Preço da CoinGecko indisponível. Tenta «Actualizar» ou edita os favoritos.
       </p>
       </div>
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex justify-end" data-mercado-card-control="">
         <MercadoCardFiatMenu coinId={slug} mercadoPrefs={mercadoPrefs} onFiatChange={onFiatChange} />
       </div>
     </div>
@@ -683,11 +701,12 @@ export function DashbuddyCryptoMarket() {
               variant="ghost"
               size="icon"
               className={cn(
-                'h-9 w-9 rounded-full border border-border/60 bg-background/90 shadow-sm backdrop-blur-sm',
+                'relative z-10 h-9 w-9 rounded-full border border-border/60 bg-background/90 shadow-sm backdrop-blur-sm',
                 'hover:bg-muted/80 hover:border-yellow-500/40',
               )}
               title="Adicionar favoritos"
               aria-label="Adicionar moeda ou ação aos favoritos"
+              data-no-swipe-nav=""
               onClick={() => setFavSheetOpen(true)}
             >
               <Plus className="h-4 w-4 text-muted-foreground" />
@@ -706,6 +725,7 @@ export function DashbuddyCryptoMarket() {
             <button
               type="button"
               className="font-medium text-yellow-500 hover:underline"
+              data-no-swipe-nav=""
               onClick={() => setFavSheetOpen(true)}
             >
               Editar favoritos

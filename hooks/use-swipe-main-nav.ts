@@ -37,7 +37,7 @@ export function useSwipeMainNavHandlers() {
   const shouldIgnoreTarget = useCallback((el: EventTarget | null) => {
     if (!(el instanceof HTMLElement)) return true
     return !!el.closest(
-      '[data-no-swipe-nav],[data-slot="dialog-content"],[data-slot="sheet-content"],[role="dialog"],input,textarea,select'
+      '[data-no-swipe-nav],[data-mercado-card-control],[data-slot="dialog-content"],[data-slot="sheet-content"],[data-slot="dropdown-menu-content"],[role="dialog"],input,textarea,select,button,a'
     )
   }, [])
 
