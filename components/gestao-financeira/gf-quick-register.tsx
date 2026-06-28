@@ -236,7 +236,7 @@ export function GfQuickRegister({ gf, mode }: Props) {
         requestingPermission={speech.requestingPermission}
         micSupported={speech.supported}
         onMicClick={handleMic}
-        lightSurface={mode === 'afazeres'}
+        lightSurface
       />
 
       {speech.micError ? <p className="mt-2 text-xs text-amber-200/90">{speech.micError}</p> : null}
