@@ -108,7 +108,8 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
             OpenAI · Interpretação e consumo
           </DialogTitle>
           <DialogDescription>
-            Chave guardada só neste dispositivo. Modelo: {GF_OPENAI_MODEL}. Use limites para controlar gastos.
+            Uma chave para tudo: receitas/despesas, voz (Whisper) e afazeres. Modelo: {GF_OPENAI_MODEL}.
+            Limites e consumo são partilhados.
           </DialogDescription>
         </DialogHeader>
 
@@ -275,7 +276,13 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
                         })}
                       </span>
                       <Badge variant="outline" className="text-[10px]">
-                        {r.feature === 'transcribe' ? 'voz' : `${r.promptTokens + r.completionTokens} tok`}
+                        {r.feature === 'transcribe'
+                          ? 'voz'
+                          : r.feature === 'parse-todos'
+                            ? 'afazeres'
+                            : r.feature === 'parse-voice'
+                              ? 'finanças'
+                              : `${r.promptTokens + r.completionTokens} tok`}
                       </Badge>
                       <span className="text-right">
                         <span className="block text-emerald-300">{fmtBrl(r.estimatedUsd * brlPerUsd)}</span>
@@ -332,8 +339,8 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
           </section>
 
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            A chave fica no seu navegador. Cada interpretação com IA envia a frase e saldos actuais para a OpenAI
-            (via servidor YieldScan). Transacções simples podem ser interpretadas localmente, sem custo.
+            A chave fica no seu navegador. Finanças, afazeres e transcrição de voz usam a mesma API e contam no
+            orçamento acima. Transacções simples podem ser interpretadas localmente, sem custo.
           </p>
         </div>
       </DialogContent>

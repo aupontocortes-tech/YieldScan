@@ -15,6 +15,9 @@ type Props = {
   requestingPermission?: boolean
   micSupported?: boolean
   onMicClick?: () => void
+  placeholder?: string
+  /** Fundo branco e texto preto (ex.: painel de afazeres). */
+  lightSurface?: boolean
 }
 
 export function GfPhraseInput({
@@ -26,6 +29,8 @@ export function GfPhraseInput({
   requestingPermission = false,
   micSupported = true,
   onMicClick,
+  placeholder = 'Ex.: Gastei 80 no mercado · Adicionei 500 · Quanto tenho no caixa?',
+  lightSurface = false,
 }: Props) {
   const internalRef = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? internalRef
@@ -45,11 +50,14 @@ export function GfPhraseInput({
       <textarea
         ref={ref}
         className={cn(
-          'min-h-[80px] w-full rounded-lg border border-border/60 bg-background/80 py-2 pl-3 pr-14 text-sm',
+          'min-h-[80px] w-full rounded-lg border py-2 pl-3 pr-14 text-sm',
+          lightSurface
+            ? 'border-neutral-300 bg-white text-black placeholder:text-neutral-500'
+            : 'border-border/60 bg-background/80 text-foreground',
           listening && 'border-red-500/50 ring-1 ring-red-500/30',
           className,
         )}
-        placeholder="Ex.: Gastei 80 no mercado · Adicionei 500 · Quanto tenho no caixa?"
+        placeholder={placeholder}
         value={value}
         enterKeyHint="done"
         autoComplete="off"

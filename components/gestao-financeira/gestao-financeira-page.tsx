@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +31,11 @@ import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfCharts } from '@/components/gestao-financeira/gf-charts'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
+import { GfNavTabs } from '@/components/gestao-financeira/gf-nav-tabs'
+import { GfAfazeres } from '@/components/gestao-financeira/gf-afazeres'
+import { GfTodoNotifyBanner } from '@/components/gestao-financeira/gf-todo-notify-banner'
+import { countGfTodosToday } from '@/lib/gestao-financeira/todos-utils'
+import { useGfTodoNotifications } from '@/hooks/use-gf-todo-notifications'
 import {
   GfCryptoCoinPicker,
   type GfCryptoCoinPick,
@@ -243,6 +248,27 @@ export function GestaoFinanceiraPage() {
   }, [gf.cryptoHoldings, gf.cryptoPrices, gf.brlPerUsd])
 
   const dueSoon = useMemo(() => debtsDueSoon(gf.debts), [gf.debts])
+  const pendingTodosToday = useMemo(() => countGfTodosToday(gf.todos), [gf.todos])
+
+  useGfTodoNotifications(gf.todos)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('tab') === 'afazeres') {
+      setTab('afazeres')
+      window.history.replaceState({}, '', '/news/gestao-financeira')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GF_OPEN_AFAZERES') setTab('afazeres')
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [])
 
   const reportRange = useMemo(
     () =>
@@ -374,7 +400,9 @@ export function GestaoFinanceiraPage() {
         </div>
       </div>
 
-      <GfQuickRegister />
+      <GfQuickRegister gf={gf} mode={tab === 'afazeres' ? 'afazeres' : 'finance'} />
+
+      {gf.ready ? <GfTodoNotifyBanner todos={gf.todos} className="mt-4" /> : null}
 
       {!gf.ready || !s ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -399,14 +427,7 @@ export function GestaoFinanceiraPage() {
       ) : null}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex h-auto w-full flex-wrap gap-1 bg-muted/50 p-1">
-          <TabsTrigger value="dashboard">Painel</TabsTrigger>
-          <TabsTrigger value="movimentos">Receitas / Despesas</TabsTrigger>
-          <TabsTrigger value="caixas">Caixas</TabsTrigger>
-          <TabsTrigger value="dividas">Dívidas</TabsTrigger>
-          <TabsTrigger value="cripto">Cripto</TabsTrigger>
-          <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
-        </TabsList>
+        <GfNavTabs pendingToday={pendingTodosToday} />
 
         <TabsContent value="dashboard" className="mt-4 space-y-6">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
@@ -685,6 +706,10 @@ export function GestaoFinanceiraPage() {
               <p className="text-sm text-muted-foreground sm:col-span-2">Adicione posições em BTC, ETH, SOL e outras moedas CoinGecko.</p>
             ) : null}
           </div>
+        </TabsContent>
+
+        <TabsContent value="afazeres" className="mt-4">
+          <GfAfazeres gf={gf} />
         </TabsContent>
 
         <TabsContent value="relatorios" className="mt-4 space-y-4">

@@ -28,6 +28,11 @@ import {
   upsertGfCryptoHolding,
   upsertGfInvestment,
   insertGfDebt,
+  insertGfTodosBatch,
+  insertGfTodo,
+  listGfTodos,
+  toggleGfTodoComplete,
+  deleteGfTodo,
   updateGfDebtPayment,
   findGfCategoryByName,
   getDefaultCashBox,
@@ -44,6 +49,8 @@ import type {
   GfDebt,
   GfInvestment,
   GfPatrimonySnapshot,
+  GfTodo,
+  GfTodoPriority,
   GfTransaction,
 } from '@/lib/gestao-financeira/types'
 import type { GfCryptoPriceMap } from '@/lib/gestao-financeira/calculations'
@@ -58,6 +65,7 @@ export function useGestaoFinanceira() {
   const [cryptoHoldings, setCryptoHoldings] = useState<GfCryptoHolding[]>([])
   const [investments, setInvestments] = useState<GfInvestment[]>([])
   const [snapshots, setSnapshots] = useState<GfPatrimonySnapshot[]>([])
+  const [todos, setTodos] = useState<GfTodo[]>([])
   const [cryptoPrices, setCryptoPrices] = useState<GfCryptoPriceMap>({})
   const [brlPerUsd, setBrlPerUsd] = useState(5.1)
   const [stats, setStats] = useState<GfDashboardStats | null>(null)
@@ -74,6 +82,7 @@ export function useGestaoFinanceira() {
       const holdings = listGfCryptoHoldings()
       const inv = listGfInvestments()
       const snaps = listGfPatrimonySnapshots()
+      const todoList = listGfTodos(true)
 
       const dashboard = computeDashboardStats({
         cashBoxes: boxes,
@@ -93,6 +102,7 @@ export function useGestaoFinanceira() {
       setCryptoHoldings(holdings)
       setInvestments(inv)
       setSnapshots(snaps)
+      setTodos(todoList)
       setCryptoPrices(prices)
       setBrlPerUsd(fx)
       setStats(dashboard)
@@ -255,6 +265,56 @@ export function useGestaoFinanceira() {
     [reload, notifyDataChanged],
   )
 
+  const addTodo = useCallback(
+    async (input: {
+      title: string
+      notes?: string | null
+      dueDate: string
+      dueTime?: string | null
+      priority?: GfTodoPriority
+    }) => {
+      insertGfTodo(input)
+      await reload()
+      notifyDataChanged()
+    },
+    [reload, notifyDataChanged],
+  )
+
+  const addTodos = useCallback(
+    async (
+      items: {
+        title: string
+        notes?: string | null
+        dueDate: string
+        dueTime?: string | null
+        priority?: GfTodoPriority
+      }[],
+    ) => {
+      insertGfTodosBatch(items)
+      await reload()
+      notifyDataChanged()
+    },
+    [reload, notifyDataChanged],
+  )
+
+  const toggleTodo = useCallback(
+    async (id: string) => {
+      toggleGfTodoComplete(id)
+      await reload()
+      notifyDataChanged()
+    },
+    [reload, notifyDataChanged],
+  )
+
+  const removeTodo = useCallback(
+    async (id: string) => {
+      deleteGfTodo(id)
+      await reload()
+      notifyDataChanged()
+    },
+    [reload, notifyDataChanged],
+  )
+
   return {
     ready,
     categories,
@@ -265,6 +325,7 @@ export function useGestaoFinanceira() {
     cryptoHoldings,
     investments,
     snapshots,
+    todos,
     cryptoPrices,
     brlPerUsd,
     stats,
@@ -277,6 +338,10 @@ export function useGestaoFinanceira() {
     removeTransaction,
     removeDebt,
     removeCryptoHolding,
+    addTodo,
+    addTodos,
+    toggleTodo,
+    removeTodo,
     exportBackup: exportGfBackup,
     importBackup: async (payload: Parameters<typeof importGfBackup>[0]) => {
       importGfBackup(payload)

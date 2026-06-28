@@ -160,7 +160,7 @@ export type GfOpenAiSettings = {
 export type GfOpenAiUsageRecord = {
   id: string
   at: string
-  feature: 'parse-voice' | 'transcribe'
+  feature: 'parse-voice' | 'transcribe' | 'parse-todos'
   model: string
   promptTokens: number
   completionTokens: number
@@ -195,4 +195,36 @@ export type GfBackupPayload = {
   cryptoHoldings: GfCryptoHolding[]
   investments: GfInvestment[]
   patrimonySnapshots: GfPatrimonySnapshot[]
+  todos?: GfTodo[]
+}
+
+export type GfTodoPriority = 'low' | 'normal' | 'high'
+
+export type GfTodo = {
+  id: string
+  title: string
+  notes: string | null
+  /** Data alvo YYYY-MM-DD (fuso local). */
+  dueDate: string
+  /** Hora opcional HH:mm */
+  dueTime: string | null
+  completed: boolean
+  completedAt: string | null
+  priority: GfTodoPriority
+  createdAt: string
+  updatedAt: string
+}
+
+export type GfParsedTodoEntry = {
+  title: string
+  notes: string | null
+  dueDate: string
+  dueTime: string | null
+  priority: GfTodoPriority
+  summary: string
+}
+
+export type GfTodoParseResult = {
+  items: GfParsedTodoEntry[]
+  source: 'local' | 'openai'
 }

@@ -20,11 +20,13 @@ import type {
   GfDebt,
   GfInvestment,
   GfPatrimonySnapshot,
+  GfTodo,
+  GfTodoPriority,
   GfTransaction,
   GfTransactionType,
 } from '@/lib/gestao-financeira/types'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 const SCHEMA_KEY = 'gf_schema_version'
 const AUTO_BACKUP_KEY = 'gf_auto_backup_v1'
 /** Cópia extra fora do SQLite — sobrevive se o Android limpar o IndexedDB. */
@@ -143,6 +145,21 @@ function rowSnapshot(r: Record<string, unknown>): GfPatrimonySnapshot {
   }
 }
 
+function rowTodo(r: Record<string, unknown>): GfTodo {
+  return {
+    id: String(r.id),
+    title: String(r.title),
+    notes: r.notes != null ? String(r.notes) : null,
+    dueDate: String(r.due_date),
+    dueTime: r.due_time != null ? String(r.due_time) : null,
+    completed: Number(r.completed) === 1,
+    completedAt: r.completed_at != null ? String(r.completed_at) : null,
+    priority: (r.priority as GfTodoPriority) ?? 'normal',
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  }
+}
+
 function runMigrations(): void {
   const current = kvGetJson<number>(SCHEMA_KEY) ?? 0
   if (current >= SCHEMA_VERSION) return
@@ -237,6 +254,20 @@ function runMigrations(): void {
       crypto_total REAL NOT NULL,
       debts_total REAL NOT NULL,
       recorded_at TEXT NOT NULL
+    )
+  `)
+  sqlRun(`
+    CREATE TABLE IF NOT EXISTS gf_todos (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      notes TEXT,
+      due_date TEXT NOT NULL,
+      due_time TEXT,
+      completed INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT,
+      priority TEXT NOT NULL DEFAULT 'normal',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )
   `)
 
@@ -660,6 +691,93 @@ export function getDefaultCashBox(): GfCashBox | null {
   return listGfCashBoxes()[0] ?? null
 }
 
+export function listGfTodos(includeCompleted = true): GfTodo[] {
+  const where = includeCompleted ? '' : ' WHERE completed = 0'
+  return sqlQuery<Record<string, unknown>>(
+    `SELECT * FROM gf_todos${where} ORDER BY completed ASC, due_date ASC, (due_time IS NULL), due_time ASC, created_at ASC`,
+  ).map(rowTodo)
+}
+
+export function insertGfTodo(input: {
+  title: string
+  notes?: string | null
+  dueDate: string
+  dueTime?: string | null
+  priority?: GfTodoPriority
+}): GfTodo {
+  const ts = nowIso()
+  const id = newId()
+  const dueDate = input.dueDate.slice(0, 10)
+  sqlRun(
+    `INSERT INTO gf_todos (id, title, notes, due_date, due_time, completed, completed_at, priority, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
+    [id, input.title.trim(), input.notes?.trim() || null, dueDate, input.dueTime ?? null, input.priority ?? 'normal', ts, ts],
+  )
+  persistAutoBackup(exportGfBackup())
+  return rowTodo(
+    sqlQuery<Record<string, unknown>>('SELECT * FROM gf_todos WHERE id = ?', [id])[0]!,
+  )
+}
+
+export function insertGfTodosBatch(
+  items: {
+    title: string
+    notes?: string | null
+    dueDate: string
+    dueTime?: string | null
+    priority?: GfTodoPriority
+  }[],
+): GfTodo[] {
+  return items.map((item) => insertGfTodo(item))
+}
+
+export function updateGfTodo(
+  id: string,
+  patch: Partial<Pick<GfTodo, 'title' | 'notes' | 'dueDate' | 'dueTime' | 'priority' | 'completed'>>,
+): GfTodo | null {
+  const existing = sqlQuery<Record<string, unknown>>('SELECT * FROM gf_todos WHERE id = ?', [id])[0]
+  if (!existing) return null
+  const current = rowTodo(existing)
+  const ts = nowIso()
+  const completed = patch.completed ?? current.completed
+  const completedAt =
+    patch.completed === true && !current.completed
+      ? ts
+      : patch.completed === false
+        ? null
+        : current.completedAt
+  sqlRun(
+    `UPDATE gf_todos SET title = ?, notes = ?, due_date = ?, due_time = ?, completed = ?, completed_at = ?, priority = ?, updated_at = ?
+     WHERE id = ?`,
+    [
+      (patch.title ?? current.title).trim(),
+      patch.notes !== undefined ? patch.notes : current.notes,
+      (patch.dueDate ?? current.dueDate).slice(0, 10),
+      patch.dueTime !== undefined ? patch.dueTime : current.dueTime,
+      completed ? 1 : 0,
+      completedAt,
+      patch.priority ?? current.priority,
+      ts,
+      id,
+    ],
+  )
+  persistAutoBackup(exportGfBackup())
+  return rowTodo(sqlQuery<Record<string, unknown>>('SELECT * FROM gf_todos WHERE id = ?', [id])[0]!)
+}
+
+export function toggleGfTodoComplete(id: string): GfTodo | null {
+  const existing = sqlQuery<Record<string, unknown>>('SELECT * FROM gf_todos WHERE id = ?', [id])[0]
+  if (!existing) return null
+  const current = rowTodo(existing)
+  return updateGfTodo(id, { completed: !current.completed })
+}
+
+export function deleteGfTodo(id: string): boolean {
+  sqlRun('DELETE FROM gf_todos WHERE id = ?', [id])
+  persistAutoBackup(exportGfBackup())
+  return true
+}
+
 export function exportGfBackup(): GfBackupPayload {
   return {
     version: SCHEMA_VERSION,
@@ -672,6 +790,7 @@ export function exportGfBackup(): GfBackupPayload {
     cryptoHoldings: listGfCryptoHoldings(),
     investments: listGfInvestments(),
     patrimonySnapshots: listGfPatrimonySnapshots(365),
+    todos: listGfTodos(true),
   }
 }
 
@@ -729,6 +848,24 @@ export function importGfBackup(payload: GfBackupPayload): void {
       `INSERT OR REPLACE INTO gf_patrimony_snapshots (id, total_assets, net_worth, cash_total, investments_total, crypto_total, debts_total, recorded_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [s.id, s.totalAssets, s.netWorth, s.cashTotal, s.investmentsTotal, s.cryptoTotal, s.debtsTotal, s.recordedAt],
+    )
+  }
+  for (const t of payload.todos ?? []) {
+    sqlRun(
+      `INSERT OR REPLACE INTO gf_todos (id, title, notes, due_date, due_time, completed, completed_at, priority, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        t.id,
+        t.title,
+        t.notes,
+        t.dueDate.slice(0, 10),
+        t.dueTime,
+        t.completed ? 1 : 0,
+        t.completedAt,
+        t.priority,
+        t.createdAt,
+        t.updatedAt,
+      ],
     )
   }
   persistAutoBackup(exportGfBackup())
