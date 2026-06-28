@@ -11,19 +11,33 @@ import {
   updateHolding,
 } from '@/lib/portfolio/storage'
 import type { PortfolioData } from '@/lib/portfolio/types'
+import {
+  NEON_PORTFOLIO_CHANGED,
+  pullPortfolioFromNeon,
+  schedulePushPortfolioToNeon,
+} from '@/lib/neon/sync-portfolio'
 
 export function usePortfolioStore() {
   const [data, setData] = useState<PortfolioData>(() => defaultPortfolio())
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    setData(loadPortfolio())
-    setReady(true)
+    void pullPortfolioFromNeon().then(() => {
+      setData(loadPortfolio())
+      setReady(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    const onRemote = () => setData(loadPortfolio())
+    window.addEventListener(NEON_PORTFOLIO_CHANGED, onRemote)
+    return () => window.removeEventListener(NEON_PORTFOLIO_CHANGED, onRemote)
   }, [])
 
   useEffect(() => {
     if (!ready) return
     savePortfolio(data)
+    schedulePushPortfolioToNeon(data)
   }, [data, ready])
 
   /** Valor em tempo real no input; não forçar o nome antigo quando o campo está vazio (permite apagar e escrever de novo). */

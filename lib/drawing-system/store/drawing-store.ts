@@ -291,7 +291,12 @@ export const useDrawingStore = create<DrawingStoreState & DrawingStoreActions>()
           }
         }),
 
-      bumpRevision: () => set((s) => ({ revision: s.revision + 1 })),
+      bumpRevision: () => {
+        set((s) => ({ revision: s.revision + 1 }))
+        if (typeof window !== 'undefined') {
+          void import('@/lib/neon/sync-indicators').then((m) => m.schedulePushIndicatorsToNeon())
+        }
+      },
 
       hydrateScopeDrawings: (scopeKey, drawings) =>
         set((s) => ({

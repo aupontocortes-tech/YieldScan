@@ -44,6 +44,10 @@ import {
   getIndicatorPair,
   type IndicatorPair,
 } from '@/lib/btc/indicator-pairs'
+import {
+  NEON_INDICATORS_CHANGED,
+  schedulePushIndicatorsToNeon,
+} from '@/lib/neon/sync-indicators'
 
 /** Intervalo inicial do gráfico de indicadores (antes da hidratação e após “Repor tudo”). */
 const DEFAULT_TIMEFRAME_ID = '1d'
@@ -583,6 +587,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
         } catch {
           /* ignore */
         }
+        schedulePushIndicatorsToNeon()
       }
     }, 450)
     return () => {
@@ -607,6 +612,16 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     trendRadar,
     chartIndicatorDisplay,
   ])
+
+  useEffect(() => {
+    const onRemote = () => {
+      if (typeof window === 'undefined') return
+      if (!window.location.pathname.startsWith('/indicator')) return
+      window.location.reload()
+    }
+    window.addEventListener(NEON_INDICATORS_CHANGED, onRemote)
+    return () => window.removeEventListener(NEON_INDICATORS_CHANGED, onRemote)
+  }, [])
 
   useEffect(() => {
     if (!hydrated) return

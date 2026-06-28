@@ -38,6 +38,7 @@ import {
   getDefaultCashBox,
 } from '@/lib/gestao-financeira/db'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
+import { pullGfFromNeon } from '@/lib/neon/sync-gestao'
 import { generateGfInsights } from '@/lib/gestao-financeira/insights'
 import { resolveCashBoxId } from '@/lib/gestao-financeira/voice-parser'
 import type {
@@ -123,6 +124,7 @@ export function useGestaoFinanceira() {
 
   const reload = useCallback(async () => {
     await ensureGfDb()
+    await pullGfFromNeon()
     const holdings = listGfCryptoHoldings()
     const coinIds = [...new Set(holdings.map((h) => h.coinId))]
 

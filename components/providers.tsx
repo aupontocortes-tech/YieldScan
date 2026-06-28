@@ -7,6 +7,7 @@ import { PwaInstallPrompt } from '@/components/pwa-install-prompt'
 import { SolanaWalletProviders } from '@/components/solana-wallet-providers'
 import { MarketApiWarm } from '@/components/market-api-warm'
 import { SqliteBootstrap } from '@/components/sqlite-bootstrap'
+import { NeonSyncBootstrap } from '@/components/neon-sync-bootstrap'
 import { AppWagmiProvider } from '@/components/wagmi-provider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -31,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SolanaWalletProviders>
           <SqliteBootstrap />
+          <NeonSyncBootstrap />
           <MarketApiWarm />
           <AppShell>{children}</AppShell>
           <PwaInstallPrompt />
