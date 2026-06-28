@@ -3,6 +3,14 @@ export const NEON_SYNC_DOMAINS = [
   'gestao_financeira',
   'portfolio',
   'indicators',
+  'mercado',
+  'tendencias',
+  'wallets',
+  'calculator',
+  'news_state',
+  'unlocks',
+  'pools',
+  'gf_prefs',
 ] as const
 
 export type NeonSyncDomain = (typeof NEON_SYNC_DOMAINS)[number]

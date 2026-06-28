@@ -3,6 +3,7 @@
  */
 
 import { kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 
 const KV_KEY = 'news_tts_heard_v1' as const
 const HEARD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -39,4 +40,5 @@ export function markNewsTtsHeard(speechId: string): void {
   let cur = pruneMap(getNewsTtsHeardMap(), now)
   cur[speechId] = now
   kvSetJson(KV_KEY, cur)
+  scheduleNeonPush('news_state')
 }

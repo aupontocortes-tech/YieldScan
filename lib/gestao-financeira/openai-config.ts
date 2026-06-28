@@ -3,6 +3,7 @@ import type {
   GfOpenAiUsageRecord,
   GfOpenAiUsageSummary,
 } from '@/lib/gestao-financeira/types'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 
 const SETTINGS_KEY = 'gf_openai_settings_v1'
 const USAGE_KEY = 'gf_openai_usage_v1'
@@ -45,11 +46,12 @@ export function loadGfOpenAiSettings(): GfOpenAiSettings {
   }
 }
 
-export function saveGfOpenAiSettings(settings: GfOpenAiSettings): void {
+export function saveGfOpenAiSettings(settings: GfOpenAiSettings, opts?: { skipNeon?: boolean }): void {
   writeJson(SETTINGS_KEY, {
     ...settings,
     apiKey: settings.apiKey.trim(),
   })
+  if (!opts?.skipNeon) scheduleNeonPush('gf_prefs')
 }
 
 export function maskOpenAiKey(key: string): string {

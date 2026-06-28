@@ -16,10 +16,9 @@ import {
   pickDefaultPairAssets,
   type CalculatorAsset,
 } from '@/lib/calculator/assets'
+import { readCalculatorPersist, writeCalculatorPersist } from '@/lib/calculator/persist'
+import { NEON_CALCULATOR_CHANGED } from '@/lib/neon/sync-extra'
 import { cn } from '@/lib/utils'
-
-const STORAGE_KEY = 'yieldscan-calculator-v3'
-const STORAGE_KEY_LEGACY = 'yieldscan-calculator-v2'
 
 type LastEdited = 'left' | 'right'
 
@@ -251,46 +250,45 @@ export function CryptoCalculator() {
 
   useEffect(() => {
     try {
-      const raw =
-        localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(STORAGE_KEY_LEGACY)
-      if (raw) {
-        const j = JSON.parse(raw) as {
-          v?: number
-          leftAsset?: CalculatorAsset
-          rightAsset?: CalculatorAsset
-          leftAssetId?: string
-          rightAssetId?: string
-          leftAmount?: string
-          rightAmount?: string
-          lastEdited?: LastEdited
-          cryptoId?: string
-          fiatId?: string
-          leftIsCrypto?: boolean
-          amount?: string
+      const saved = readCalculatorPersist()
+      if (saved) {
+        const L = saved.leftAsset
+        const R = saved.rightAsset
+        if (L.id && R.id && L.type && R.type) {
+          setLeftAsset(L as CalculatorAsset)
+          setRightAsset(R as CalculatorAsset)
+          setLeftAmount(saved.leftAmount)
+          setRightAmount(saved.rightAmount)
+          setLastEdited(saved.lastEdited)
         }
-        if (j.v === 3 && j.leftAsset && j.rightAsset) {
-          const L = j.leftAsset
-          const R = j.rightAsset
-          if (L.id && R.id && L.type && R.type) {
-            setLeftAsset(L)
-            setRightAsset(R)
+      } else {
+        const raw = localStorage.getItem('yieldscan-calculator-v2')
+        if (raw) {
+          const j = JSON.parse(raw) as {
+            leftAssetId?: string
+            rightAssetId?: string
+            leftAmount?: string
+            rightAmount?: string
+            lastEdited?: LastEdited
+            cryptoId?: string
+            fiatId?: string
+            leftIsCrypto?: boolean
+            amount?: string
+          }
+          if (j.leftAssetId && j.rightAssetId) {
+            setLeftAsset(legacyAssetFromId(j.leftAssetId))
+            setRightAsset(legacyAssetFromId(j.rightAssetId))
             if (typeof j.leftAmount === 'string') setLeftAmount(j.leftAmount)
             if (typeof j.rightAmount === 'string') setRightAmount(j.rightAmount)
             if (j.lastEdited === 'left' || j.lastEdited === 'right') setLastEdited(j.lastEdited)
-          }
-        } else if (j.leftAssetId && j.rightAssetId) {
-          setLeftAsset(legacyAssetFromId(j.leftAssetId))
-          setRightAsset(legacyAssetFromId(j.rightAssetId))
-          if (typeof j.leftAmount === 'string') setLeftAmount(j.leftAmount)
-          if (typeof j.rightAmount === 'string') setRightAmount(j.rightAmount)
-          if (j.lastEdited === 'left' || j.lastEdited === 'right') setLastEdited(j.lastEdited)
-        } else if (j.cryptoId && j.fiatId) {
-          const lc = Boolean(j.leftIsCrypto !== false)
-          setLeftAsset(legacyAssetFromId(lc ? j.cryptoId : j.fiatId))
-          setRightAsset(legacyAssetFromId(lc ? j.fiatId : j.cryptoId))
-          if (typeof j.amount === 'string') {
-            setLeftAmount(j.amount)
-            setLastEdited('left')
+          } else if (j.cryptoId && j.fiatId) {
+            const lc = Boolean(j.leftIsCrypto !== false)
+            setLeftAsset(legacyAssetFromId(lc ? j.cryptoId : j.fiatId))
+            setRightAsset(legacyAssetFromId(lc ? j.fiatId : j.cryptoId))
+            if (typeof j.amount === 'string') {
+              setLeftAmount(j.amount)
+              setLastEdited('left')
+            }
           }
         }
       }
@@ -301,24 +299,31 @@ export function CryptoCalculator() {
   }, [])
 
   useEffect(() => {
+    const onRemote = () => {
+      const saved = readCalculatorPersist()
+      if (!saved) return
+      setLeftAsset(saved.leftAsset as CalculatorAsset)
+      setRightAsset(saved.rightAsset as CalculatorAsset)
+      setLeftAmount(saved.leftAmount)
+      setRightAmount(saved.rightAmount)
+      setLastEdited(saved.lastEdited)
+    }
+    window.addEventListener(NEON_CALCULATOR_CHANGED, onRemote)
+    return () => window.removeEventListener(NEON_CALCULATOR_CHANGED, onRemote)
+  }, [])
+
+  useEffect(() => {
     if (!hydrated) return
     const n = normalizeCalculatorAssetPair(leftAsset, rightAsset)
     const t = window.setTimeout(() => {
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            v: 3,
-            leftAsset: n.left,
-            rightAsset: n.right,
-            leftAmount,
-            rightAmount,
-            lastEdited,
-          })
-        )
-      } catch {
-        /* ignore */
-      }
+      writeCalculatorPersist({
+        v: 3,
+        leftAsset: n.left,
+        rightAsset: n.right,
+        leftAmount,
+        rightAmount,
+        lastEdited,
+      })
     }, 300)
     return () => clearTimeout(t)
   }, [hydrated, leftAsset, rightAsset, leftAmount, rightAmount, lastEdited])

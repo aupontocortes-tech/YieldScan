@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 
 const STORAGE_KEY = 'yieldscan_seen_chains_v1'
 
@@ -28,6 +29,7 @@ export function useNovelChains(sortedChainIds: string[]) {
     return () => {
       const merged = [...new Set([...known, ...unique])]
       localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+      scheduleNeonPush('pools')
     }
   }, [chainKey, sortedChainIds])
 

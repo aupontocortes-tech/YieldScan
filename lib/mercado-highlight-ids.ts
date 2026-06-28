@@ -4,6 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvDelete, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 import { MERCADO_HIGHLIGHT_EXTRA_ALIASES } from '@/lib/mercado-highlight-presets'
 import { DEFAULT_MARKET_HIGHLIGHT_MIX } from '@/lib/us-equities'
 
@@ -114,7 +115,7 @@ export function readStoredHighlightIds(): string[] | null {
   return null
 }
 
-export function writeStoredHighlightIds(ids: string[]): void {
+export function writeStoredHighlightIds(ids: string[], opts?: { skipNeon?: boolean }): void {
   const next = sanitizeHighlightIds(ids)
   // Fallback imediato: se por algum motivo o SQLite/IDB não estiver disponível,
   // pelo menos a UI continua persistindo no localStorage.
@@ -127,6 +128,7 @@ export function writeStoredHighlightIds(ids: string[]): void {
   }
 
   kvSetJson(KV_KEY, next)
+  if (!opts?.skipNeon) scheduleNeonPush('mercado')
 }
 
 export function clearStoredHighlightIds(): void {

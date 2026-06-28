@@ -1,4 +1,5 @@
 import type { GfTodo } from '@/lib/gestao-financeira/types'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 
 const NOTIFIED_KEY = 'yieldscan_gf_todo_notified_v1'
 const NOTIFY_ENABLED_KEY = 'yieldscan_gf_todo_notify_enabled_v1'
@@ -52,9 +53,10 @@ export function isTodoNotifyEnabled(): boolean {
   }
 }
 
-export function setTodoNotifyEnabled(enabled: boolean): void {
+export function setTodoNotifyEnabled(enabled: boolean, opts?: { skipNeon?: boolean }): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(NOTIFY_ENABLED_KEY, enabled ? '1' : '0')
+  if (!opts?.skipNeon) scheduleNeonPush('gf_prefs')
 }
 
 export function isTodoNotifyPromptDismissed(): boolean {
@@ -66,9 +68,10 @@ export function isTodoNotifyPromptDismissed(): boolean {
   }
 }
 
-export function dismissTodoNotifyPrompt(): void {
+export function dismissTodoNotifyPrompt(opts?: { skipNeon?: boolean }): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(DISMISS_PROMPT_KEY, '1')
+  if (!opts?.skipNeon) scheduleNeonPush('gf_prefs')
 }
 
 export function getTodoNotificationPermission(): NotificationPermission | 'unsupported' {

@@ -1,3 +1,5 @@
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
+
 const KEY = 'yieldscan_unlocks_recent_v1'
 const MAX = 8
 
@@ -25,6 +27,7 @@ export function pushUnlocksRecent(coin: UnlocksRecentCoin): void {
   const next = [coin, ...prev].slice(0, MAX)
   try {
     localStorage.setItem(KEY, JSON.stringify(next))
+    scheduleNeonPush('unlocks')
   } catch {
     /* ignore */
   }

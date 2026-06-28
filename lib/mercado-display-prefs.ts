@@ -4,6 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 import { withDisplayQuotes, type MercadoCoin, MercadoFiat, type MercadoFxRates } from '@/lib/coingecko-market'
 
 export type MercadoDisplayFiat = MercadoFiat
@@ -93,7 +94,10 @@ export function readMercadoDisplayPrefs(): MercadoDisplayPrefs {
   return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
 }
 
-export function writeMercadoDisplayPrefs(prefs: MercadoDisplayPrefs): void {
+export function writeMercadoDisplayPrefs(
+  prefs: MercadoDisplayPrefs,
+  opts?: { skipNeon?: boolean },
+): void {
   if (typeof window === 'undefined') return
   const payload = {
     displayFiat: prefs.displayFiat,
@@ -109,6 +113,7 @@ export function writeMercadoDisplayPrefs(prefs: MercadoDisplayPrefs): void {
   }
 
   kvSetJson(KV_KEY, payload)
+  if (!opts?.skipNeon) scheduleNeonPush('mercado')
 }
 
 export type ResolvedMercadoQuote = {

@@ -4,6 +4,8 @@ import { getAddress } from 'ethers'
 import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import { useWallet, type WalletChain } from '@/hooks/use-wallet'
 import { isValidSavedWalletAddress, normalizeSolanaAddressInput } from '@/lib/wallet-address'
+import { NEON_WALLETS_CHANGED } from '@/lib/neon/sync-extra'
+import { writeSavedWallets } from '@/lib/wallet-saved-storage'
 
 const STORAGE_KEY = 'ys_ml_wallets_v2'
 const LEGACY_STORAGE_KEY = 'ys_ml_wallets_v1'
@@ -157,12 +159,23 @@ export function useMultiWallet() {
   /** Persiste carteiras no localStorage sempre que mudam. */
   useEffect(() => {
     if (state.wallets.length === 0) return
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.wallets))
-    } catch {
-      /* ignore */
-    }
+    writeSavedWallets(state.wallets)
   }, [state.wallets])
+
+  useEffect(() => {
+    const onRemote = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        if (!raw) return
+        const parsed = JSON.parse(raw) as SavedWallet[]
+        if (Array.isArray(parsed)) dispatch({ type: 'load', wallets: parsed })
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener(NEON_WALLETS_CHANGED, onRemote)
+    return () => window.removeEventListener(NEON_WALLETS_CHANGED, onRemote)
+  }, [])
 
   /** Adiciona ou actualiza carteira ligada via extensão (MetaMask / Phantom). */
   useEffect(() => {

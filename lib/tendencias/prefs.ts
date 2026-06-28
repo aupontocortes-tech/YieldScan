@@ -4,6 +4,7 @@ import {
   type MomentumPeriod,
   type AnalysisTone,
 } from '@/lib/tendencias/types'
+import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 
 const STORAGE_KEY = 'yieldscan:tendencias-prefs'
 
@@ -22,9 +23,10 @@ export function readTendenciasPrefs(): TendenciasPrefs {
   }
 }
 
-export function writeTendenciasPrefs(prefs: TendenciasPrefs) {
+export function writeTendenciasPrefs(prefs: TendenciasPrefs, opts?: { skipNeon?: boolean }) {
   if (typeof window === 'undefined') return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+  if (!opts?.skipNeon) scheduleNeonPush('tendencias')
 }
 
 function isPeriod(v: unknown): v is MomentumPeriod {
