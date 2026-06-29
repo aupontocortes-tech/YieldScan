@@ -15,6 +15,8 @@ type Props = {
   brlPerUsd: number
   onDelete: () => void
   fmtBrl: (n: number) => string
+  /** Posição espelhada da Carteira — edite em /portfolio */
+  readOnly?: boolean
 }
 
 export function GfCryptoHoldingCard({
@@ -24,6 +26,7 @@ export function GfCryptoHoldingCard({
   brlPerUsd,
   onDelete,
   fmtBrl,
+  readOnly = false,
 }: Props) {
   const pxUsd = prices[h.coinId]?.usd ?? 0
   const pxBrl = prices[h.coinId]?.brl ?? pxUsd * brlPerUsd
@@ -44,16 +47,22 @@ export function GfCryptoHoldingCard({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <Badge variant="outline">{wallet?.name}</Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-red-400"
-            aria-label={`Excluir posição ${h.symbol}`}
-            onClick={onDelete}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {readOnly ? (
+            <Badge variant="secondary" className="text-[10px]">
+              Carteira
+            </Badge>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-red-400"
+              aria-label={`Excluir posição ${h.symbol}`}
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 

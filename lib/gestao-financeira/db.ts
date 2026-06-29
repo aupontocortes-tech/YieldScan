@@ -546,6 +546,30 @@ export function listGfCryptoWallets(): GfCryptoWallet[] {
   ).map(rowCryptoWallet)
 }
 
+/** Carteira ligada ao módulo /portfolio (sync automático de posições). */
+export function ensureGfPortfolioWallet(displayName?: string): string {
+  const existing = sqlQuery<Record<string, unknown>>(
+    "SELECT * FROM gf_crypto_wallets WHERE wallet_type = 'portfolio' LIMIT 1",
+  )[0]
+  if (existing) {
+    const name = displayName?.trim()
+    if (name && String(existing.name) !== name) {
+      sqlRun('UPDATE gf_crypto_wallets SET name = ? WHERE id = ?', [name, String(existing.id)])
+      scheduleAutoBackup()
+    }
+    return String(existing.id)
+  }
+  const id = newId()
+  const ts = nowIso()
+  const name = displayName?.trim() || 'Minha Carteira'
+  sqlRun(
+    'INSERT INTO gf_crypto_wallets (id, name, wallet_type, created_at) VALUES (?, ?, ?, ?)',
+    [id, name, 'portfolio', ts],
+  )
+  scheduleAutoBackup()
+  return id
+}
+
 export function listGfCryptoHoldings(): GfCryptoHolding[] {
   return sqlQuery<Record<string, unknown>>(
     'SELECT * FROM gf_crypto_holdings ORDER BY symbol ASC',

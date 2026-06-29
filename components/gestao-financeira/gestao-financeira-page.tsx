@@ -691,17 +691,21 @@ export function GestaoFinanceiraPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {gf.cryptoHoldings.map((h) => (
+            {gf.cryptoHoldings.map((h) => {
+              const wallet = gf.cryptoWallets.find((w) => w.id === h.walletId)
+              const fromPortfolio = wallet?.walletType === 'portfolio'
+              return (
               <GfCryptoHoldingCard
                 key={h.id}
                 holding={h}
-                wallet={gf.cryptoWallets.find((w) => w.id === h.walletId)}
+                wallet={wallet}
                 prices={gf.cryptoPrices}
                 brlPerUsd={gf.brlPerUsd}
                 fmtBrl={fmtBrl}
+                readOnly={fromPortfolio}
                 onDelete={() => setDeleteTarget({ kind: 'crypto', id: h.id, label: h.symbol })}
               />
-            ))}
+            )})}
             {gf.cryptoHoldings.length === 0 ? (
               <p className="text-sm text-muted-foreground sm:col-span-2">Adicione posições em BTC, ETH, SOL e outras moedas CoinGecko.</p>
             ) : null}

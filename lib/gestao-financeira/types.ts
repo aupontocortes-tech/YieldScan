@@ -4,7 +4,13 @@ export type GfCategoryType = 'income' | 'expense' | 'both'
 
 export type GfDebtStatus = 'active' | 'paid' | 'overdue'
 
-export type GfCryptoWalletType = 'hold' | 'trade' | 'long_term' | 'altcoins' | 'experimental'
+export type GfCryptoWalletType =
+  | 'hold'
+  | 'trade'
+  | 'long_term'
+  | 'altcoins'
+  | 'experimental'
+  | 'portfolio'
 
 export type GfCategory = {
   id: string

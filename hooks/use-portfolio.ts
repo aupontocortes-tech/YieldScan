@@ -16,6 +16,8 @@ import {
   pullPortfolioFromNeon,
   schedulePushPortfolioToNeon,
 } from '@/lib/neon/sync-portfolio'
+import { syncPortfolioToGfCrypto } from '@/lib/portfolio/gf-sync'
+import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 
 export function usePortfolioStore() {
   const [data, setData] = useState<PortfolioData>(() => defaultPortfolio())
@@ -38,6 +40,11 @@ export function usePortfolioStore() {
     if (!ready) return
     savePortfolio(data)
     schedulePushPortfolioToNeon(data)
+    void syncPortfolioToGfCrypto(data).then((changed) => {
+      if (changed && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(GF_DATA_CHANGED_EVENT))
+      }
+    })
   }, [data, ready])
 
   /** Valor em tempo real no input; não forçar o nome antigo quando o campo está vazio (permite apagar e escrever de novo). */
