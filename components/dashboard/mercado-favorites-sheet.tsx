@@ -358,7 +358,7 @@ export function MercadoFavoritesSheet({
             Adicionar favoritos
           </SheetTitle>
           <SheetDescription className="text-sm text-muted-foreground">
-            Primeiro cripto, depois ações US. No cartão, a engrenagem em baixo à direita muda a moeda.
+            Até {MAX_MARKET_HIGHLIGHTS} cripto e ações US nos teus favoritos. No cartão, a engrenagem muda a moeda.
           </SheetDescription>
         </SheetHeader>
 

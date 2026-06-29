@@ -73,7 +73,7 @@ const MARKETS_PATH =
 
 const UA = 'yieldscan-market/1'
 /** Máximo de slugs por pedido à API de mercado (favoritos + ações fixas). */
-export const MAX_MARKET_FETCH_IDS = 24
+export const MAX_MARKET_FETCH_IDS = 80
 
 /** Evita 429 na API pública; com chave Pro/Demo os lotes são maiores. */
 const SIMPLE_PRICE_CHUNK_PUBLIC = 4

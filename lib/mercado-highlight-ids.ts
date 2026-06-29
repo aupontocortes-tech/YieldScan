@@ -12,7 +12,7 @@ import { DEFAULT_MARKET_HIGHLIGHT_MIX } from '@/lib/us-equities'
 export const DEFAULT_MARKET_HIGHLIGHT_IDS = [...DEFAULT_MARKET_HIGHLIGHT_MIX] as const
 
 /** Máximo de moedas em destaque (URL + CoinGecko simple/price). */
-export const MAX_MARKET_HIGHLIGHTS = 12
+export const MAX_MARKET_HIGHLIGHTS = 60
 
 const STORAGE_KEY = 'yieldscan-mercado-highlight-ids'
 const KV_KEY = 'mercado_highlights_v1'

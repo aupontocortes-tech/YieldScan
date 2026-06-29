@@ -392,7 +392,23 @@ function coinForHighlightDisplay(
   const q = resolveMercadoDisplay(synthetic, fiat, prefs.priceOverrides, fxRates)
   if (q.price != null) return synthetic
 
-  return coin ? withStoredHighlightImage(coin) : coin
+  return coin ? withStoredHighlightImage(coin) : null
+}
+
+function mercadoCoinFromStockRow(row: TendenciasEquityRow): MercadoCoin | null {
+  const id = row.xstockId?.trim().toLowerCase()
+  if (!id || row.price == null || !Number.isFinite(row.price)) return null
+  const meta = highlightMetaFromPresetOrId(id)
+  return {
+    id,
+    name: row.name?.trim() || meta.name,
+    symbol: (row.symbol || meta.symbol).toUpperCase(),
+    price: row.price,
+    change_24h: row.changePct,
+    image: COINGECKO_LOGO_BY_ID[id] ?? readHighlightIconUrl(id) ?? null,
+    market_cap: row.marketCap ?? null,
+    source: 'coingecko',
+  }
 }
 
 function HighlightEmptyCard({
@@ -474,10 +490,11 @@ export function DashbuddyCryptoMarket() {
 
   const pinnedStockIds = [...MARKET_PINNED_STOCK_IDS]
 
+  /** Ações fixas primeiro — garante preço Tesla/S&P500 mesmo com muitos favoritos. */
   const allMarketIds = useMemo(() => {
     const seen = new Set<string>()
     const out: string[] = []
-    for (const id of [...highlightIds, ...MARKET_PINNED_STOCK_IDS]) {
+    for (const id of [...MARKET_PINNED_STOCK_IDS, ...highlightIds]) {
       const k = id.trim()
       if (k && !seen.has(k)) {
         seen.add(k)
@@ -487,13 +504,12 @@ export function DashbuddyCryptoMarket() {
     return out
   }, [highlightIds])
 
-  const favoriteQueryKey = mercadoQueryKey(highlightIds)
   const marketQueryKey = mercadoQueryKey(allMarketIds)
-  const pricesCacheKey = `${favoriteQueryKey}|prices`
+  const pricesCacheKey = `${marketQueryKey}|prices`
 
   const pricesPlaceholder = useMemo(
-    () => (clientMounted ? readMercadoPricesPlaceholder(highlightIds) : undefined),
-    [highlightIds, clientMounted],
+    () => (clientMounted ? readMercadoPricesPlaceholder(allMarketIds) : undefined),
+    [allMarketIds, clientMounted],
   )
   const pricesCacheUpdatedAt = useMemo(
     () => (clientMounted ? readMercadoCacheUpdatedAt(pricesCacheKey) : undefined),
@@ -508,15 +524,15 @@ export function DashbuddyCryptoMarket() {
     isFetching: pricesFetching,
     refetch: refetchPrices,
   } = useQuery({
-    queryKey: [MERCADO_PRICES_QUERY_PREFIX, favoriteQueryKey],
-    queryFn: () => fetchAndCacheMercadoPrices(highlightIds),
+    queryKey: [MERCADO_PRICES_QUERY_PREFIX, marketQueryKey],
+    queryFn: () => fetchAndCacheMercadoPrices(allMarketIds),
     staleTime: isMobile ? 120_000 : 300_000,
     refetchInterval: false as const,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: isMobile,
     refetchOnMount: 'always',
     gcTime: isMobile ? 600_000 : 300_000,
-    retry: isMobile ? 2 : 3,
+    retry: isMobile ? 3 : 3,
     retryDelay: (attempt) =>
       isMobile
         ? Math.min(6_000, 800 * 2 ** attempt)
@@ -524,8 +540,19 @@ export function DashbuddyCryptoMarket() {
     initialData: clientMounted ? pricesPlaceholder : undefined,
     initialDataUpdatedAt: clientMounted ? pricesCacheUpdatedAt : undefined,
     placeholderData: clientMounted
-      ? (prev) => prev ?? readMercadoPricesPlaceholder(highlightIds)
+      ? (prev) => prev ?? readMercadoPricesPlaceholder(allMarketIds)
       : undefined,
+  })
+
+  const pinnedOnlyKey = mercadoQueryKey(pinnedStockIds)
+  const { data: pinnedPricesData } = useQuery({
+    queryKey: [MERCADO_PRICES_QUERY_PREFIX, 'pinned', pinnedOnlyKey],
+    queryFn: () => fetchAndCacheMercadoPrices([...pinnedStockIds]),
+    enabled: clientMounted && isMobile,
+    staleTime: 120_000,
+    refetchOnMount: 'always',
+    retry: 2,
+    retryDelay: (attempt) => Math.min(8_000, 1_000 * 2 ** attempt),
   })
 
   const {
@@ -544,7 +571,7 @@ export function DashbuddyCryptoMarket() {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
     gcTime: 300_000,
-    retry: isMobile ? 1 : 2,
+    retry: isMobile ? 2 : 2,
     retryDelay: (attempt) =>
       isMobile
         ? Math.min(8_000, 1_200 * 2 ** attempt)
@@ -563,12 +590,15 @@ export function DashbuddyCryptoMarket() {
     const delay = pricesData ? 350 : 2_000
     const t = window.setTimeout(() => setFullFetchReady(true), delay)
     return () => window.clearTimeout(t)
-  }, [isMobile, pricesData, favoriteQueryKey])
+  }, [isMobile, pricesData, marketQueryKey])
 
-  const data = useMemo(
-    () => mergeMarketPayload(pricesData, listsData),
-    [pricesData, listsData],
-  )
+  const data = useMemo(() => {
+    let merged = mergeMarketPayload(pricesData, listsData)
+    if (pinnedPricesData) {
+      merged = mergeMarketPayload(pinnedPricesData, merged)
+    }
+    return merged
+  }, [pricesData, listsData, pinnedPricesData])
 
   const isLoading = pricesLoading && !pricesData && !pricesPlaceholder
   const isFetching = pricesFetching || listsFetching
@@ -592,12 +622,15 @@ export function DashbuddyCryptoMarket() {
 
   useEffect(() => {
     if (!pricesData || pricesFetching) return
-    const hasPrice = pricesData.highlightCoins.some((c) => c?.price != null)
-    if (!hasPrice) {
-      const t = window.setTimeout(() => void refetchPrices(), 2_500)
-      return () => window.clearTimeout(t)
-    }
-  }, [pricesData, pricesFetching, refetchPrices])
+    const missingPinned = pinnedStockIds.some((id) => {
+      const idx = pricesData.highlightIds?.indexOf(id) ?? -1
+      const c = idx >= 0 ? pricesData.highlightCoins[idx] : null
+      return c?.price == null
+    })
+    if (!missingPinned) return
+    const t = window.setTimeout(() => void refetchPrices(), isMobile ? 1_500 : 2_500)
+    return () => window.clearTimeout(t)
+  }, [pricesData, pricesFetching, refetchPrices, pinnedStockIds, isMobile])
 
   const coinById = useMemo(() => {
     const map = new Map<string, MercadoCoin | null>()
@@ -606,8 +639,21 @@ export function DashbuddyCryptoMarket() {
     ids.forEach((id, i) => {
       map.set(id, data.highlightCoins[i] ?? null)
     })
+    for (const row of data.trendingStocks ?? []) {
+      const fromRow = mercadoCoinFromStockRow(row)
+      if (!fromRow) continue
+      const prev = map.get(fromRow.id)
+      if (prev?.price != null) continue
+      map.set(fromRow.id, fromRow)
+    }
+    for (const id of pinnedStockIds) {
+      if (map.get(id)?.price != null) continue
+      const row = (data.trendingStocks ?? []).find((r) => r.xstockId === id)
+      const fromRow = row ? mercadoCoinFromStockRow(row) : null
+      if (fromRow) map.set(id, fromRow)
+    }
     return map
-  }, [data, allMarketIds])
+  }, [data, allMarketIds, pinnedStockIds])
 
   useEffect(() => {
     if (!data) return
