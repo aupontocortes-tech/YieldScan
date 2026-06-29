@@ -719,7 +719,7 @@ export function DashbuddyCryptoMarket() {
               onSaved={handleFavoritesSaved}
             />
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 hidden text-sm text-muted-foreground md:block">
             Preços CoinGecko · padrão em <span className="font-medium text-foreground">{fiatLabel}</span>.{' '}
             <span className="text-foreground/90">Engrenagem em cada cartão</span> muda real, dólar ou euro.{' '}
             <button

@@ -152,7 +152,12 @@ export function NewsHubHeader() {
       <h1 className="text-3xl font-bold tracking-tight text-foreground">
         {onGestao ? 'Gestão Financeira' : 'Cripto e mercado global'}
       </h1>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      <p
+        className={cn(
+          'mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground',
+          !onGestao && 'hidden md:block',
+        )}
+      >
         {onGestao
           ? 'Registre receitas e despesas digitando ou falando pelo teclado.'
           : 'Preços (cripto e ações US), notícias e análise inteligente — escolhe a secção abaixo.'}
