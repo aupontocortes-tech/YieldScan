@@ -4,6 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
+import { afterMercadoLocalWrite, pickNewerBySavedAt } from '@/lib/mercado-persist'
 import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 import { withDisplayQuotes, type MercadoCoin, MercadoFiat, type MercadoFxRates } from '@/lib/coingecko-market'
 
@@ -72,25 +73,47 @@ export function parseMercadoPrefsRecord(j: Record<string, unknown>): MercadoDisp
   }
 }
 
+type StoredMercadoDisplay = MercadoDisplayPrefs & { savedAt?: number }
+
+function readMercadoDisplayFromRaw(raw: string): { prefs: MercadoDisplayPrefs; savedAt: number } | null {
+  try {
+    const j = JSON.parse(raw) as Record<string, unknown>
+    if (!j || typeof j !== 'object' || Array.isArray(j)) return null
+    const savedAt = typeof j.savedAt === 'number' && Number.isFinite(j.savedAt) ? j.savedAt : 0
+    return { prefs: parseMercadoPrefsRecord(j), savedAt }
+  } catch {
+    return null
+  }
+}
+
+function readMercadoDisplayFromSqlite(): { prefs: MercadoDisplayPrefs; savedAt: number } | null {
+  if (!isYieldscanSqliteOpen()) return null
+  const j = kvGetJson<Record<string, unknown>>(KV_KEY)
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return null
+  const savedAt = typeof j.savedAt === 'number' && Number.isFinite(j.savedAt) ? j.savedAt : 0
+  return { prefs: parseMercadoPrefsRecord(j), savedAt }
+}
+
 export function readMercadoDisplayPrefs(): MercadoDisplayPrefs {
   if (typeof window === 'undefined') {
     return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
   }
+
+  let fromLs: { prefs: MercadoDisplayPrefs; savedAt: number } | null = null
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const j = JSON.parse(raw) as Record<string, unknown>
-      return parseMercadoPrefsRecord(j)
-    }
+    if (raw) fromLs = readMercadoDisplayFromRaw(raw)
   } catch {
     /* ignore */
   }
-  if (isYieldscanSqliteOpen()) {
-    const j = kvGetJson<Record<string, unknown>>(KV_KEY)
-    if (j && typeof j === 'object' && !Array.isArray(j)) {
-      return parseMercadoPrefsRecord(j)
-    }
-  }
+
+  const fromSql = readMercadoDisplayFromSqlite()
+  const picked = pickNewerBySavedAt(
+    fromSql ? { value: fromSql.prefs, savedAt: fromSql.savedAt } : null,
+    fromLs ? { value: fromLs.prefs, savedAt: fromLs.savedAt } : null,
+  )
+  if (picked) return picked
+
   return { ...DEFAULT_PREFS, priceOverrides: {}, displayFiatByCoinId: {} }
 }
 
@@ -99,10 +122,11 @@ export function writeMercadoDisplayPrefs(
   opts?: { skipNeon?: boolean },
 ): void {
   if (typeof window === 'undefined') return
-  const payload = {
+  const payload: StoredMercadoDisplay = {
     displayFiat: prefs.displayFiat,
     displayFiatByCoinId: prefs.displayFiatByCoinId,
     priceOverrides: prefs.priceOverrides,
+    savedAt: Date.now(),
   }
 
   // Fallback imediato: evita “não fica salvo” se o IndexedDB/SQLite falhar.
@@ -113,7 +137,10 @@ export function writeMercadoDisplayPrefs(
   }
 
   kvSetJson(KV_KEY, payload)
-  if (!opts?.skipNeon) scheduleNeonPush('mercado')
+  if (!opts?.skipNeon) {
+    afterMercadoLocalWrite()
+    scheduleNeonPush('mercado', 800)
+  }
 }
 
 export type ResolvedMercadoQuote = {

@@ -18,6 +18,7 @@ import {
   writeMercadoDisplayPrefs,
   type MercadoDisplayPrefs,
 } from '@/lib/mercado-display-prefs'
+import { isMercadoLocalEditRecent } from '@/lib/mercado-persist'
 import { readStoredHighlightIds, writeStoredHighlightIds } from '@/lib/mercado-highlight-ids'
 import {
   readHighlightIconMap,
@@ -120,6 +121,7 @@ function readMercadoPayload(): MercadoNeonPayload {
 }
 
 function applyMercadoPayload(payload: MercadoNeonPayload): void {
+  if (isMercadoLocalEditRecent()) return
   writeMercadoDisplayPrefs(payload.display, { skipNeon: true })
   if (payload.highlightIds.length > 0) writeStoredHighlightIds(payload.highlightIds, { skipNeon: true })
   writeHighlightIconMap(payload.highlightIcons, { skipNeon: true })
@@ -211,6 +213,7 @@ async function pullDomain<T>(
 }
 
 export async function pullMercadoFromNeon(): Promise<boolean> {
+  if (isMercadoLocalEditRecent()) return false
   return pullDomain(
     'mercado',
     (v): v is MercadoNeonPayload => Boolean(v && typeof v === 'object' && (v as MercadoNeonPayload).v === 1),
@@ -440,7 +443,10 @@ export function initExtraNeonSync(): () => void {
     handlersRegistered = true
   }
 
-  void pullAllExtraFromNeon()
+  void (async () => {
+    await openYieldscanSqlite().catch(() => {})
+    await pullAllExtraFromNeon()
+  })()
 
   const poll = window.setInterval(() => {
     void pushNewsStateToNeonNow()

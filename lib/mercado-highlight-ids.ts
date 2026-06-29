@@ -4,6 +4,7 @@
  */
 
 import { isYieldscanSqliteOpen, kvDelete, kvGetJson, kvSetJson } from '@/lib/client-db/sqlite-core'
+import { afterMercadoLocalWrite, pickNewerBySavedAt } from '@/lib/mercado-persist'
 import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
 import { MERCADO_HIGHLIGHT_EXTRA_ALIASES } from '@/lib/mercado-highlight-presets'
 import { DEFAULT_MARKET_HIGHLIGHT_MIX } from '@/lib/us-equities'
@@ -97,38 +98,76 @@ export function parseHighlightsQueryParam(param: string | null): string[] {
   return sanitizeHighlightIds(parts)
 }
 
-export function readStoredHighlightIds(): string[] | null {
-  if (typeof window === 'undefined') return null
+type StoredHighlightIds = { ids: string[]; savedAt?: number }
+
+function readHighlightIdsFromRaw(raw: string): { ids: string[]; savedAt: number } | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown
-      if (Array.isArray(parsed)) return sanitizeHighlightIds(parsed.map(String))
+    const parsed = JSON.parse(raw) as unknown
+    if (Array.isArray(parsed)) {
+      return { ids: sanitizeHighlightIds(parsed.map(String)), savedAt: 0 }
+    }
+    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as StoredHighlightIds).ids)) {
+      const row = parsed as StoredHighlightIds
+      const savedAt = typeof row.savedAt === 'number' && Number.isFinite(row.savedAt) ? row.savedAt : 0
+      return { ids: sanitizeHighlightIds(row.ids.map(String)), savedAt }
     }
   } catch {
     /* ignore */
   }
-  if (isYieldscanSqliteOpen()) {
-    const parsed = kvGetJson<unknown>(KV_KEY)
-    if (Array.isArray(parsed)) return sanitizeHighlightIds(parsed.map(String))
+  return null
+}
+
+function readHighlightIdsFromSqlite(): { ids: string[]; savedAt: number } | null {
+  if (!isYieldscanSqliteOpen()) return null
+  const parsed = kvGetJson<unknown>(KV_KEY)
+  if (Array.isArray(parsed)) {
+    return { ids: sanitizeHighlightIds(parsed.map(String)), savedAt: 0 }
+  }
+  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as StoredHighlightIds).ids)) {
+    const row = parsed as StoredHighlightIds
+    const savedAt = typeof row.savedAt === 'number' && Number.isFinite(row.savedAt) ? row.savedAt : 0
+    return { ids: sanitizeHighlightIds(row.ids.map(String)), savedAt }
   }
   return null
 }
 
+export function readStoredHighlightIds(): string[] | null {
+  if (typeof window === 'undefined') return null
+
+  let fromLs: { ids: string[]; savedAt: number } | null = null
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) fromLs = readHighlightIdsFromRaw(raw)
+  } catch {
+    /* ignore */
+  }
+
+  const fromSql = readHighlightIdsFromSqlite()
+  const picked = pickNewerBySavedAt(
+    fromSql ? { value: fromSql.ids, savedAt: fromSql.savedAt } : null,
+    fromLs ? { value: fromLs.ids, savedAt: fromLs.savedAt } : null,
+  )
+  return picked
+}
+
 export function writeStoredHighlightIds(ids: string[], opts?: { skipNeon?: boolean }): void {
   const next = sanitizeHighlightIds(ids)
+  const payload: StoredHighlightIds = { ids: next, savedAt: Date.now() }
   // Fallback imediato: se por algum motivo o SQLite/IDB não estiver disponível,
   // pelo menos a UI continua persistindo no localStorage.
   if (typeof window !== 'undefined') {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch {
       /* ignore */
     }
   }
 
-  kvSetJson(KV_KEY, next)
-  if (!opts?.skipNeon) scheduleNeonPush('mercado')
+  kvSetJson(KV_KEY, payload)
+  if (!opts?.skipNeon) {
+    afterMercadoLocalWrite()
+    scheduleNeonPush('mercado', 800)
+  }
 }
 
 export function clearStoredHighlightIds(): void {
