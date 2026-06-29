@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 import {
   ArrowLeftRight,
   BarChart3,
-  BookOpen,
   Calculator,
   LockKeyhole,
   Droplets,
@@ -15,7 +14,6 @@ import {
   LineChart,
   Newspaper,
   SlidersHorizontal,
-  Sparkles,
   Wallet,
 } from 'lucide-react'
 import {
@@ -65,11 +63,6 @@ const MAIN_NAV: NavItem[] = [
   { name: 'Unlocks', href: '/unlocks', icon: LockKeyhole, iconClassName: 'text-teal-400' },
   { name: 'DEX', href: '/dex', icon: LayoutGrid, iconClassName: 'text-fuchsia-400' },
   { name: 'Trocas', href: '/swap', icon: ArrowLeftRight, iconClassName: 'text-rose-400' },
-]
-
-const RESOURCE_NAV: NavItem[] = [
-  { name: 'Aprender', href: 'https://www.yldlab.xyz/', icon: BookOpen, iconClassName: 'text-indigo-400' },
-  { name: 'PRO', href: '/dex', icon: Sparkles, iconClassName: 'text-[#d4af37]' },
 ]
 
 function isNewsNavActive(pathname: string): boolean {
@@ -230,34 +223,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Recursos</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Aprender (site externo)">
-                    <a href={RESOURCE_NAV[0].href} target="_blank" rel="noopener noreferrer">
-                      <BookOpen className={cn('size-4 shrink-0', RESOURCE_NAV[0].iconClassName)} />
-                      <span>Aprender</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === '/dex' || pathname.startsWith('/dex/')}
-                    tooltip="Destaques PRO"
-                  >
-                    <Link href={RESOURCE_NAV[1].href}>
-                      <Sparkles className={cn('size-4 shrink-0', RESOURCE_NAV[1].iconClassName)} />
-                      <span>PRO</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
