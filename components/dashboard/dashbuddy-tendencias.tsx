@@ -414,6 +414,92 @@ function sentimentClass(s: SentimentLevel): string {
   return 'text-amber-300 border-amber-500/30 bg-amber-500/10'
 }
 
+const ANALYSIS_HIGHLIGHT_RE =
+  /(\d{1,3}\/100|[-+]?\d+[.,]?\d*\s*%|~?[\d.,]+\s*(?:[BMT])?\s*(?:USD|US\$)?|\b(?:SOL|BTC|ETH|XRP|BNB|ADA|DOGE|AVAX|LINK|DeFi|TVL)\b)/gi
+
+function isAnalysisHighlight(part: string): boolean {
+  if (!part.trim()) return false
+  return (
+    /^\d{1,3}\/100$/i.test(part) ||
+    /^[-+]?\d+[.,]?\d*\s*%$/.test(part) ||
+    /^~?[\d.,]+\s*(?:[BMT])?\s*(?:USD|US\$)?$/i.test(part) ||
+    /^(?:SOL|BTC|ETH|XRP|BNB|ADA|DOGE|AVAX|LINK|DeFi|TVL)$/i.test(part)
+  )
+}
+
+function highlightClass(part: string): string {
+  if (/^\d{1,3}\/100$/i.test(part)) return 'text-yellow-300'
+  if (/^\+/.test(part) && /%/.test(part)) return 'text-emerald-300'
+  if (/^-/.test(part) && /%/.test(part)) return 'text-red-300'
+  if (/%/.test(part)) return 'text-amber-300'
+  if (/USD|US\$|\d/.test(part)) return 'text-sky-300'
+  return 'text-cyan-300'
+}
+
+function ObserveTodayPanel({
+  text,
+  periodLabel,
+  tone,
+  score,
+}: {
+  text: string
+  periodLabel: string
+  tone: string
+  score: number
+}) {
+  const parts = text.split(ANALYSIS_HIGHLIGHT_RE)
+
+  return (
+    <Card className="relative overflow-hidden border-yellow-500/30 bg-gradient-to-br from-yellow-500/[0.12] via-card to-amber-950/20 animate-tendencias-glow">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-yellow-400/80 to-transparent animate-tendencias-shimmer"
+        aria-hidden
+      />
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight sm:text-lg">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-500/20 ring-1 ring-yellow-500/35">
+              <Zap className="h-5 w-5 text-yellow-400 animate-pulse" />
+            </span>
+            O que observar hoje
+          </CardTitle>
+          <Badge
+            variant="outline"
+            className="border-yellow-500/40 bg-yellow-500/10 px-2.5 py-1 font-mono text-sm font-bold text-yellow-300 tabular-nums"
+          >
+            {score}/100
+          </Badge>
+        </div>
+        <p className="text-xs font-medium text-yellow-200/80">Análise do mercado · leitura rápida</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-base font-medium leading-[1.8] tracking-wide text-foreground/95 sm:text-lg sm:leading-[1.85]">
+          {parts.map((part, i) =>
+            part && isAnalysisHighlight(part) ? (
+              <span key={i} className={cn('font-extrabold tabular-nums', highlightClass(part))}>
+                {part}
+              </span>
+            ) : (
+              <span key={i} className="text-foreground/90">
+                {part}
+              </span>
+            ),
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 border-t border-yellow-500/15 pt-3">
+          <Badge variant="secondary" className="text-[10px] font-medium">
+            {periodLabel}
+          </Badge>
+          <Badge variant="outline" className="border-border/50 text-[10px] capitalize text-muted-foreground">
+            Tom {tone}
+          </Badge>
+          <span className="text-[10px] text-muted-foreground">Números e % em destaque</span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function KpiCard({
   label,
   value,
@@ -426,19 +512,20 @@ function KpiCard({
   accent?: 'gold' | 'up' | 'down'
 }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+    <div className="group rounded-xl border border-border/50 bg-card/50 px-3 py-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-border hover:bg-card/80 hover:shadow-lg hover:shadow-black/20">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       <p
         className={cn(
-          'mt-0.5 truncate font-mono text-lg font-bold tabular-nums',
-          accent === 'gold' && 'text-yellow-500',
+          'mt-1 truncate font-mono text-xl font-extrabold tabular-nums transition-transform duration-300 group-hover:scale-[1.03]',
+          accent === 'gold' && 'text-yellow-400',
           accent === 'up' && 'text-emerald-400',
           accent === 'down' && 'text-red-400',
+          !accent && 'text-foreground',
         )}
       >
         {value}
       </p>
-      {sub && <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-1 truncate text-[11px] font-medium text-muted-foreground">{sub}</p>}
     </div>
   )
 }
@@ -465,13 +552,13 @@ function SentimentGauge({
           <span className="text-sm font-normal text-muted-foreground">/100</span>
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted/40">
+      <div className="h-2 overflow-hidden rounded-full bg-muted/40">
         <div
           className={cn(
-            'h-full rounded-full transition-all',
-            level === 'optimista' && 'bg-emerald-500',
-            level === 'pessimista' && 'bg-red-500',
-            level === 'neutro' && 'bg-amber-400',
+            'h-full rounded-full transition-all duration-700 ease-out animate-tendencias-pulse-bar',
+            level === 'optimista' && 'bg-gradient-to-r from-emerald-600 to-emerald-400',
+            level === 'pessimista' && 'bg-gradient-to-r from-red-600 to-red-400',
+            level === 'neutro' && 'bg-gradient-to-r from-amber-600 to-amber-400',
           )}
           style={{ width: `${score}%` }}
         />
@@ -625,14 +712,14 @@ function AlertRow({ alert }: { alert: TendenciasAlert }) {
   return (
     <div
       className={cn(
-        'rounded-lg border px-3 py-2 text-xs',
-        alert.severity === 'urgent' && 'border-red-500/40 bg-red-950/20',
-        alert.severity === 'watch' && 'border-amber-500/30 bg-amber-950/15',
-        alert.severity === 'info' && 'border-border/40 bg-muted/10',
+        'rounded-lg border px-3 py-2.5 text-xs transition-all duration-200 hover:translate-x-0.5',
+        alert.severity === 'urgent' && 'border-red-500/40 bg-red-950/20 hover:border-red-500/60',
+        alert.severity === 'watch' && 'border-amber-500/30 bg-amber-950/15 hover:border-amber-500/50',
+        alert.severity === 'info' && 'border-border/40 bg-muted/10 hover:bg-muted/20',
       )}
     >
-      <p className="font-medium">{alert.title}</p>
-      <p className="mt-0.5 text-muted-foreground">{alert.detail}</p>
+      <p className="font-semibold text-foreground">{alert.title}</p>
+      <p className="mt-1 leading-relaxed text-muted-foreground">{alert.detail}</p>
     </div>
   )
 }
@@ -828,7 +915,7 @@ export function DashbuddyTendencias() {
       )}
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="tendencias-stagger grid grid-cols-2 gap-2 sm:grid-cols-4">
         <KpiCard
           label="Sentimento"
           value={String(market.sentimentScore)}
@@ -857,37 +944,32 @@ export function DashbuddyTendencias() {
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+              'relative flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200',
               tab === id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'scale-[1.02] bg-background text-foreground shadow-md ring-1 ring-yellow-500/25'
+                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className={cn('h-3.5 w-3.5 transition-colors', tab === id && 'text-yellow-400')} />
             {label}
+            {tab === id ? (
+              <span className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-yellow-500/80" aria-hidden />
+            ) : null}
           </button>
         ))}
       </div>
 
       {/* Tab: Visão geral */}
       {tab === 'visao' && (
-        <div className="space-y-6">
-          <Card className="border-yellow-500/15 bg-gradient-to-br from-card to-yellow-500/[0.04]">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Zap className="h-4 w-4 text-yellow-500" />
-                O que observar hoje
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed">{observeToday}</p>
-              <p className="mt-2 text-[10px] text-muted-foreground">
-                {PERIOD_LABEL[meta.momentumPeriod]} · Tom {meta.analysisTone}
-              </p>
-            </CardContent>
-          </Card>
+        <div className="animate-fade-in space-y-6">
+          <ObserveTodayPanel
+            text={observeToday}
+            periodLabel={PERIOD_LABEL[meta.momentumPeriod]}
+            tone={meta.analysisTone}
+            score={market.trimMarketScore}
+          />
 
-          <section className="space-y-4 rounded-xl border border-cyan-500/15 bg-cyan-950/10 p-4 sm:p-5">
+          <section className="space-y-4 rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-950/20 via-card/40 to-background p-4 shadow-inner sm:p-5">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-cyan-400" />
               <h3 className="text-sm font-semibold tracking-tight text-foreground">Mercado cripto</h3>

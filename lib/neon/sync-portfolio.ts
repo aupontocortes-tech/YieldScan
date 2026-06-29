@@ -1,7 +1,8 @@
 import { defaultPortfolio, loadPortfolio, savePortfolio } from '@/lib/portfolio/storage'
 import type { PortfolioData } from '@/lib/portfolio/types'
+import { isPortfolioLocalEditRecent } from '@/lib/portfolio/persist'
 import { isRemoteNewer, pullNeonSync, pushNeonSync } from '@/lib/neon/sync-client'
-import { writeSyncMeta } from '@/lib/neon/sync-meta'
+import { readSyncMeta, writeSyncMeta } from '@/lib/neon/sync-meta'
 
 export const NEON_PORTFOLIO_CHANGED = 'yieldscan-neon-portfolio-changed'
 
@@ -23,6 +24,15 @@ export async function pullPortfolioFromNeon(): Promise<boolean> {
   if (!isPortfolioPayload(remote.payload)) return false
 
   const local = loadPortfolio()
+
+  if (isPortfolioLocalEditRecent() && hasPortfolioData(local)) return false
+
+  const localMeta = readSyncMeta().portfolio?.updatedAt
+  if (hasPortfolioData(local) && !localMeta) {
+    void pushPortfolioToNeonNow(local)
+    return false
+  }
+
   const shouldImport = isRemoteNewer('portfolio', remote.updatedAt) || !hasPortfolioData(local)
   if (!shouldImport) return false
 

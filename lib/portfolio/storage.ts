@@ -1,4 +1,5 @@
 import type { PortfolioData, PortfolioHolding, PortfolioTransaction } from './types'
+import { markPortfolioLocalEdit } from './persist'
 
 const STORAGE_KEY = 'yieldscan_portfolio_v1' as const
 
@@ -85,8 +86,26 @@ export function savePortfolio(data: PortfolioData): void {
     const name = data.name.trim() || defaultPortfolio().name
     const payload = name === data.name ? data : { ...data, name }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    markPortfolioLocalEdit()
   } catch {
     /* quota / private mode */
+  }
+}
+
+export function exportPortfolioJson(data?: PortfolioData): string {
+  const payload = data ?? loadPortfolio()
+  return JSON.stringify(payload, null, 2)
+}
+
+export function importPortfolioJson(raw: string): PortfolioData | { error: string } {
+  try {
+    const parsed = normalize(JSON.parse(raw))
+    if (parsed.holdings.length === 0 && parsed.transactions.length === 0) {
+      return { error: 'Ficheiro vazio ou sem posições.' }
+    }
+    return parsed
+  } catch {
+    return { error: 'JSON inválido.' }
   }
 }
 

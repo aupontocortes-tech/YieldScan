@@ -35,6 +35,7 @@ import { CoinAvatar } from '@/lib/portfolio/cmc-assets'
 import { usePortfolioStore } from '@/hooks/use-portfolio'
 import { AllocationGoalsDialog } from '@/components/portfolio/allocation-goals-dialog'
 import { AddTransactionDialog } from '@/components/portfolio/add-transaction-dialog'
+import { PortfolioCloudSync } from '@/components/portfolio/portfolio-cloud-sync'
 import { PortfolioTransactionRow } from '@/components/portfolio/transaction-row'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -460,6 +461,11 @@ export function PortfolioClient() {
             </div>
           </div>
         </div>
+
+        <PortfolioCloudSync
+          data={data}
+          onImport={(next) => mergePortfolio(() => next)}
+        />
 
         {(bestWorst.best || bestWorst.worst) && (
           <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
