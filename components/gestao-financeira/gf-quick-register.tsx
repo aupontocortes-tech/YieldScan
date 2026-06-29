@@ -1,39 +1,29 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GfParsedPreview } from '@/components/gestao-financeira/gf-parsed-preview'
 import { GfPhraseInput } from '@/components/gestao-financeira/gf-phrase-input'
+import type { GfTabValue } from '@/components/gestao-financeira/gf-nav-tabs'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import { useGfSpeechInput, requestMicStreamSync } from '@/hooks/use-gf-speech-input'
-import { loadGfOpenAiSettings } from '@/lib/gestao-financeira/openai-config'
-import {
-  parseGfVoiceWithOpenAi,
-  tryLocalBalanceQuery,
-  type GfParseVoiceContext,
-} from '@/lib/gestao-financeira/parse-with-openai'
-import { parseGfTodosWithOpenAi } from '@/lib/gestao-financeira/parse-todos-with-openai'
-import { parseGfTodosText } from '@/lib/gestao-financeira/todos-parser'
+import { interpretGfPhrase } from '@/lib/gestao-financeira/parse-phrase-with-openai'
+import type { GfPhraseRouteContext } from '@/lib/gestao-financeira/phrase-router'
 import { saveGfParsedVoiceEntry } from '@/lib/gestao-financeira/save-parsed-voice'
-import { parseGfVoiceText } from '@/lib/gestao-financeira/voice-parser'
-import type { GfParsedTodoEntry, GfVoiceParseResult } from '@/lib/gestao-financeira/types'
-import { CalendarCheck, Loader2, PenLine, Sparkles } from 'lucide-react'
+import type { GfPhraseParseResult } from '@/lib/gestao-financeira/types'
+import { CalendarCheck, Loader2, Mic, Sparkles } from 'lucide-react'
 
-export type GfQuickRegisterMode = 'finance' | 'afazeres'
+const PLACEHOLDER =
+  'Fale ou digite — movimentação, afazer, dívida, relatório ou saldo. Ex.: Gastei 80 no mercado · Amanhã dentista · Remarcar dentista para sexta'
 
-const PLACEHOLDERS: Record<GfQuickRegisterMode, string> = {
-  finance: 'Ex.: Gastei 80 no mercado · Adicionei 500 · Quanto tenho no caixa?',
-  afazeres: 'Ex.: Amanhã dentista às 14h · Sexta pagar luz · Quinta reunião às 10h',
-}
-
-function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfParseVoiceContext {
+function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfPhraseRouteContext {
   const cashBoxes = gf.cashBoxes.map((b) => ({ name: b.name, balance: b.balance }))
   const totalCashBrl = cashBoxes.reduce((s, b) => s + b.balance, 0)
 
   const cryptoHoldings = gf.cryptoHoldings.map((h) => {
     const price = gf.cryptoPrices[h.coinId]?.brl ?? 0
-    const valueBrl = h.quantity * price
-    return { symbol: h.symbol, quantity: h.quantity, valueBrl }
+    return { symbol: h.symbol, quantity: h.quantity, valueBrl: h.quantity * price }
   })
   const totalCryptoBrl = cryptoHoldings.reduce((s, h) => s + h.valueBrl, 0)
 
@@ -44,98 +34,40 @@ function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfParseVoiceC
     categories: gf.categories.map((c) => c.name),
     totalCashBrl,
     totalCryptoBrl,
+    existingTodos: gf.todos,
+    transactions: gf.transactions,
+    monthIncome: gf.stats?.monthIncome ?? 0,
+    monthExpense: gf.stats?.monthExpense ?? 0,
+    monthSavings: gf.stats?.monthSavings ?? 0,
   }
+}
+
+function tabForResult(result: GfPhraseParseResult): GfTabValue | null {
+  if (result.kind === 'todos' || result.kind === 'todo_action') return 'afazeres'
+  if (result.kind === 'transaction') return 'movimentos'
+  if (result.kind === 'debt') return 'dividas'
+  if (result.kind === 'report') return 'relatorios'
+  return null
 }
 
 type Props = {
   gf: ReturnType<typeof useGestaoFinanceira>
-  mode: GfQuickRegisterMode
+  onTabChange?: (tab: GfTabValue) => void
 }
 
-/** Registro por frase — finanças ou afazeres conforme a aba activa. */
-export function GfQuickRegister({ gf, mode }: Props) {
+/** Registro inteligente — a frase é encaminhada para o destino certo (qualquer aba). */
+export function GfQuickRegister({ gf, onTabChange }: Props) {
   const speech = useGfSpeechInput()
   const interpretRef = useRef<(phrase: string) => Promise<void>>(async () => {})
   const [text, setText] = useState('')
-  const [parsedFinance, setParsedFinance] = useState<GfVoiceParseResult | null>(null)
-  const [parsedTodos, setParsedTodos] = useState<GfParsedTodoEntry[] | null>(null)
+  const [parsed, setParsed] = useState<GfPhraseParseResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [interpreting, setInterpreting] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    setText('')
-    setParsedFinance(null)
-    setParsedTodos(null)
-    setError(null)
-    speech.clearError()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
-
   const clearParsed = () => {
-    setParsedFinance(null)
-    setParsedTodos(null)
+    setParsed(null)
     setError(null)
-  }
-
-  const interpretFinance = async (phrase: string) => {
-    const ctx = buildContext(gf)
-    const balanceLocal = tryLocalBalanceQuery(phrase, ctx)
-    if (balanceLocal) {
-      setParsedFinance(balanceLocal)
-      return
-    }
-
-    const local = parseGfVoiceText(phrase)
-    if (local) {
-      setParsedFinance({ kind: 'transaction', entry: local, source: 'local' })
-      return
-    }
-
-    const settings = loadGfOpenAiSettings()
-    if (settings.enabled && settings.apiKey.trim()) {
-      const { result, error: apiError } = await parseGfVoiceWithOpenAi(phrase, ctx)
-      if (result) {
-        setParsedFinance(result)
-        return
-      }
-      if (apiError) setError(apiError)
-    }
-
-    setError(
-      settings.enabled && settings.apiKey.trim()
-        ? 'Não entendi. Inclua valor e ação (ex.: gastei 50 no mercado) ou pergunte o saldo.'
-        : 'Não entendi. Ative a OpenAI para frases complexas ou consultas como «quanto tenho no caixa».',
-    )
-  }
-
-  const interpretAfazeres = async (phrase: string) => {
-    const ctx = {
-      todayIso: new Date().toISOString(),
-      existingTodos: gf.todos.map((t) => ({ title: t.title, dueDate: t.dueDate })),
-    }
-
-    const settings = loadGfOpenAiSettings()
-    if (settings.enabled && settings.apiKey.trim()) {
-      const { result, error: apiError } = await parseGfTodosWithOpenAi(phrase, ctx)
-      if (result?.items.length) {
-        setParsedTodos(result.items)
-        return
-      }
-      if (apiError) setError(apiError)
-    }
-
-    const local = parseGfTodosText(phrase, ctx.todayIso)
-    if (local.length) {
-      setParsedTodos(local)
-      return
-    }
-
-    setError(
-      settings.enabled && settings.apiKey.trim()
-        ? 'Não entendi. Ex.: «Amanhã dentista às 14h» ou «Sexta pagar luz e quinta reunião».'
-        : 'Ative a OpenAI em Uso da API para organizar lembretes por voz.',
-    )
   }
 
   const handleInterpret = async (overrideText?: string) => {
@@ -146,8 +78,16 @@ export function GfQuickRegister({ gf, mode }: Props) {
     setInterpreting(true)
 
     try {
-      if (mode === 'afazeres') await interpretAfazeres(phrase)
-      else await interpretFinance(phrase)
+      const { result, error: err } = await interpretGfPhrase(phrase, buildContext(gf))
+      if (result) {
+        setParsed(result)
+        const tab = tabForResult(result)
+        if (tab && result.kind !== 'balance' && result.kind !== 'report') {
+          onTabChange?.(tab)
+        }
+      } else if (err) {
+        setError(err)
+      }
     } finally {
       setInterpreting(false)
     }
@@ -166,11 +106,12 @@ export function GfQuickRegister({ gf, mode }: Props) {
   }
 
   const handleSave = async () => {
+    if (!parsed) return
     setSaving(true)
     try {
-      if (mode === 'afazeres' && parsedTodos?.length) {
+      if (parsed.kind === 'todos' && parsed.items.length) {
         await gf.addTodos(
-          parsedTodos.map((p) => ({
+          parsed.items.map((p) => ({
             title: p.title,
             notes: p.notes,
             dueDate: p.dueDate,
@@ -178,17 +119,46 @@ export function GfQuickRegister({ gf, mode }: Props) {
             priority: p.priority,
           })),
         )
+        onTabChange?.('afazeres')
         setText('')
         clearParsed()
         return
       }
 
-      if (mode === 'finance' && parsedFinance?.kind === 'transaction') {
-        const ok = await saveGfParsedVoiceEntry(parsedFinance.entry)
+      if (parsed.kind === 'todo_action') {
+        const ok = await gf.applyTodoAction(parsed.action)
+        if (!ok) {
+          setError(`Não encontrei o afazer «${parsed.action.titleMatch}». Verifique o título na lista.`)
+          return
+        }
+        onTabChange?.('afazeres')
+        setText('')
+        clearParsed()
+        return
+      }
+
+      if (parsed.kind === 'transaction') {
+        const ok = await saveGfParsedVoiceEntry(parsed.entry)
         if (ok) {
+          onTabChange?.('movimentos')
           setText('')
           clearParsed()
         }
+        return
+      }
+
+      if (parsed.kind === 'debt') {
+        await gf.addDebt({
+          name: parsed.entry.name,
+          totalAmount: parsed.entry.totalAmount,
+          paidAmount: 0,
+          installments: parsed.entry.installments,
+          paidInstallments: 0,
+          dueDate: parsed.entry.dueDate,
+        })
+        onTabChange?.('dividas')
+        setText('')
+        clearParsed()
       }
     } finally {
       setSaving(false)
@@ -196,31 +166,22 @@ export function GfQuickRegister({ gf, mode }: Props) {
   }
 
   const canSave =
-    mode === 'afazeres'
-      ? (parsedTodos?.length ?? 0) > 0
-      : parsedFinance?.kind === 'transaction'
-
-  const title = mode === 'afazeres' ? 'Registrar afazeres em uma frase' : 'Registrar em uma frase'
-  const Icon = mode === 'afazeres' ? CalendarCheck : PenLine
-  const iconBg = mode === 'afazeres' ? 'bg-violet-600/90' : 'bg-emerald-600/90'
-  const borderClass =
-    mode === 'afazeres'
-      ? 'border-violet-500/35 bg-gradient-to-br from-violet-950/30 to-indigo-950/15'
-      : 'border-emerald-500/35 bg-gradient-to-br from-emerald-950/35 to-teal-950/15'
+    parsed?.kind === 'todos' ||
+    parsed?.kind === 'todo_action' ||
+    parsed?.kind === 'transaction' ||
+    parsed?.kind === 'debt'
 
   return (
-    <div className={`rounded-2xl border p-4 ${borderClass}`}>
+    <div className="rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-950/35 to-teal-950/15 p-4">
       <div className="mb-3 flex items-start gap-3">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${iconBg}`}>
-          <Icon className="h-5 w-5" />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-white">
+          <Mic className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h3 className="font-semibold text-foreground">{title}</h3>
-          {mode === 'afazeres' ? (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Fale ou digite — a OpenAI organiza lembretes por data na lista abaixo.
-            </p>
-          ) : null}
+          <h3 className="font-semibold text-foreground">Falar ou escrever — a IA direciona</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Caixa, afazeres, dívidas, relatórios ou movimentos — em qualquer aba.
+          </p>
         </div>
       </div>
 
@@ -231,7 +192,7 @@ export function GfQuickRegister({ gf, mode }: Props) {
           clearParsed()
           speech.clearError()
         }}
-        placeholder={PLACEHOLDERS[mode]}
+        placeholder={PLACEHOLDER}
         listening={speech.listening}
         requestingPermission={speech.requestingPermission}
         micSupported={speech.supported}
@@ -255,7 +216,7 @@ export function GfQuickRegister({ gf, mode }: Props) {
         {canSave ? (
           <Button
             type="button"
-            className={`flex-1 gap-2 ${mode === 'afazeres' ? 'bg-violet-600 hover:bg-violet-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+            className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-500"
             disabled={saving}
             onClick={() => void handleSave()}
           >
@@ -265,30 +226,49 @@ export function GfQuickRegister({ gf, mode }: Props) {
         ) : null}
       </div>
 
-      {mode === 'finance' && parsedFinance?.kind === 'transaction' ? (
+      {parsed?.kind === 'transaction' ? (
         <div className="mt-3">
-          <GfParsedPreview parsed={parsedFinance.entry} />
+          <Badge variant="outline" className="mb-2 border-emerald-500/40 text-emerald-200">
+            → Movimento
+          </Badge>
+          <GfParsedPreview parsed={parsed.entry} />
         </div>
       ) : null}
 
-      {mode === 'finance' && parsedFinance?.kind === 'balance' ? (
+      {(parsed?.kind === 'balance' || parsed?.kind === 'report') && (
         <div className="mt-3 rounded-lg border border-sky-500/25 bg-sky-950/20 p-3 text-sm">
-          <p className="font-medium text-sky-200">Resposta</p>
-          <p className="mt-1 whitespace-pre-line text-foreground">{parsedFinance.answer}</p>
+          <p className="font-medium text-sky-200">
+            {parsed.kind === 'report' ? 'Relatório' : 'Resposta'}
+          </p>
+          <p className="mt-1 whitespace-pre-line text-foreground">{parsed.answer}</p>
         </div>
-      ) : null}
+      )}
 
-      {mode === 'afazeres' && parsedTodos && parsedTodos.length > 0 ? (
+      {parsed?.kind === 'todos' && parsed.items.length > 0 ? (
         <div className="mt-3 rounded-lg border border-violet-500/25 bg-violet-950/20 p-3 text-sm">
-          <p className="font-medium text-violet-200">Lembretes a salvar</p>
-          <ul className="mt-2 space-y-2">
-            {parsedTodos.map((item, i) => (
+          <p className="mb-2 font-medium text-violet-200">→ Afazeres a salvar</p>
+          <ul className="space-y-2">
+            {parsed.items.map((item, i) => (
               <li key={i} className="rounded-md border border-border/40 bg-background/40 px-3 py-2">
                 <p className="font-medium text-foreground">{item.title}</p>
                 <p className="text-xs text-muted-foreground">{item.summary}</p>
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {parsed?.kind === 'todo_action' ? (
+        <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-950/20 p-3 text-sm">
+          <p className="font-medium text-amber-200">→ Atualizar afazer</p>
+          <p className="mt-1 text-foreground">{parsed.action.summary}</p>
+        </div>
+      ) : null}
+
+      {parsed?.kind === 'debt' ? (
+        <div className="mt-3 rounded-lg border border-rose-500/25 bg-rose-950/20 p-3 text-sm">
+          <p className="font-medium text-rose-200">→ Nova dívida</p>
+          <p className="mt-1 text-foreground">{parsed.entry.summary}</p>
         </div>
       ) : null}
 

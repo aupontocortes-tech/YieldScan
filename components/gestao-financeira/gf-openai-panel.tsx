@@ -278,11 +278,13 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
                       <Badge variant="outline" className="text-[10px]">
                         {r.feature === 'transcribe'
                           ? 'voz'
-                          : r.feature === 'parse-todos'
-                            ? 'afazeres'
-                            : r.feature === 'parse-voice'
-                              ? 'finanças'
-                              : `${r.promptTokens + r.completionTokens} tok`}
+                          : r.feature === 'parse-phrase'
+                            ? 'direcionar'
+                            : r.feature === 'parse-todos'
+                              ? 'afazeres'
+                              : r.feature === 'parse-voice'
+                                ? 'finanças'
+                                : `${r.promptTokens + r.completionTokens} tok`}
                       </Badge>
                       <span className="text-right">
                         <span className="block text-emerald-300">{fmtBrl(r.estimatedUsd * brlPerUsd)}</span>

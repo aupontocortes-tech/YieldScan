@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -9,7 +9,8 @@ import { GfTodoNotifyEnableInline } from '@/components/gestao-financeira/gf-todo
 import { formatTodoDateLabel, groupGfTodos, countGfTodosToday } from '@/lib/gestao-financeira/todos-utils'
 import type { GfTodo, GfTodoPriority } from '@/lib/gestao-financeira/types'
 import { cn } from '@/lib/utils'
-import { CalendarCheck, Clock, Trash2 } from 'lucide-react'
+import { CalendarClock, CalendarCheck, Clock, Trash2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 
 const PRIORITY_LABEL: Record<GfTodoPriority, string> = {
   high: 'Urgente',
@@ -35,17 +36,28 @@ function TodoRow({
   todo,
   onToggle,
   onDelete,
+  onReschedule,
 }: {
   todo: GfTodo
   onToggle: (id: string) => void
   onDelete: (id: string) => void
+  onReschedule: (id: string, dueDate: string) => void
 }) {
   const overdue = !todo.completed && todo.dueDate < todayInputValue()
+  const [editing, setEditing] = useState(false)
+  const [newDate, setNewDate] = useState(todo.dueDate)
+
+  const confirmReschedule = () => {
+    if (newDate && newDate !== todo.dueDate) {
+      onReschedule(todo.id, newDate)
+    }
+    setEditing(false)
+  }
 
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-xl border px-3 py-3 transition-colors',
+        'flex flex-col gap-2 rounded-xl border px-3 py-3 transition-colors sm:flex-row sm:items-start',
         todo.completed
           ? 'border-border/30 bg-muted/20 opacity-70'
           : overdue
@@ -53,6 +65,7 @@ function TodoRow({
             : 'border-border/45 bg-card/50 hover:border-border/70',
       )}
     >
+      <div className="flex w-full items-start gap-3">
       <Checkbox
         checked={todo.completed}
         onCheckedChange={() => onToggle(todo.id)}
@@ -80,16 +93,75 @@ function TodoRow({
           </Badge>
         </div>
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-        onClick={() => onDelete(todo.id)}
-        aria-label="Excluir"
-      >
-        <Trash2 className="size-4" />
-      </Button>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {!todo.completed ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setNewDate(todo.dueDate)
+              setEditing((v) => !v)
+            }}
+          >
+            <CalendarClock className="size-3.5" />
+            Remarcar
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              onClick={() => onToggle(todo.id)}
+            >
+              Pendente
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setNewDate(todo.dueDate)
+                setEditing((v) => !v)
+              }}
+            >
+              <CalendarClock className="size-3.5" />
+              Remarcar
+            </Button>
+          </>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8 text-muted-foreground hover:text-destructive"
+          onClick={() => onDelete(todo.id)}
+          aria-label="Excluir"
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+      </div>
+      {editing ? (
+        <div className="col-span-full mt-2 flex flex-wrap items-center gap-2 border-t border-border/40 pt-2">
+          <Input
+            type="date"
+            value={newDate}
+            onChange={(e) => setNewDate(e.target.value)}
+            className="h-9 w-auto"
+          />
+          <Button type="button" size="sm" className="h-9" onClick={confirmReschedule}>
+            Guardar data
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => setEditing(false)}>
+            Cancelar
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -104,7 +176,7 @@ export function GfAfazeres({ gf }: { gf: ReturnType<typeof useGestaoFinanceira> 
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-foreground">Afazeres do dia</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Use o painel acima para registar. Active os lembretes no aviso amarelo/roxo para receber alertas.
+            Marque concluído, volte a pendente ou remarque para outro dia. Também pode falar: «remarcar dentista para sexta».
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -138,6 +210,7 @@ export function GfAfazeres({ gf }: { gf: ReturnType<typeof useGestaoFinanceira> 
                   todo={todo}
                   onToggle={(id) => void gf.toggleTodo(id)}
                   onDelete={(id) => void gf.removeTodo(id)}
+                  onReschedule={(id, dueDate) => void gf.rescheduleTodo(id, dueDate)}
                 />
               ))}
             </div>

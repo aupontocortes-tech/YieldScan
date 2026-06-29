@@ -166,7 +166,7 @@ export type GfOpenAiSettings = {
 export type GfOpenAiUsageRecord = {
   id: string
   at: string
-  feature: 'parse-voice' | 'transcribe' | 'parse-todos'
+  feature: 'parse-voice' | 'transcribe' | 'parse-todos' | 'parse-phrase'
   model: string
   promptTokens: number
   completionTokens: number
@@ -234,3 +234,30 @@ export type GfTodoParseResult = {
   items: GfParsedTodoEntry[]
   source: 'local' | 'openai'
 }
+
+export type GfParsedDebtEntry = {
+  name: string
+  totalAmount: number
+  dueDate: string | null
+  installments: number | null
+  summary: string
+}
+
+export type GfTodoActionType = 'complete' | 'pending' | 'reschedule'
+
+export type GfParsedTodoAction = {
+  action: GfTodoActionType
+  /** Texto para encontrar o afazer existente (título parcial). */
+  titleMatch: string
+  dueDate?: string
+  dueTime?: string | null
+  summary: string
+}
+
+/** Resultado unificado — a IA ou o router local escolhe o destino. */
+export type GfPhraseParseResult =
+  | GfVoiceParseResult
+  | { kind: 'todos'; items: GfParsedTodoEntry[]; source: 'local' | 'openai' }
+  | { kind: 'debt'; entry: GfParsedDebtEntry; source: 'local' | 'openai' }
+  | { kind: 'report'; answer: string; source: 'local' | 'openai' }
+  | { kind: 'todo_action'; action: GfParsedTodoAction; source: 'local' | 'openai' }

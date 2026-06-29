@@ -1,4 +1,4 @@
-import type { GfParsedTodoEntry, GfTodoPriority } from '@/lib/gestao-financeira/types'
+import type { GfParsedTodoAction, GfParsedTodoEntry, GfTodo, GfTodoPriority } from '@/lib/gestao-financeira/types'
 
 function addDays(base: Date, days: number): string {
   const d = new Date(base)
@@ -94,4 +94,66 @@ export function parseGfTodosText(text: string, todayIso?: string): GfParsedTodoE
       summary: `${title}${dueTime ? ` · ${dueTime}` : ''} · ${dueDate.split('-').reverse().join('/')}`,
     },
   ]
+}
+
+const RESCHEDULE_RE =
+  /\b(remarcar|reagendar|adiar|passar\s+para|mudar\s+para|deixar\s+para|para\s+outro\s+dia|outro\s+dia|n[aã]o\s+consegui|n[aã]o\s+fiz|nao\s+consegui|nao\s+fiz)\b/i
+const COMPLETE_RE = /\b(conclu[ií]|finalizei|terminei|fiz|feito|marquei\s+como\s+feito|marcar\s+como\s+feito|j[aá]\s+fiz)\b/i
+const PENDING_RE = /\b(pendente|deixar\s+pendente|desmarcar|n[aã]o\s+conclu[ií]|voltar\s+para\s+pendente)\b/i
+
+function extractTitleForAction(phrase: string): string {
+  return phrase
+    .replace(RESCHEDULE_RE, '')
+    .replace(COMPLETE_RE, '')
+    .replace(PENDING_RE, '')
+    .replace(/\b(afazer|tarefa|lembrete|o|a|de|do|da|para|pra)\b/gi, '')
+    .replace(/\b(?:às|as)\s*\d{1,2}(?::\d{2})?\s*h?\b/gi, '')
+    .replace(/\b(hoje|amanh[ãa]|depois de amanh[ãa]|segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo)(?:-feira)?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/^[-–—:,.\s]+|[-–—:,.\s]+$/g, '')
+}
+
+/** Atualizar afazer existente: concluir, voltar a pendente ou remarcar data. */
+export function parseGfTodoActionText(
+  text: string,
+  todos: GfTodo[],
+  todayIso?: string,
+): GfParsedTodoAction | null {
+  const phrase = text.trim()
+  if (!phrase || phrase.length < 4) return null
+
+  const isReschedule = RESCHEDULE_RE.test(phrase)
+  const isComplete = COMPLETE_RE.test(phrase)
+  const isPending = PENDING_RE.test(phrase)
+  if (!isReschedule && !isComplete && !isPending) return null
+
+  const titleMatch = extractTitleForAction(phrase)
+  if (!titleMatch || titleMatch.length < 2) return null
+
+  const today = todayIso ? new Date(todayIso) : new Date()
+  const dueDate = parseDateHint(phrase, today)
+  const dueTime = parseTime(phrase)
+
+  if (isReschedule) {
+    return {
+      action: 'reschedule',
+      titleMatch,
+      dueDate,
+      dueTime,
+      summary: `Remarcar «${titleMatch}» para ${dueDate.split('-').reverse().join('/')}${dueTime ? ` às ${dueTime}` : ''}`,
+    }
+  }
+  if (isPending) {
+    return {
+      action: 'pending',
+      titleMatch,
+      summary: `Voltar «${titleMatch}» para pendente`,
+    }
+  }
+  return {
+    action: 'complete',
+    titleMatch,
+    summary: `Marcar «${titleMatch}» como concluído`,
+  }
 }

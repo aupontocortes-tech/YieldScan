@@ -400,7 +400,7 @@ export function GestaoFinanceiraPage() {
         </div>
       </div>
 
-      <GfQuickRegister gf={gf} mode={tab === 'afazeres' ? 'afazeres' : 'finance'} />
+      <GfQuickRegister gf={gf} onTabChange={setTab} />
 
       {gf.ready ? <GfTodoNotifyBanner todos={gf.todos} className="mt-4" /> : null}
 

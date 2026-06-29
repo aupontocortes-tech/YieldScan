@@ -93,3 +93,35 @@ export function countGfTodosToday(todos: GfTodo[], today = new Date()): number {
   const todayKey = dateKey(today)
   return todos.filter((t) => !t.completed && t.dueDate === todayKey).length
 }
+
+/** Encontra afazer pelo título (parcial, sem acentos). */
+export function findGfTodoByTitleMatch(todos: GfTodo[], query: string): GfTodo | null {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .trim()
+  const q = norm(query)
+  if (!q || q.length < 2) return null
+
+  let best: GfTodo | null = null
+  let bestScore = 0
+  for (const todo of todos) {
+    const title = norm(todo.title)
+    if (title.includes(q) || q.includes(title)) {
+      const score = Math.min(title.length, q.length)
+      if (score > bestScore) {
+        best = todo
+        bestScore = score
+      }
+    }
+    const words = q.split(/\s+/).filter((w) => w.length >= 3)
+    const hits = words.filter((w) => title.includes(w)).length
+    if (hits > 0 && hits >= Math.ceil(words.length / 2) && hits > bestScore) {
+      best = todo
+      bestScore = hits
+    }
+  }
+  return best
+}

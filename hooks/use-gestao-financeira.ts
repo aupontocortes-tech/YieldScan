@@ -33,13 +33,14 @@ import {
   listGfTodos,
   toggleGfTodoComplete,
   deleteGfTodo,
+  updateGfTodo,
   updateGfDebtPayment,
   findGfCategoryByName,
   getDefaultCashBox,
 } from '@/lib/gestao-financeira/db'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { pullGfFromNeon } from '@/lib/neon/sync-gestao'
-import { generateGfInsights } from '@/lib/gestao-financeira/insights'
+import { findGfTodoByTitleMatch } from '@/lib/gestao-financeira/todos-utils'
 import { resolveCashBoxId } from '@/lib/gestao-financeira/voice-parser'
 import type {
   GfCashBox,
@@ -50,6 +51,7 @@ import type {
   GfDebt,
   GfInvestment,
   GfPatrimonySnapshot,
+  GfParsedTodoAction,
   GfTodo,
   GfTodoPriority,
   GfTransaction,
@@ -317,6 +319,43 @@ export function useGestaoFinanceira() {
     [reload, notifyDataChanged],
   )
 
+  const rescheduleTodo = useCallback(
+    async (id: string, dueDate: string, opts?: { dueTime?: string | null }) => {
+      updateGfTodo(id, {
+        dueDate: dueDate.slice(0, 10),
+        dueTime: opts?.dueTime ?? null,
+        completed: false,
+      })
+      await reload()
+      notifyDataChanged()
+    },
+    [reload, notifyDataChanged],
+  )
+
+  const applyTodoAction = useCallback(
+    async (action: GfParsedTodoAction): Promise<boolean> => {
+      const todo = findGfTodoByTitleMatch(todos, action.titleMatch)
+      if (!todo) return false
+      if (action.action === 'complete') {
+        updateGfTodo(todo.id, { completed: true })
+      } else if (action.action === 'pending') {
+        updateGfTodo(todo.id, { completed: false })
+      } else if (action.action === 'reschedule' && action.dueDate) {
+        updateGfTodo(todo.id, {
+          completed: false,
+          dueDate: action.dueDate,
+          dueTime: action.dueTime ?? null,
+        })
+      } else {
+        return false
+      }
+      await reload()
+      notifyDataChanged()
+      return true
+    },
+    [todos, reload, notifyDataChanged],
+  )
+
   return {
     ready,
     categories,
@@ -344,6 +383,8 @@ export function useGestaoFinanceira() {
     addTodos,
     toggleTodo,
     removeTodo,
+    rescheduleTodo,
+    applyTodoAction,
     exportBackup: exportGfBackup,
     importBackup: async (payload: Parameters<typeof importGfBackup>[0]) => {
       importGfBackup(payload)
