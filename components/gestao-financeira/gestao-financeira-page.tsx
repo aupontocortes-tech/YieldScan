@@ -31,7 +31,7 @@ import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfCharts } from '@/components/gestao-financeira/gf-charts'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
-import { GfNavTabs } from '@/components/gestao-financeira/gf-nav-tabs'
+import { GfNavTabs, type GfTabValue } from '@/components/gestao-financeira/gf-nav-tabs'
 import { GfAfazeres } from '@/components/gestao-financeira/gf-afazeres'
 import { GfTodoNotifyBanner } from '@/components/gestao-financeira/gf-todo-notify-banner'
 import { countGfTodosToday } from '@/lib/gestao-financeira/todos-utils'
@@ -255,8 +255,18 @@ export function GestaoFinanceiraPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    if (params.get('tab') === 'afazeres') {
-      setTab('afazeres')
+    const tabParam = params.get('tab')
+    const valid: GfTabValue[] = [
+      'dashboard',
+      'movimentos',
+      'caixas',
+      'dividas',
+      'cripto',
+      'afazeres',
+      'relatorios',
+    ]
+    if (tabParam && (valid as string[]).includes(tabParam)) {
+      setTab(tabParam)
       window.history.replaceState({}, '', '/news/gestao-financeira')
     }
   }, [])

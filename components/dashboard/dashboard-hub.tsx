@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { LayoutDashboard } from 'lucide-react'
 import { HubAreas } from '@/components/dashboard/hub/hub-areas'
+import { HubFinance } from '@/components/dashboard/hub/hub-finance'
 import { HubLiquidity } from '@/components/dashboard/hub/hub-liquidity'
 import { HubMarketStrip } from '@/components/dashboard/hub/hub-market-strip'
 import { HubNews } from '@/components/dashboard/hub/hub-news'
@@ -49,8 +50,8 @@ export function DashboardHub() {
               Centro de comando
             </h2>
             <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Mercado, notícias, tendências e liquidez LP — visão geral antes de mergulhares em cada
-              área.
+              Mercado, finanças pessoais, afazeres e liquidez LP — visão geral antes de mergulhares em
+              cada área.
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
@@ -66,6 +67,11 @@ export function DashboardHub() {
       <div>
         <HubSectionTitle>Mercado</HubSectionTitle>
         <HubMarketStrip />
+      </div>
+
+      <div>
+        <HubSectionTitle>Finanças pessoais</HubSectionTitle>
+        <HubFinance />
       </div>
 
       <div>

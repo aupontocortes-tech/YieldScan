@@ -4,7 +4,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Activity,
   ArrowLeftRight,
   BarChart3,
   BookOpen,
@@ -44,15 +43,14 @@ import { useIsMobile } from '@/hooks/use-mobile'
 type NavItem = {
   name: string
   href: string
-  icon: typeof Activity
+  icon: typeof Newspaper
   /** Cor do ícone (sempre visível, inclusive no item activo). */
   iconClassName: string
 }
 
 const MAIN_NAV: NavItem[] = [
-  { name: 'Painel', href: '/dashboard', icon: Activity, iconClassName: 'text-emerald-400' },
-  { name: 'Gestão Financeira', href: '/news/gestao-financeira', icon: Building2, iconClassName: 'text-emerald-400' },
   { name: 'Notícias', href: '/news', icon: Newspaper, iconClassName: 'text-blue-400' },
+  { name: 'Gestão Financeira', href: '/news/gestao-financeira', icon: Building2, iconClassName: 'text-emerald-400' },
   { name: 'Carteira', href: '/portfolio', icon: Wallet, iconClassName: 'text-amber-400' },
   { name: 'Pools', href: '/pools', icon: BarChart3, iconClassName: 'text-cyan-400' },
   { name: 'A minha liquidez', href: '/my-liquidity', icon: Droplets, iconClassName: 'text-sky-400' },
@@ -74,8 +72,13 @@ const RESOURCE_NAV: NavItem[] = [
   { name: 'PRO', href: '/dex', icon: Sparkles, iconClassName: 'text-[#d4af37]' },
 ]
 
+function isNewsNavActive(pathname: string): boolean {
+  if (!pathname.startsWith('/news')) return false
+  return !pathname.startsWith('/news/gestao-financeira')
+}
+
 function pageTitle(pathname: string): string {
-  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Painel'
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'Notícias'
   if (pathname === '/news' || pathname.startsWith('/news/')) {
     if (pathname.startsWith('/news/gestao-financeira')) return 'Gestão Financeira'
     return 'Notícias'
@@ -199,8 +202,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       asChild
                       isActive={
                         item.href === '/news'
-                          ? pathname === '/news' || pathname.startsWith('/news/')
-                          : item.href === '/portfolio'
+                          ? isNewsNavActive(pathname)
+                          : item.href === '/news/gestao-financeira'
+                            ? pathname.startsWith('/news/gestao-financeira')
+                            : item.href === '/portfolio'
                             ? pathname.startsWith('/portfolio')
                             : item.href === '/pools'
                               ? pathname.startsWith('/pools')

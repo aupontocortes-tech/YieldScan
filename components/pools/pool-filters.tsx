@@ -44,7 +44,7 @@ import { SAFE_CHAINS } from '@/lib/pool-classification'
 import { canonicalLlamaChain } from '@/lib/llama-chain'
 import { sanitizeFiltersForCuratedBlueChips } from '@/lib/blue-chip-pools'
 import { sanitizeFiltersForCuratedRwa } from '@/lib/rwa-pools'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X, Globe, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TVL_PRESETS: { label: string; value: number }[] = [
@@ -61,7 +61,13 @@ function formatDexLabel(slug: string): string {
 }
 
 const chipClass =
-  'shrink-0 cursor-pointer whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors'
+  'pools-chip shrink-0 cursor-pointer whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium'
+
+const chipInactive =
+  'border-white/10 bg-card/40 text-foreground hover:border-cyan-400/30 hover:bg-cyan-500/10'
+
+const chipActive =
+  'pools-chip-active border-cyan-400/50 bg-cyan-500/20 text-cyan-100'
 
 interface PoolFiltersProps {
   filters: PoolFilters
@@ -226,20 +232,26 @@ export function PoolFiltersComponent({
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Busca — destaque tipo “lab” */}
-      <div
-        className={cn(
-          'rounded-xl border-2 border-gold/45 bg-background/60 p-0.5 transition-shadow',
-          'focus-within:border-gold/80 focus-within:shadow-[0_0_0_3px_rgba(232,197,71,0.18)]'
-        )}
-      >
+      <div className="pools-hint-bar flex flex-wrap items-center gap-2.5 rounded-xl border px-3 py-2.5">
+        <span className="pools-step-dot pools-step-dot-violet" aria-hidden>
+          2
+        </span>
+        <p className="text-xs leading-relaxed text-violet-100/85">
+          <span className="font-bold text-pink-200">Busca</span> o par → escolhe{' '}
+          <span className="font-bold text-cyan-200">rede</span> e{' '}
+          <span className="font-bold text-violet-200">DEX</span> → refina em baixo 🎯
+        </p>
+      </div>
+
+      {/* Busca */}
+      <div className="pools-search-glow rounded-2xl border p-0.5 transition-all duration-300">
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gold/80" />
+          <Search className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-cyan-400" />
           <Input
             placeholder="Buscar par, token ou protocolo (ex.: btc, eth/usdt)…"
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value, quickPreset: 'none' })}
-            className="h-11 border-0 bg-transparent pl-11 pr-3 text-base shadow-none placeholder:text-muted-foreground/80 focus-visible:ring-0"
+            className="h-11 rounded-[14px] border-0 bg-transparent pl-11 pr-3 text-base shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
           />
         </div>
       </div>
@@ -247,14 +259,15 @@ export function PoolFiltersComponent({
       {/* Redes — faixa horizontal */}
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-2">
-          <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Label className="flex items-center gap-1.5 text-xs font-semibold text-cyan-300/90">
+            <Globe className="h-3.5 w-3.5" aria-hidden />
             Redes
           </Label>
           <span className="text-[10px] text-muted-foreground">
             {blueChipsOnly ? (
               <span className="text-success">Lista curada blue chip (Solana/Ethereum) · chips de rede/DEX acima</span>
             ) : rwaPoolsOnly ? (
-              <span className="text-gold">Pools RWA (Solana, Hyperliquid, EVM) · refine rede/DEX nos chips</span>
+              <span className="text-muted-foreground">Pools RWA (Solana, Hyperliquid, EVM) · refine rede/DEX nos chips</span>
             ) : (
               <>Nenhuma selecionada = todas · role para ver mais</>
             )}
@@ -271,12 +284,7 @@ export function PoolFiltersComponent({
               <button
                 key={chain}
                 type="button"
-                className={cn(
-                  chipClass,
-                  filters.chains.includes(chain)
-                    ? 'border-gold/70 bg-gold/15 text-gold'
-                    : 'border-border/80 bg-card/80 text-foreground hover:border-gold/40'
-                )}
+                className={cn(chipClass, filters.chains.includes(chain) ? chipActive : chipInactive)}
                 onClick={() => toggleChain(chain)}
               >
                 {chain}
@@ -288,7 +296,7 @@ export function PoolFiltersComponent({
               <DialogTrigger asChild>
                 <button
                   type="button"
-                  className={cn(chipClass, 'border-dashed border-gold/50 text-gold hover:bg-gold/10')}
+                  className={cn(chipClass, 'border-dashed border-violet-400/40 text-violet-200 hover:bg-violet-500/15')}
                 >
                   + Mais redes
                 </button>
@@ -302,12 +310,7 @@ export function PoolFiltersComponent({
                     <button
                       key={chain}
                       type="button"
-                      className={cn(
-                        chipClass,
-                        filters.chains.includes(chain)
-                          ? 'border-gold/70 bg-gold/15 text-gold'
-                          : 'border-border bg-card hover:border-gold/40'
-                      )}
+                      className={cn(chipClass, filters.chains.includes(chain) ? chipActive : chipInactive)}
                       onClick={() => toggleChain(chain)}
                     >
                       {chain}
@@ -322,7 +325,8 @@ export function PoolFiltersComponent({
 
       {/* DEX / protocolos */}
       <div className="space-y-2">
-        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Label className="flex items-center gap-1.5 text-xs font-semibold text-violet-300/90">
+          <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
           DEX / protocolo
         </Label>
         <div
@@ -342,9 +346,7 @@ export function PoolFiltersComponent({
                 className={cn(
                   chipClass,
                   'max-w-[11rem] truncate sm:max-w-none',
-                  filters.protocols.includes(agg.project)
-                    ? 'border-gold/70 bg-gold/15 text-gold'
-                    : 'border-border/80 bg-card/80 hover:border-gold/40'
+                  filters.protocols.includes(agg.project) ? chipActive : chipInactive
                 )}
                 onClick={() => toggleProtocol(agg.project)}
               >
@@ -355,13 +357,13 @@ export function PoolFiltersComponent({
         </div>
         <button
           type="button"
-          className="text-xs font-medium text-gold hover:underline"
+          className="text-xs font-semibold text-violet-300 transition-colors hover:text-violet-200 hover:underline"
           onClick={() => setExpandDexList((e) => !e)}
         >
           {expandDexList ? 'Ver menos protocolos' : 'Ver mais protocolos'}
         </button>
         {expandDexList && moreProtocolAggs.length > 0 && (
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-border/70 bg-background/50 p-2">
+          <div className="max-h-40 overflow-y-auto rounded-xl border border-border/50 bg-muted/15 p-2.5">
             <div className="flex flex-wrap gap-1.5">
               {moreProtocolAggs.map((agg) => (
                 <button
@@ -371,9 +373,7 @@ export function PoolFiltersComponent({
                   className={cn(
                     chipClass,
                     'max-w-[10rem] truncate text-left',
-                    filters.protocols.includes(agg.project)
-                      ? 'border-gold/70 bg-gold/15 text-gold'
-                      : 'border-border bg-card hover:border-gold/35'
+                    filters.protocols.includes(agg.project) ? chipActive : chipInactive
                   )}
                   onClick={() => toggleProtocol(agg.project)}
                 >
@@ -386,12 +386,16 @@ export function PoolFiltersComponent({
       </div>
 
       {/* Barra de ferramentas */}
-      <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="flex flex-col gap-3 border-t border-violet-400/15 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
+        <p className="flex w-full items-center gap-1.5 text-xs font-semibold text-pink-300/90 sm:mr-1 sm:w-auto">
+          <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+          Refinar
+        </p>
         <Select
           value={filters.sortBy}
           onValueChange={(value) => updateFilter('sortBy', value as PoolFilters['sortBy'])}
         >
-          <SelectTrigger className="h-10 w-full border-border/80 bg-card/80 sm:w-[160px]">
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/60 bg-card/50 sm:w-[160px]">
             <SelectValue placeholder="Ordenar por" />
           </SelectTrigger>
           <SelectContent>
@@ -408,10 +412,10 @@ export function PoolFiltersComponent({
           variant="outline"
           title="Pares fortes só em Raydium, Orca, Meteora (Solana) e Uniswap (Ethereum)"
           className={cn(
-            'h-10 bg-card/80',
+            'h-10 rounded-xl border-border/60 bg-card/50 transition-colors',
             blueChipsOnly
-              ? 'border-success text-success hover:bg-success/10 hover:text-success'
-              : 'border-border/80 text-foreground hover:border-success/40'
+              ? 'pools-btn-active-mint'
+              : 'border-white/10 bg-card/40 text-foreground hover:bg-emerald-500/10'
           )}
           onClick={toggleBlueChipsOnly}
         >
@@ -424,10 +428,8 @@ export function PoolFiltersComponent({
           variant="outline"
           title="Ativos do mundo real (ONDO, ouro, ações tokenizadas, treasury…) — foco Solana e Hyperliquid; resto nos filtros"
           className={cn(
-            'h-10 bg-card/80',
-            rwaPoolsOnly
-              ? 'border-gold text-gold hover:bg-gold/10 hover:text-gold'
-              : 'border-border/80 text-foreground hover:border-gold/40'
+            'h-10 rounded-xl border-border/60 bg-card/50 transition-colors',
+            rwaPoolsOnly ? 'pools-btn-active-pink' : 'border-white/10 bg-card/40 text-foreground hover:bg-pink-500/10'
           )}
           onClick={toggleRwaPoolsOnly}
         >
@@ -439,8 +441,8 @@ export function PoolFiltersComponent({
           size="sm"
           variant={filters.safeAprProfile ? 'default' : 'outline'}
           className={cn(
-            'h-10 border-gold/40 bg-card/80',
-            filters.safeAprProfile && 'bg-gold text-background hover:bg-gold/90'
+            'h-10 rounded-xl border-border/60 bg-card/50 transition-colors',
+            filters.safeAprProfile && 'pools-btn-active-violet'
           )}
           onClick={toggleSafeAprProfile}
         >
@@ -448,7 +450,7 @@ export function PoolFiltersComponent({
         </Button>
 
         <Select value={period} onValueChange={(v) => onAprPeriodChange(v as PoolAprPeriod)}>
-          <SelectTrigger className="h-10 w-full border-gold/25 bg-card/80 sm:w-[200px] sm:shrink-0">
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/60 bg-card/50 sm:w-[200px] sm:shrink-0">
             <SelectValue placeholder="Período do APR" />
           </SelectTrigger>
           <SelectContent>
@@ -469,8 +471,8 @@ export function PoolFiltersComponent({
             size="sm"
             variant={filters.tvlMin === TVL_PRESETS[0].value ? 'default' : 'outline'}
             className={cn(
-              'h-9 rounded-lg text-xs sm:h-10',
-              filters.tvlMin === TVL_PRESETS[0].value && 'bg-gold text-background hover:bg-gold/90'
+              'h-9 rounded-full text-xs transition-colors sm:h-10',
+              filters.tvlMin === TVL_PRESETS[0].value && 'pools-btn-active-cyan'
             )}
             onClick={() => updateFilter('tvlMin', TVL_PRESETS[0].value)}
           >
@@ -479,7 +481,7 @@ export function PoolFiltersComponent({
         )}
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-full text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:w-auto sm:mr-1">
+          <span className="w-full text-xs font-medium text-muted-foreground sm:mr-1 sm:w-auto">
             TVL mín.
           </span>
           {TVL_PRESETS.slice(1).map((p) => (
@@ -489,8 +491,8 @@ export function PoolFiltersComponent({
               size="sm"
               variant={filters.tvlMin === p.value ? 'default' : 'outline'}
               className={cn(
-                'h-9 rounded-lg text-xs',
-                filters.tvlMin === p.value && 'bg-gold text-background hover:bg-gold/90'
+                'h-9 rounded-full text-xs transition-colors',
+                filters.tvlMin === p.value && 'pools-btn-active-cyan'
               )}
               onClick={() => updateFilter('tvlMin', p.value)}
             >
@@ -505,12 +507,12 @@ export function PoolFiltersComponent({
               type="button"
               variant="outline"
               size="sm"
-              className="h-10 gap-2 border-gold/35 bg-card/80"
+              className="h-10 gap-2 rounded-xl border-border/60 bg-card/50 transition-colors hover:bg-muted/30"
             >
               <SlidersHorizontal className="h-4 w-4" />
               Mais filtros
               {activeTotal > 0 && (
-                <Badge className="bg-gold px-1.5 text-[10px] text-background">{activeTotal}</Badge>
+                <Badge className="bg-violet-500/80 px-1.5 text-[10px] text-white">{activeTotal}</Badge>
               )}
             </Button>
           </SheetTrigger>
@@ -595,11 +597,11 @@ export function PoolFiltersComponent({
 
               <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
                 {activeTotal > 0 && (
-                  <p className="text-xs font-medium text-gold">
+                  <p className="text-xs font-semibold text-violet-300">
                     {activeTotal} filtro(s) ativo(s)
                   </p>
                 )}
-                <Button type="button" variant="outline" size="sm" className="border-gold/40" onClick={clearFilters}>
+                <Button type="button" variant="outline" size="sm" className="border-violet-400/40 text-violet-200" onClick={clearFilters}>
                   Limpar tudo
                 </Button>
               </div>
@@ -619,7 +621,7 @@ export function PoolFiltersComponent({
         filters.smartHighTvl ||
         filters.smartLowRisk ||
         filters.tvlMin !== DEFAULT_FILTERS.tvlMin) && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border/60 bg-background/40 px-2 py-2">
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-violet-400/20 bg-violet-500/8 px-2.5 py-2">
           <span className="text-[11px] font-medium text-muted-foreground">Ativos:</span>
           {filters.tvlMin !== DEFAULT_FILTERS.tvlMin && (
             <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
@@ -653,12 +655,12 @@ export function PoolFiltersComponent({
           {filters.curatedRwaPoolsOnly && (
             <Badge
               variant="secondary"
-              className="gap-1 border-gold/35 bg-gold/10 px-2 py-0.5 text-xs text-gold"
+              className="gap-1 border-border/60 bg-muted/25 px-2 py-0.5 text-xs text-foreground"
             >
               Pools RWA
               <button
                 type="button"
-                className="-m-0.5 inline-flex rounded p-0.5 text-gold/80 hover:bg-background/60 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-m-0.5 inline-flex rounded p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Desligar lista curada RWA"
                 onClick={() => updateFilter('curatedRwaPoolsOnly', false)}
               >

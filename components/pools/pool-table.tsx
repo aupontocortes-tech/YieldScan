@@ -114,10 +114,10 @@ export function PoolTable({
 
   if (isLoading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50 shadow-inner">
+      <div className="pools-table-shell overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-border/60 hover:bg-transparent bg-muted/25">
+            <TableRow className="border-violet-400/10 bg-gradient-to-r from-violet-500/10 via-transparent to-cyan-500/10 hover:bg-transparent">
               <TableHead>Par</TableHead>
               <TableHead>Taxa · gráfico</TableHead>
               <TableHead>Rede</TableHead>
@@ -147,10 +147,10 @@ export function PoolTable({
 
   return (
     <div className="space-y-0">
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card/50 shadow-inner">
+      <div className="pools-table-shell overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-border/60 hover:bg-transparent bg-muted/30">
+            <TableRow className="border-violet-400/10 bg-gradient-to-r from-violet-500/10 via-transparent to-cyan-500/10 hover:bg-transparent">
               <TableHead className="min-w-[200px] text-muted-foreground">Par</TableHead>
               <TableHead className="min-w-[140px] text-muted-foreground">Taxa · gráfico</TableHead>
               <TableHead className="min-w-[100px] text-muted-foreground">Rede</TableHead>
@@ -181,9 +181,9 @@ export function PoolTable({
                 <Fragment key={pool.pool}>
                   <TableRow
                     className={cn(
-                      'table-row-animate cursor-pointer border-border/50 transition-colors',
-                      index % 2 === 0 ? 'bg-transparent' : 'bg-muted/[0.04]',
-                      isExpanded ? 'bg-secondary/45' : 'hover:bg-secondary/25',
+                      'table-row-animate cursor-pointer border-white/[0.05] transition-all duration-200',
+                      index % 2 === 0 ? 'bg-transparent' : 'bg-muted/[0.03]',
+                      isExpanded ? 'bg-secondary/40' : 'hover:bg-secondary/20',
                       primaryDex && 'ring-1 ring-inset ring-gold/25',
                       smartHighlightIds?.has(pool.pool) && 'bg-gold/[0.08] ring-1 ring-inset ring-gold/28'
                     )}
@@ -404,7 +404,7 @@ export function PoolTable({
             })}
           </TableBody>
         </Table>
-        <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/[0.12] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        <div className="flex flex-col gap-3 border-t border-white/[0.06] bg-muted/[0.08] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">
               {pools.length === 0
@@ -417,7 +417,7 @@ export function PoolTable({
                 setPageSize(Number(e.target.value))
                 setPage(0)
               }}
-              className="rounded-lg border border-border/80 bg-background/80 px-2 py-1.5 text-sm"
+              className="rounded-lg border border-violet-400/20 bg-violet-500/8 px-2 py-1.5 text-sm transition-colors hover:bg-violet-500/15"
             >
               <option value={25}>25</option>
               <option value={50}>50</option>
@@ -428,7 +428,7 @@ export function PoolTable({
             <Button
               variant="outline"
               size="sm"
-              className="border-border/80"
+              className="rounded-xl border-violet-400/20 transition-colors hover:bg-violet-500/10"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={clampedPage === 0}
             >
@@ -440,11 +440,11 @@ export function PoolTable({
             <Button
               variant="outline"
               size="sm"
-              className="border-border/80"
+              className="rounded-xl border-violet-400/20 transition-colors hover:bg-violet-500/10"
               onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
               disabled={clampedPage >= maxPage || totalPages === 0}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>

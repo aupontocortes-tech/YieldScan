@@ -283,6 +283,225 @@
   animation-delay: 0.22s;
 }
 
+/* Explorador de Pools — pastel colorido e animado */
+@keyframes pools-gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes pools-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pools-bounce-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.pools-explorer-page {
+  background:
+    radial-gradient(ellipse 75% 50% at 10% -5%, rgba(236, 72, 153, 0.12), transparent 58%),
+    radial-gradient(ellipse 60% 45% at 95% 5%, rgba(34, 211, 238, 0.11), transparent 52%),
+    radial-gradient(ellipse 55% 40% at 50% 100%, rgba(139, 92, 246, 0.1), transparent 50%);
+}
+
+.pools-panel {
+  border-color: rgba(167, 139, 250, 0.25);
+  background: linear-gradient(
+    165deg,
+    hsl(var(--card) / 0.95) 0%,
+    hsl(var(--background) / 0.92) 45%,
+    hsl(var(--card) / 0.88) 100%
+  );
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 22px 70px -28px rgba(0, 0, 0, 0.6);
+}
+
+.pools-hero-glow {
+  background: linear-gradient(
+    120deg,
+    rgba(236, 72, 153, 0.12),
+    rgba(139, 92, 246, 0.1),
+    rgba(34, 211, 238, 0.1),
+    rgba(52, 211, 153, 0.08)
+  );
+  background-size: 280% 280%;
+  animation: pools-gradient-shift 12s ease infinite;
+}
+
+.pools-section-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  background: linear-gradient(145deg, hsl(var(--card) / 0.45), hsl(var(--background) / 0.35));
+  animation: pools-section-in 0.5s ease-out forwards;
+}
+
+.pools-flow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.pools-flow-pill:hover {
+  transform: translateY(-2px);
+}
+
+.pools-flow-pill-pink {
+  border-color: rgba(244, 114, 182, 0.45);
+  background: rgba(236, 72, 153, 0.18);
+  color: #fbcfe8;
+}
+
+.pools-flow-pill-violet {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: rgba(139, 92, 246, 0.18);
+  color: #ddd6fe;
+}
+
+.pools-flow-pill-cyan {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(34, 211, 238, 0.15);
+  color: #a5f3fc;
+}
+
+.pools-step-dot {
+  display: inline-flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.pools-step-dot-pink {
+  background: rgba(236, 72, 153, 0.35);
+  color: #fce7f3;
+}
+
+.pools-step-dot-violet {
+  background: rgba(139, 92, 246, 0.35);
+  color: #ede9fe;
+}
+
+.pools-step-dot-cyan {
+  background: rgba(34, 211, 238, 0.35);
+  color: #cffafe;
+}
+
+.pools-opportunity-card {
+  animation: pools-section-in 0.5s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+  opacity: 0;
+}
+
+.pools-opportunity-card:hover {
+  animation: pools-bounce-soft 0.6s ease-in-out;
+  box-shadow: 0 16px 40px -20px rgba(139, 92, 246, 0.35);
+}
+
+.pools-chip {
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.4, 0.64, 1),
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pools-chip:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.pools-chip-active {
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35), 0 6px 20px -10px rgba(34, 211, 238, 0.4);
+}
+
+.pools-search-glow {
+  border-color: rgba(34, 211, 238, 0.35);
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(139, 92, 246, 0.06));
+}
+
+.pools-search-glow:focus-within {
+  border-color: rgba(34, 211, 238, 0.55);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15), 0 10px 36px -14px rgba(139, 92, 246, 0.35);
+}
+
+.pools-hint-bar {
+  border-color: rgba(167, 139, 250, 0.3);
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.12), rgba(34, 211, 238, 0.08));
+}
+
+.pools-table-shell {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  background: linear-gradient(180deg, hsl(var(--card) / 0.42) 0%, hsl(var(--background) / 0.32) 100%);
+  animation: pools-section-in 0.55s ease-out forwards;
+}
+
+.pools-btn-active-pink {
+  border-color: rgba(236, 72, 153, 0.5) !important;
+  background: rgba(236, 72, 153, 0.22) !important;
+  color: #fbcfe8 !important;
+}
+
+.pools-btn-active-mint {
+  border-color: rgba(52, 211, 153, 0.5) !important;
+  background: rgba(52, 211, 153, 0.2) !important;
+  color: #a7f3d0 !important;
+}
+
+.pools-btn-active-violet {
+  border-color: rgba(139, 92, 246, 0.5) !important;
+  background: rgba(139, 92, 246, 0.22) !important;
+  color: #ddd6fe !important;
+}
+
+.pools-btn-active-cyan {
+  border-color: rgba(34, 211, 238, 0.5) !important;
+  background: rgba(34, 211, 238, 0.2) !important;
+  color: #a5f3fc !important;
+}
+
+.pools-stagger > *:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.pools-stagger > *:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.pools-stagger > *:nth-child(3) {
+  animation-delay: 0.19s;
+}
+.pools-stagger > *:nth-child(4) {
+  animation-delay: 0.26s;
+}
+.pools-stagger > *:nth-child(5) {
+  animation-delay: 0.33s;
+}
+
 /* Stagger animation for table rows */
 .table-row-animate {
   animation: fade-in 0.3s ease-out forwards;

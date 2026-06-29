@@ -1,7 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
+  Building2,
   Calculator,
+  CheckSquare,
   Droplets,
   LineChart,
   LockKeyhole,
@@ -19,6 +21,27 @@ export type DashboardHubSection = {
 }
 
 export const DASHBOARD_HUB_SECTIONS: DashboardHubSection[] = [
+  {
+    id: 'finance',
+    title: 'Gestão Financeira',
+    description: 'Patrimônio, caixa, dívidas e relatórios',
+    href: '/news/gestao-financeira',
+    icon: Building2,
+    iconClassName: 'text-emerald-400',
+    links: [
+      { label: 'Afazeres', href: '/news/gestao-financeira?tab=afazeres' },
+      { label: 'Voz', href: '/news/gestao-financeira/microfone' },
+    ],
+  },
+  {
+    id: 'afazeres',
+    title: 'Afazeres',
+    description: 'Tarefas do dia e lembretes',
+    href: '/news/gestao-financeira?tab=afazeres',
+    icon: CheckSquare,
+    iconClassName: 'text-violet-400',
+    links: [{ label: 'Gestão Financeira', href: '/news/gestao-financeira' }],
+  },
   {
     id: 'pools',
     title: 'Pools',

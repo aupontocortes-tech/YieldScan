@@ -49,11 +49,18 @@ export function HubAreas() {
               <span className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
                 {section.description}
               </span>
-              {section.links?.[0] && (
-                <span className="mt-2 text-[10px] font-medium text-muted-foreground/70 group-hover:text-foreground/90">
-                  {section.links[0].label} →
-                </span>
-              )}
+              {section.links && section.links.length > 0 ? (
+                <div className="mt-2 flex flex-col gap-0.5">
+                  {section.links.map((link) => (
+                    <span
+                      key={link.href}
+                      className="text-[10px] font-medium text-muted-foreground/70 group-hover:text-foreground/90"
+                    >
+                      {link.label} →
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </Link>
           )
         })}

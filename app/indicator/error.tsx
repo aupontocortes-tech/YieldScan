@@ -31,7 +31,7 @@ export default function IndicatorError({
         <Button type="button" onClick={reset} className="bg-[#d4af37] text-black hover:bg-[#d4af37]/90">
           Tentar de novo
         </Button>
-        <Button type="button" variant="outline" className="border-zinc-700" onClick={() => (window.location.href = '/dashboard')}>
+        <Button type="button" variant="outline" className="border-zinc-700" onClick={() => (window.location.href = '/news/mercado')}>
           Ir ao painel
         </Button>
       </div>

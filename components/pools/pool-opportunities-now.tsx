@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import type { Pool, PoolAprPeriod } from '@/lib/types'
 import { formatCurrency, formatPercent, poolDisplayApr } from '@/lib/api'
 import { pickTopOpportunityPools } from '@/lib/pool-smart-rank'
+import { POOL_CARD_THEMES } from '@/lib/pools-playful-theme'
 import { cn } from '@/lib/utils'
 import { PairTokenAvatars } from '@/components/pools/pair-token-avatars'
 
@@ -19,56 +20,90 @@ export function PoolOpportunitiesNow({
   if (top.length === 0) return null
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="pools-step-dot pools-step-dot-pink" aria-hidden>
+          1
+        </span>
+        <span className="text-xl" aria-hidden>
+          ✨
+        </span>
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-lg" aria-hidden>
-              🔥
-            </span>
-            <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
-              Melhores oportunidades agora
-            </h2>
-          </div>
-          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-            Recorte por APR, volume e TVL na amostra atual — indicador técnico, não é aconselhamento financeiro.
+          <h2 className="text-base font-bold tracking-tight text-foreground sm:text-lg">
+            Melhores oportunidades agora
+          </h2>
+          <p className="text-[11px] text-muted-foreground sm:text-xs">
+            Top 5 — quem brilha mais em APR, volume e TVL neste momento.
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
+      <div className="pools-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {top.map((pool, i) => {
           const apr = poolDisplayApr(pool, period)
+          const theme = POOL_CARD_THEMES[i % POOL_CARD_THEMES.length]
+          const isTop = i === 0
           return (
             <article
               key={pool.pool}
               className={cn(
-                'flex min-h-[7.5rem] flex-col rounded-xl border bg-gradient-to-b from-card/90 to-background/80 px-3.5 py-3',
-                i === 0
-                  ? 'border-gold/50 shadow-[0_0_0_1px_rgba(232,197,71,0.12)]'
-                  : 'border-border/70'
+                'pools-opportunity-card flex min-h-[8.5rem] flex-col rounded-2xl border px-3.5 py-3.5 transition-shadow duration-300',
+                theme.bg,
+                theme.border,
+                isTop && 'ring-2 ring-pink-400/30'
               )}
+              style={{ animationDelay: `${i * 90}ms` }}
             >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', theme.rank)}>
+                  #{i + 1}
+                </span>
+                {isTop && (
+                  <span className="animate-pulse rounded-full bg-pink-500/25 px-2 py-0.5 text-[10px] font-semibold text-pink-200">
+                    🏆 Top
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
-                <PairTokenAvatars pool={pool} size={28} />
-                <p className="truncate text-sm font-semibold text-foreground" title={pool.symbol}>
+                <PairTokenAvatars pool={pool} size={30} />
+                <p className="truncate text-sm font-bold text-foreground" title={pool.symbol}>
                   {pool.symbol}
                 </p>
               </div>
-              <p className="truncate text-[11px] text-muted-foreground" title={pool.project}>
+              <p className="mt-1 truncate text-[11px] text-muted-foreground" title={pool.project}>
                 {pool.project}
               </p>
-              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p
+                className={cn(
+                  'mt-1.5 inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                  theme.chain
+                )}
+              >
                 {pool.chain}
               </p>
-              <div className="mt-auto flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 pt-2">
-                <span className="text-base font-bold tabular-nums text-gold sm:text-lg">{formatPercent(apr)}</span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">{formatCurrency(pool.tvlUsd)}</span>
+              <div className="mt-auto space-y-1.5 pt-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    APR
+                  </span>
+                  <span className={cn('text-lg font-extrabold tabular-nums sm:text-xl', theme.apr)}>
+                    {formatPercent(apr)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground">TVL</span>
+                  <span className="text-[11px] font-medium tabular-nums text-foreground/85">
+                    {formatCurrency(pool.tvlUsd)}
+                  </span>
+                </div>
+                {pool.volumeUsd1d != null && pool.volumeUsd1d > 0 && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground">Vol.</span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
+                      {formatCurrency(pool.volumeUsd1d)}
+                    </span>
+                  </div>
+                )}
               </div>
-              {pool.volumeUsd1d != null && pool.volumeUsd1d > 0 && (
-                <p className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-                  Vol. {formatCurrency(pool.volumeUsd1d)}
-                </p>
-              )}
             </article>
           )
         })}
