@@ -40,6 +40,7 @@ import {
 } from '@/lib/gestao-financeira/db'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { pullGfFromNeon } from '@/lib/neon/sync-gestao'
+import { generateGfInsights } from '@/lib/gestao-financeira/insights'
 import { findGfTodoByTitleMatch } from '@/lib/gestao-financeira/todos-utils'
 import { resolveCashBoxId } from '@/lib/gestao-financeira/voice-parser'
 import type {
