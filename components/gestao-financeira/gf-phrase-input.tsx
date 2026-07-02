@@ -16,6 +16,9 @@ type Props = {
   micSupported?: boolean
   onMicClick?: () => void
   placeholder?: string
+  /** Placeholder enquanto o microfone está activo (sem texto ainda). */
+  listeningPlaceholder?: string
+  transcribing?: boolean
   /** Fundo branco e texto preto (ex.: painel de afazeres). */
   lightSurface?: boolean
 }
@@ -29,9 +32,16 @@ export function GfPhraseInput({
   requestingPermission = false,
   micSupported = true,
   onMicClick,
-  placeholder = 'Ex.: Gastei 80 no mercado · Adicionei 500 · Quanto tenho no caixa?',
+  placeholder = 'Fale ou digite…',
+  listeningPlaceholder = 'A ouvir…',
+  transcribing = false,
   lightSurface = false,
 }: Props) {
+  const activePlaceholder = transcribing
+    ? 'A transcrever…'
+    : listening
+      ? listeningPlaceholder
+      : placeholder
   const internalRef = useRef<HTMLTextAreaElement>(null)
   const ref = inputRef ?? internalRef
   const micHandledRef = useRef(false)
@@ -50,14 +60,14 @@ export function GfPhraseInput({
       <textarea
         ref={ref}
         className={cn(
-          'min-h-[80px] w-full rounded-lg border py-2 pl-3 pr-14 text-sm',
+          'min-h-[72px] w-full rounded-lg border py-2 pl-3 pr-14 text-sm sm:min-h-[80px]',
           lightSurface
-            ? 'border-neutral-300 bg-white text-black placeholder:text-neutral-500'
-            : 'border-border/60 bg-background/80 text-foreground',
-          listening && 'border-red-500/50 ring-1 ring-red-500/30',
+            ? 'border-neutral-300 bg-white text-black placeholder:text-neutral-400 placeholder:text-xs sm:placeholder:text-sm'
+            : 'border-border/60 bg-background/80 text-foreground placeholder:text-xs sm:placeholder:text-sm',
+          (listening || transcribing) && 'border-red-500/50 ring-1 ring-red-500/30',
           className,
         )}
-        placeholder={placeholder}
+        placeholder={activePlaceholder}
         value={value}
         enterKeyHint="done"
         autoComplete="off"

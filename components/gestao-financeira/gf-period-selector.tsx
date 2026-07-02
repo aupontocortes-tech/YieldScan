@@ -16,6 +16,7 @@ export type GfReportPeriodState = {
 }
 
 const PRESETS: { id: GfPeriodPreset; label: string }[] = [
+  { id: 'day', label: 'Diário' },
   { id: 'week', label: 'Semanal' },
   { id: 'month', label: 'Mensal' },
   { id: 'quarter', label: 'Trimestral' },
@@ -105,7 +106,7 @@ export function defaultReportPeriodState(): GfReportPeriodState {
   const ymd = today.toISOString().slice(0, 10)
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
   return {
-    preset: 'month',
+    preset: 'day',
     anchor: today,
     customFrom: monthStart,
     customTo: ymd,

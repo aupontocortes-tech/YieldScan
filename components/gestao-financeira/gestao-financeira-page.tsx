@@ -21,14 +21,15 @@ import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import {
   buildPeriodSummary,
   debtsDueSoon,
-  filterTransactionsByRange,
   resolvePeriodRange,
   shiftPeriodAnchor,
 } from '@/lib/gestao-financeira/calculations'
-import { downloadGfCsv, downloadGfJsonBackup, printGfReport, readGfBackupFile } from '@/lib/gestao-financeira/export'
+import { downloadGfCsv, downloadGfJsonBackup, openGfReportPreview, printGfReportHtml, readGfBackupFile } from '@/lib/gestao-financeira/export'
+import { buildGfEpigraphicReport, renderGfReportHtml } from '@/lib/gestao-financeira/report-document'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfCharts } from '@/components/gestao-financeira/gf-charts'
+import { GfReportView } from '@/components/gestao-financeira/gf-report-view'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
 import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
 import { GfNavTabs, type GfTabValue } from '@/components/gestao-financeira/gf-nav-tabs'
@@ -53,10 +54,12 @@ import {
   ArrowUpRight,
   Bitcoin,
   Download,
+  FileText,
   Gauge,
   Landmark,
   PiggyBank,
   Plus,
+  Printer,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -294,9 +297,40 @@ export function GestaoFinanceiraPage() {
     [gf.transactions, reportPeriod.preset, reportRange],
   )
 
-  const periodTransactions = useMemo(
-    () => filterTransactionsByRange(gf.transactions, reportRange),
-    [gf.transactions, reportRange],
+
+  const epigraphicReport = useMemo(() => {
+    if (!gf.ready || !gf.stats) return null
+    return buildGfEpigraphicReport({
+      periodLabel: periodSummary.label,
+      period: periodSummary,
+      reportRange,
+      transactions: gf.transactions,
+      categories: gf.categories,
+      cashBoxes: gf.cashBoxes,
+      cryptoHoldings: gf.cryptoHoldings,
+      cryptoPrices: gf.cryptoPrices,
+      debts: gf.debts,
+      investments: gf.investments,
+      brlPerUsd: gf.brlPerUsd,
+    })
+  }, [
+    gf.ready,
+    gf.stats,
+    gf.transactions,
+    gf.categories,
+    gf.cashBoxes,
+    gf.cryptoHoldings,
+    gf.cryptoPrices,
+    gf.debts,
+    gf.investments,
+    gf.brlPerUsd,
+    periodSummary,
+    reportRange,
+  ])
+
+  const reportHtml = useMemo(
+    () => (epigraphicReport ? renderGfReportHtml(epigraphicReport) : ''),
+    [epigraphicReport],
   )
 
   const shiftReportPeriod = (delta: -1 | 1) => {
@@ -734,27 +768,46 @@ export function GestaoFinanceiraPage() {
             onNext={() => shiftReportPeriod(1)}
           />
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Receitas no período" value={fmtBrl(periodSummary.income)} icon={ArrowDownLeft} tone="green" />
-            <StatCard label="Despesas no período" value={fmtBrl(periodSummary.expense)} icon={ArrowUpRight} tone="red" />
-            <StatCard
-              label="Saldo do período"
-              value={fmtBrl(periodSummary.savings)}
-              icon={PiggyBank}
-              tone={periodSummary.savings >= 0 ? 'green' : 'red'}
-            />
-            <StatCard label="Movimentações" value={String(periodSummary.transactionCount)} icon={Wallet} />
-          </div>
-
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="default"
+              className="gap-2 bg-emerald-600 hover:bg-emerald-500"
+              disabled={!epigraphicReport}
+              onClick={() => {
+                document.getElementById('gf-report-view')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+            >
+              <FileText className="h-4 w-4" />
+              Ver relatório
+            </Button>
             <Button
               type="button"
               variant="outline"
               className="gap-2"
-              onClick={() => downloadGfJsonBackup(gf.exportBackup())}
+              disabled={!reportHtml}
+              onClick={() => {
+                if (!openGfReportPreview(reportHtml)) {
+                  window.alert('Permita pop-ups para ver o PDF.')
+                }
+              }}
             >
-              <Download className="h-4 w-4" />
-              Exportar JSON
+              <FileText className="h-4 w-4" />
+              Abrir PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              disabled={!reportHtml}
+              onClick={() => {
+                if (!printGfReportHtml(reportHtml)) {
+                  window.alert('Permita pop-ups para imprimir.')
+                }
+              }}
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir
             </Button>
             <Button
               type="button"
@@ -763,17 +816,22 @@ export function GestaoFinanceiraPage() {
               onClick={() => downloadGfCsv(gf.transactions, gf.categories, reportRange)}
             >
               <Download className="h-4 w-4" />
-              CSV do período
+              Exportar CSV
             </Button>
-            <Button type="button" variant="outline" className="gap-2" onClick={printGfReport}>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => downloadGfJsonBackup(gf.exportBackup())}
+            >
               <Download className="h-4 w-4" />
-              Imprimir / PDF
+              Backup JSON
             </Button>
             <label className="inline-flex">
               <Button type="button" variant="outline" className="gap-2" asChild>
                 <span>
                   <Upload className="h-4 w-4" />
-                  Importar backup
+                  Importar
                   <input
                     type="file"
                     accept="application/json"
@@ -789,59 +847,35 @@ export function GestaoFinanceiraPage() {
               </Button>
             </label>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Backups automáticos a cada 6 horas no SQLite local. Importar faz merge — nunca apaga dados existentes.
-          </p>
-          <GfCharts
-            transactions={gf.transactions}
-            categories={gf.categories}
-            snapshots={gf.snapshots}
-            stats={s}
-            cryptoBreakdown={cryptoBreakdown}
-            reportRange={reportRange}
-            periodLabel={periodSummary.label}
-          />
 
-          {periodTransactions.length > 0 ? (
-            <div className="rounded-2xl border border-border/50 bg-card/40 p-4 backdrop-blur-sm">
-              <h3 className="mb-3 text-sm font-semibold">Movimentações no período</h3>
-              <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
-                {periodTransactions.map((t) => {
-                  const cat = t.categoryId
-                    ? (gf.categories.find((c) => c.id === t.categoryId)?.name ?? 'Outros')
-                    : '—'
-                  const box = gf.cashBoxes.find((b) => b.id === t.cashBoxId)?.name ?? ''
-                  return (
-                    <li
-                      key={t.id}
-                      className="flex flex-wrap items-center justify-between gap-2 border-b border-border/30 py-2 last:border-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground">
-                          {t.description || cat}
-                          <span className="ml-2 text-xs text-muted-foreground">{t.occurredAt.slice(0, 10)}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {cat} · {box}
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          'shrink-0 font-mono font-semibold',
-                          t.type === 'income' ? 'text-emerald-400' : t.type === 'expense' ? 'text-red-400' : 'text-zinc-400',
-                        )}
-                      >
-                        {t.type === 'expense' ? '−' : t.type === 'income' ? '+' : ''}
-                        {fmtBrl(t.amount)}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+          {epigraphicReport ? (
+            <GfReportView id="gf-report-view" report={epigraphicReport} fmtBrl={fmtBrl} />
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma movimentação neste período.</p>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-2xl" />
+              ))}
+            </div>
           )}
+
+          <details className="rounded-2xl border border-border/50 bg-card/30 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
+              Gráficos detalhados
+            </summary>
+            <div className="mt-4">
+              {s ? (
+                <GfCharts
+                  transactions={gf.transactions}
+                  categories={gf.categories}
+                  snapshots={gf.snapshots}
+                  stats={s}
+                  cryptoBreakdown={cryptoBreakdown}
+                  reportRange={reportRange}
+                  periodLabel={periodSummary.label}
+                />
+              ) : null}
+            </div>
+          </details>
         </TabsContent>
       </Tabs>
         </>

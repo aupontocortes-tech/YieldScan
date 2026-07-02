@@ -99,6 +99,8 @@ export function useGfSpeechInput() {
   const recordStartRef = useRef(0)
   const maxTimerRef = useRef<number | null>(null)
   const onFinalRef = useRef<(text: string) => void>(() => {})
+  const onInterimRef = useRef<(text: string) => void>(() => {})
+  const lastTranscriptRef = useRef('')
 
   useEffect(() => {
     setMode(resolveSpeechMode())
@@ -157,6 +159,7 @@ export function useGfSpeechInput() {
       streamRef.current = active
       chunksRef.current = []
       recordStartRef.current = Date.now()
+      onInterimRef.current('')
 
       const { recorder, mime } = createAudioRecorder(active)
       mediaRecorderRef.current = recorder
@@ -214,22 +217,24 @@ export function useGfSpeechInput() {
     recRef.current?.abort()
     const rec = new Ctor()
     rec.lang = 'pt-BR'
-    rec.continuous = false
+    rec.continuous = true
     rec.interimResults = true
     rec.maxAlternatives = 1
 
+    lastTranscriptRef.current = ''
+    onInterimRef.current('')
     wantListenRef.current = true
     setListening(true)
 
     rec.onresult = (ev) => {
       let transcript = ''
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      for (let i = 0; i < ev.results.length; i++) {
         transcript += ev.results[i]![0].transcript
       }
-      if (ev.results[ev.results.length - 1]?.isFinal) {
-        const final = transcript.trim()
-        if (final) onFinal(final)
-      }
+      const trimmed = transcript.trim()
+      if (!trimmed) return
+      lastTranscriptRef.current = trimmed
+      onInterimRef.current(trimmed)
     }
 
     rec.onerror = (ev) => {
@@ -239,7 +244,10 @@ export function useGfSpeechInput() {
 
     rec.onend = () => {
       setListening(false)
+      if (!wantListenRef.current) return
       wantListenRef.current = false
+      const final = lastTranscriptRef.current.trim()
+      if (final) onFinal(final)
     }
 
     recRef.current = rec
@@ -255,8 +263,10 @@ export function useGfSpeechInput() {
 
   const stopBrowser = useCallback(() => {
     wantListenRef.current = false
+    const final = lastTranscriptRef.current.trim()
     recRef.current?.stop()
     setListening(false)
+    if (final) onFinalRef.current(final)
   }, [])
 
   const continueWithStream = useCallback(
@@ -287,8 +297,13 @@ export function useGfSpeechInput() {
   )
 
   const toggle = useCallback(
-    (onFinal: (text: string) => void, micPromise?: Promise<MediaStream> | null) => {
+    (
+      onFinal: (text: string) => void,
+      micPromise?: Promise<MediaStream> | null,
+      onInterim?: (text: string) => void,
+    ) => {
       onFinalRef.current = onFinal
+      onInterimRef.current = onInterim ?? (() => {})
       const currentMode = resolveSpeechMode()
       setMode(currentMode)
 

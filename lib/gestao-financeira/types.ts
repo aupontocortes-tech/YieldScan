@@ -109,7 +109,7 @@ export type GfDashboardStats = {
 }
 
 /** Preset de relatório ou intervalo livre entre duas datas. */
-export type GfPeriodPreset = 'week' | 'month' | 'quarter' | 'custom'
+export type GfPeriodPreset = 'day' | 'week' | 'month' | 'quarter' | 'custom'
 
 export type GfDateRange = {
   start: Date

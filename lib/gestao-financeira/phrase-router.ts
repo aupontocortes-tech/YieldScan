@@ -62,7 +62,13 @@ function tryLocalReportQuery(text: string, ctx: GfPhraseRouteContext): GfPhraseP
   if (!REPORT_HINT.test(text)) return null
   const t = text.toLowerCase()
   const now = new Date(ctx.todayIso)
-  const preset = /\b(semana|semanal)\b/.test(t) ? 'week' : /\b(trimestre)\b/.test(t) ? 'quarter' : 'month'
+  const preset = /\b(hoje|di[aá]rio|neste dia)\b/.test(t)
+    ? 'day'
+    : /\b(semana|semanal)\b/.test(t)
+      ? 'week'
+      : /\b(trimestre)\b/.test(t)
+        ? 'quarter'
+        : 'month'
   const range = resolvePeriodRange(preset, now)
   const filtered = filterTransactionsByRange(ctx.transactions, range)
   const summary = buildPeriodSummary(filtered, preset, range)

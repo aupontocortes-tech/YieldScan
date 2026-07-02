@@ -14,8 +14,7 @@ import { saveGfParsedVoiceEntry } from '@/lib/gestao-financeira/save-parsed-voic
 import type { GfPhraseParseResult } from '@/lib/gestao-financeira/types'
 import { CalendarCheck, Loader2, Mic, Sparkles } from 'lucide-react'
 
-const PLACEHOLDER =
-  'Fale ou digite — movimentação, afazer, dívida, relatório ou saldo. Ex.: Gastei 80 no mercado · Amanhã dentista · Remarcar dentista para sexta'
+const PLACEHOLDER = 'Fale ou digite…'
 
 function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfPhraseRouteContext {
   const cashBoxes = gf.cashBoxes.map((b) => ({ name: b.name, balance: b.balance }))
@@ -97,12 +96,15 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
 
   const handleMic = () => {
     speech.clearError()
+    const onInterim = (transcript: string) => {
+      setText(transcript)
+    }
     const onFinal = (transcript: string) => {
       setText(transcript)
       clearParsed()
-      void interpretRef.current(transcript)
+      if (transcript.trim()) void interpretRef.current(transcript)
     }
-    speech.toggle(onFinal, requestMicStreamSync())
+    speech.toggle(onFinal, requestMicStreamSync(), onInterim)
   }
 
   const handleSave = async () => {
@@ -193,7 +195,8 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
           speech.clearError()
         }}
         placeholder={PLACEHOLDER}
-        listening={speech.listening}
+        listening={speech.listening || speech.transcribing}
+        transcribing={speech.transcribing}
         requestingPermission={speech.requestingPermission}
         micSupported={speech.supported}
         onMicClick={handleMic}

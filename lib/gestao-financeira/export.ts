@@ -49,6 +49,33 @@ export async function readGfBackupFile(file: File): Promise<GfBackupPayload> {
   return parsed
 }
 
+/** Abre relatório HTML numa nova janela (pré-visualizar / guardar PDF). */
+export function openGfReportPreview(html: string): Window | null {
+  if (typeof window === 'undefined') return null
+  const w = window.open('', '_blank', 'noopener,noreferrer')
+  if (!w) return null
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  return w
+}
+
+/** Abre e dispara impressão (Guardar como PDF no browser). */
+export function printGfReportHtml(html: string): boolean {
+  const w = openGfReportPreview(html)
+  if (!w) return false
+  window.setTimeout(() => {
+    try {
+      w.print()
+    } catch {
+      /* ignore */
+    }
+  }, 500)
+  return true
+}
+
+/** @deprecated Use printGfReportHtml com relatório epigráfico. */
 export function printGfReport(): void {
   if (typeof window !== 'undefined') window.print()
 }

@@ -23,6 +23,13 @@ export function isInRange(iso: string, range: GfDateRange): boolean {
   return d >= range.start && d < range.end
 }
 
+export function getDayRange(ref = new Date()): GfDateRange {
+  const start = startOfDay(ref)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start, end }
+}
+
 export function getWeekRange(ref = new Date()): GfDateRange {
   const d = startOfDay(ref)
   const diffToMonday = (d.getDay() + 6) % 7
@@ -65,6 +72,8 @@ export function resolvePeriodRange(
   custom?: { from: string; to: string },
 ): GfDateRange {
   switch (preset) {
+    case 'day':
+      return getDayRange(anchor)
     case 'week':
       return getWeekRange(anchor)
     case 'month':
@@ -78,6 +87,10 @@ export function resolvePeriodRange(
 
 export function shiftPeriodAnchor(preset: GfPeriodPreset, anchor: Date, delta: -1 | 1): Date {
   const d = new Date(anchor)
+  if (preset === 'day') {
+    d.setDate(d.getDate() + delta)
+    return d
+  }
   if (preset === 'week') {
     d.setDate(d.getDate() + delta * 7)
     return d
@@ -104,6 +117,14 @@ const PT_MONTHS = [
 
 export function formatPeriodLabel(preset: GfPeriodPreset, range: GfDateRange): string {
   const lastInclusive = new Date(range.end.getTime() - DAY_MS)
+  if (preset === 'day') {
+    return range.start.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    })
+  }
   if (preset === 'week') {
     const a = range.start.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
     const b = lastInclusive.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
