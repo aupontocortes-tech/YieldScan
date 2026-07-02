@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useTendencias } from '@/hooks/use-tendencias'
 import {
   DEFAULT_TENDENCIAS_PREFS,
@@ -43,6 +43,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { type TrimClass, SCORE_MERCADO_NOME, SCORE_TENDENCIA_FORMULA, SCORE_TENDENCIA_NOME } from '@/lib/tendencias/trim-config'
 import { cn } from '@/lib/utils'
 import {
+  getGfSpeechActiveId,
+  getGfSpeechActiveIdServer,
+  isGfSpeechSupported,
+  primeGfSpeechVoices,
+  subscribeGfSpeech,
+  toggleGfSpeech,
+} from '@/lib/speech/gf-speech'
+import {
   AlertTriangle,
   Building2,
   Layers,
@@ -52,6 +60,7 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Volume2,
   X,
   Zap,
 } from 'lucide-react'
@@ -436,6 +445,8 @@ function highlightClass(part: string): string {
   return 'text-cyan-300'
 }
 
+const OBSERVE_TODAY_SPEECH_ID = 'tendencias-observe-today'
+
 function ObserveTodayPanel({
   text,
   periodLabel,
@@ -448,6 +459,16 @@ function ObserveTodayPanel({
   score: number
 }) {
   const parts = text.split(ANALYSIS_HIGHLIGHT_RE)
+  const speakText = useMemo(() => {
+    const clean = text.replace(/\s+/g, ' ').trim()
+    return `O que observar hoje. Score de tendência ${score} de 100. ${clean}`
+  }, [text, score])
+
+  const speaking = useSyncExternalStore(
+    subscribeGfSpeech,
+    () => getGfSpeechActiveId() === OBSERVE_TODAY_SPEECH_ID,
+    () => false,
+  )
 
   return (
     <Card className="relative overflow-hidden border-yellow-500/30 bg-gradient-to-br from-yellow-500/[0.12] via-card to-amber-950/20 animate-tendencias-glow">
@@ -458,8 +479,31 @@ function ObserveTodayPanel({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight sm:text-lg">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-500/20 ring-1 ring-yellow-500/35">
-              <Zap className="h-5 w-5 text-yellow-400 animate-pulse" />
+            <span className="flex items-center gap-1.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-500/20 ring-1 ring-yellow-500/35">
+                <Zap className="h-5 w-5 text-yellow-400 animate-pulse" />
+              </span>
+              {isGfSpeechSupported() ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    primeGfSpeechVoices()
+                    toggleGfSpeech(OBSERVE_TODAY_SPEECH_ID, speakText)
+                  }}
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-xl border transition-colors',
+                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-500/60',
+                    speaking
+                      ? 'border-yellow-500/50 bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/35'
+                      : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20',
+                  )}
+                  title={speaking ? 'Parar leitura' : 'Ouvir resumo do mercado'}
+                  aria-label={speaking ? 'Parar leitura do resumo' : 'Ouvir resumo do mercado'}
+                  aria-pressed={speaking}
+                >
+                  <Volume2 className="h-4 w-4" strokeWidth={2.25} />
+                </button>
+              ) : null}
             </span>
             O que observar hoje
           </CardTitle>
