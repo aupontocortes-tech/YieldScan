@@ -1,6 +1,7 @@
 import { buildPeriodSummary, filterTransactionsByRange, resolvePeriodRange } from '@/lib/gestao-financeira/calculations'
 import { tryLocalBalanceQuery, type GfParseVoiceContext } from '@/lib/gestao-financeira/parse-with-openai'
 import { parseGfTodoActionText, parseGfTodosText } from '@/lib/gestao-financeira/todos-parser'
+import { groupGfTodos } from '@/lib/gestao-financeira/todos-utils'
 import type {
   GfParsedDebtEntry,
   GfPhraseParseResult,
@@ -22,6 +23,39 @@ const TODO_HINT =
 const DEBT_HINT = /\b(dívida|divida|empréstimo|emprestimo|financiamento|parcela do|devo ao|devo para)\b/i
 const REPORT_HINT =
   /\b(relatório|relatorio|quanto\s+gastei|quanto\s+recebi|quanto\s+economizei|resumo\s+do\s+m[eê]s|resumo\s+da\s+semana|balanço|balanco)\b/i
+const TODO_QUERY_HINT =
+  /\b(o\s+que|quais?).{0,24}(afazer|tarefa|pendente|falta\s+fazer)|\bafazeres?\s+(de\s+)?hoje\b|\btenho\s+pra\s+hoje\b/i
+
+function tryLocalTodosQuery(text: string, ctx: GfPhraseRouteContext): GfPhraseParseResult | null {
+  if (!TODO_QUERY_HINT.test(text)) return null
+  const groups = groupGfTodos(ctx.existingTodos, new Date(ctx.todayIso))
+  const overdue = groups.find((g) => g.key === 'overdue')?.items ?? []
+  const today = groups.find((g) => g.key === 'today')?.items ?? []
+  const pending = [...overdue, ...today]
+
+  if (pending.length === 0) {
+    return {
+      kind: 'todo_query',
+      answer: 'Não há afazeres urgentes para hoje. Aproveite para planear a semana.',
+      source: 'local',
+    }
+  }
+
+  const list = pending.slice(0, 5).map((t) => t.title).join(', ')
+  const extra = pending.length > 5 ? ` e mais ${pending.length - 5}.` : '.'
+  let intro = 'Para hoje você tem: '
+  if (overdue.length > 0) {
+    intro = `Tem ${overdue.length} atrasado${overdue.length > 1 ? 's' : ''}`
+    if (today.length > 0) intro += ` e ${today.length} para hoje`
+    intro += ': '
+  }
+
+  return {
+    kind: 'todo_query',
+    answer: `${intro}${list}${extra}`,
+    source: 'local',
+  }
+}
 
 function parseAmountLocal(text: string): number | null {
   const normalized = text
@@ -128,6 +162,9 @@ export function routeGfPhraseLocally(text: string, ctx: GfPhraseRouteContext): G
   if (debt) {
     return { kind: 'debt', entry: debt, source: 'local' }
   }
+
+  const todoQuery = tryLocalTodosQuery(phrase, ctx)
+  if (todoQuery) return todoQuery
 
   const report = tryLocalReportQuery(phrase, ctx)
   if (report) return report

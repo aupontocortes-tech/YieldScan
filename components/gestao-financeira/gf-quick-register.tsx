@@ -9,40 +9,22 @@ import type { GfTabValue } from '@/components/gestao-financeira/gf-nav-tabs'
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import { useGfSpeechInput, requestMicStreamSync } from '@/hooks/use-gf-speech-input'
 import { interpretGfPhrase } from '@/lib/gestao-financeira/parse-phrase-with-openai'
+import { buildGfPhraseContext } from '@/lib/gestao-financeira/phrase-context'
 import type { GfPhraseRouteContext } from '@/lib/gestao-financeira/phrase-router'
 import { saveGfParsedVoiceEntry } from '@/lib/gestao-financeira/save-parsed-voice'
 import type { GfPhraseParseResult } from '@/lib/gestao-financeira/types'
+import { primeGfSpeechVoices, toggleGfSpeech } from '@/lib/speech/gf-speech'
 import { CalendarCheck, Loader2, Mic, Sparkles } from 'lucide-react'
 
 const PLACEHOLDER = 'Fale ou digite…'
+const QUICK_ANSWER_SPEECH_ID = 'gf-quick-answer'
 
 function buildContext(gf: ReturnType<typeof useGestaoFinanceira>): GfPhraseRouteContext {
-  const cashBoxes = gf.cashBoxes.map((b) => ({ name: b.name, balance: b.balance }))
-  const totalCashBrl = cashBoxes.reduce((s, b) => s + b.balance, 0)
-
-  const cryptoHoldings = gf.cryptoHoldings.map((h) => {
-    const price = gf.cryptoPrices[h.coinId]?.brl ?? 0
-    return { symbol: h.symbol, quantity: h.quantity, valueBrl: h.quantity * price }
-  })
-  const totalCryptoBrl = cryptoHoldings.reduce((s, h) => s + h.valueBrl, 0)
-
-  return {
-    todayIso: new Date().toISOString(),
-    cashBoxes,
-    cryptoHoldings,
-    categories: gf.categories.map((c) => c.name),
-    totalCashBrl,
-    totalCryptoBrl,
-    existingTodos: gf.todos,
-    transactions: gf.transactions,
-    monthIncome: gf.stats?.monthIncome ?? 0,
-    monthExpense: gf.stats?.monthExpense ?? 0,
-    monthSavings: gf.stats?.monthSavings ?? 0,
-  }
+  return buildGfPhraseContext(gf)
 }
 
 function tabForResult(result: GfPhraseParseResult): GfTabValue | null {
-  if (result.kind === 'todos' || result.kind === 'todo_action') return 'afazeres'
+  if (result.kind === 'todos' || result.kind === 'todo_action' || result.kind === 'todo_query') return 'afazeres'
   if (result.kind === 'transaction') return 'movimentos'
   if (result.kind === 'debt') return 'dividas'
   if (result.kind === 'report') return 'relatorios'
@@ -81,8 +63,12 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
       if (result) {
         setParsed(result)
         const tab = tabForResult(result)
-        if (tab && result.kind !== 'balance' && result.kind !== 'report') {
+        if (tab && result.kind !== 'balance') {
           onTabChange?.(tab)
+        }
+        if (result.kind === 'balance' || result.kind === 'report' || result.kind === 'todo_query') {
+          primeGfSpeechVoices()
+          toggleGfSpeech(QUICK_ANSWER_SPEECH_ID, result.answer)
         }
       } else if (err) {
         setError(err)
@@ -238,10 +224,10 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
         </div>
       ) : null}
 
-      {(parsed?.kind === 'balance' || parsed?.kind === 'report') && (
+      {(parsed?.kind === 'balance' || parsed?.kind === 'report' || parsed?.kind === 'todo_query') && (
         <div className="mt-3 rounded-lg border border-sky-500/25 bg-sky-950/20 p-3 text-sm">
           <p className="font-medium text-sky-200">
-            {parsed.kind === 'report' ? 'Relatório' : 'Resposta'}
+            {parsed.kind === 'report' ? 'Relatório' : parsed.kind === 'todo_query' ? 'Afazeres' : 'Resposta'}
           </p>
           <p className="mt-1 whitespace-pre-line text-foreground">{parsed.answer}</p>
         </div>

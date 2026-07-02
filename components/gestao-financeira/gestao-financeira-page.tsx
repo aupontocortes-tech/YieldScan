@@ -26,11 +26,13 @@ import {
 } from '@/lib/gestao-financeira/calculations'
 import { downloadGfCsv, downloadGfJsonBackup, openGfReportPreview, printGfReportHtml, readGfBackupFile } from '@/lib/gestao-financeira/export'
 import { buildGfEpigraphicReport, renderGfReportHtml } from '@/lib/gestao-financeira/report-document'
+import { buildGfSimpleNarrative } from '@/lib/gestao-financeira/simple-narrative'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { dispatchGfFocusPhrase } from '@/lib/gestao-financeira/voice-bridge'
 import { GfCharts } from '@/components/gestao-financeira/gf-charts'
 import { GfReportView } from '@/components/gestao-financeira/gf-report-view'
 import { GfQuickRegister } from '@/components/gestao-financeira/gf-quick-register'
+import { GfVoicePanel } from '@/components/gestao-financeira/gf-voice-panel'
 import { GfOpenAiPanel } from '@/components/gestao-financeira/gf-openai-panel'
 import { GfNavTabs, type GfTabValue } from '@/components/gestao-financeira/gf-nav-tabs'
 import { GfAfazeres } from '@/components/gestao-financeira/gf-afazeres'
@@ -61,7 +63,6 @@ import {
   Plus,
   Printer,
   RefreshCw,
-  Sparkles,
   Trash2,
   TrendingUp,
   Upload,
@@ -297,6 +298,16 @@ export function GestaoFinanceiraPage() {
     [gf.transactions, reportPeriod.preset, reportRange],
   )
 
+  const reportNarrative = useMemo(() => {
+    if (!gf.stats) return null
+    return buildGfSimpleNarrative({
+      stats: gf.stats,
+      insights: gf.insights,
+      todos: gf.todos,
+      transactions: gf.transactions,
+      categories: gf.categories,
+    })
+  }, [gf.stats, gf.insights, gf.todos, gf.transactions, gf.categories])
 
   const epigraphicReport = useMemo(() => {
     if (!gf.ready || !gf.stats) return null
@@ -456,19 +467,7 @@ export function GestaoFinanceiraPage() {
         </div>
       ) : (
         <>
-      {gf.insights.length > 0 ? (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/15 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-300">
-            <Sparkles className="h-4 w-4" />
-            IA Financeira
-          </div>
-          <ul className="space-y-1.5 text-sm text-muted-foreground">
-            {gf.insights.map((line, i) => (
-              <li key={i}>• {line}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      {s ? <GfVoicePanel gf={gf} insights={gf.insights} /> : null}
 
       <Tabs value={tab} onValueChange={setTab}>
         <GfNavTabs pendingToday={pendingTodosToday} />
@@ -858,24 +857,31 @@ export function GestaoFinanceiraPage() {
             </div>
           )}
 
-          <details className="rounded-2xl border border-border/50 bg-card/30 p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
-              Gráficos detalhados
-            </summary>
-            <div className="mt-4">
-              {s ? (
-                <GfCharts
-                  transactions={gf.transactions}
-                  categories={gf.categories}
-                  snapshots={gf.snapshots}
-                  stats={s}
-                  cryptoBreakdown={cryptoBreakdown}
-                  reportRange={reportRange}
-                  periodLabel={periodSummary.label}
-                />
-              ) : null}
+          <div className="rounded-2xl border border-border/50 bg-card/30 p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Gráficos fáceis de entender</h3>
+              {reportNarrative?.chartHint ? (
+                <p className="mt-1 text-xs text-muted-foreground">{reportNarrative.chartHint}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Cada cor mostra para onde foi o dinheiro. Verde entrou, vermelho saiu.
+                </p>
+              )}
             </div>
-          </details>
+            {s ? (
+              <GfCharts
+                transactions={gf.transactions}
+                categories={gf.categories}
+                snapshots={gf.snapshots}
+                stats={s}
+                cryptoBreakdown={cryptoBreakdown}
+                reportRange={reportRange}
+                periodLabel={periodSummary.label}
+                intuitive
+                chartHint={reportNarrative?.chartHint}
+              />
+            ) : null}
+          </div>
         </TabsContent>
       </Tabs>
         </>

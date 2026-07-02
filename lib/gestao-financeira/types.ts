@@ -260,4 +260,5 @@ export type GfPhraseParseResult =
   | { kind: 'todos'; items: GfParsedTodoEntry[]; source: 'local' | 'openai' }
   | { kind: 'debt'; entry: GfParsedDebtEntry; source: 'local' | 'openai' }
   | { kind: 'report'; answer: string; source: 'local' | 'openai' }
+  | { kind: 'todo_query'; answer: string; source: 'local' | 'openai' }
   | { kind: 'todo_action'; action: GfParsedTodoAction; source: 'local' | 'openai' }
