@@ -21,6 +21,7 @@ import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import {
   buildPeriodSummary,
   debtsDueSoon,
+  gfHoldingValueUsd,
   resolvePeriodRange,
   shiftPeriodAnchor,
 } from '@/lib/gestao-financeira/calculations'
@@ -271,10 +272,10 @@ export function GestaoFinanceiraPage() {
 
   const cryptoBreakdown = useMemo(() => {
     return gf.cryptoHoldings
-      .map((h) => {
-        const px = gf.cryptoPrices[h.coinId]?.usd ?? 0
-        return { name: h.symbol, value: h.quantity * px * gf.brlPerUsd }
-      })
+      .map((h) => ({
+        name: h.symbol,
+        value: gfHoldingValueUsd(h, gf.cryptoPrices) * gf.brlPerUsd,
+      }))
       .filter((x) => x.value > 0)
   }, [gf.cryptoHoldings, gf.cryptoPrices, gf.brlPerUsd])
 

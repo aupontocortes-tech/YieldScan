@@ -12,6 +12,18 @@ import type {
 
 export type GfCryptoPriceMap = Record<string, { usd: number; brl?: number }>
 
+/** USD por moeda — preço ao vivo ou preço médio registado. */
+export function gfHoldingPriceUsd(holding: GfCryptoHolding, prices: GfCryptoPriceMap): number {
+  const live = prices[holding.coinId]?.usd
+  if (live != null && live > 0) return live
+  if (holding.avgPriceUsd > 0) return holding.avgPriceUsd
+  return 0
+}
+
+export function gfHoldingValueUsd(holding: GfCryptoHolding, prices: GfCryptoPriceMap): number {
+  return holding.quantity * gfHoldingPriceUsd(holding, prices)
+}
+
 const DAY_MS = 86_400_000
 
 function startOfDay(d: Date): Date {
@@ -206,8 +218,7 @@ export function sumCryptoHoldings(
 ): { usd: number; brl: number } {
   let usd = 0
   for (const h of holdings) {
-    const px = prices[h.coinId]?.usd ?? 0
-    usd += h.quantity * px
+    usd += gfHoldingValueUsd(h, prices)
   }
   return { usd, brl: usd * brlPerUsd }
 }

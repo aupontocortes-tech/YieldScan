@@ -405,7 +405,8 @@ export function useGestaoFinanceira() {
     },
     saveHolding: async (input: Parameters<typeof upsertGfCryptoHolding>[0]) => {
       upsertGfCryptoHolding(input)
-      await reload()
+      notifyDataChanged()
+      await refreshCryptoPrices([input.coinId])
     },
     saveInvestment: async (input: Parameters<typeof upsertGfInvestment>[0]) => {
       upsertGfInvestment(input)

@@ -1,5 +1,6 @@
-import { ensureGfDb, exportGfBackup, importGfBackup, hasGfUserData } from '@/lib/gestao-financeira/db'
+import { ensureGfDb, deleteGfCryptoHolding, exportGfBackup, importGfBackup, hasGfUserData, listGfCryptoHoldings } from '@/lib/gestao-financeira/db'
 import type { GfBackupPayload } from '@/lib/gestao-financeira/types'
+import { mergeGfCryptoHoldings } from '@/lib/gestao-financeira/merge-backup-crypto'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { isRemoteNewer, pullNeonSync, pushNeonSync } from '@/lib/neon/sync-client'
 import { writeSyncMeta } from '@/lib/neon/sync-meta'
@@ -24,6 +25,18 @@ function shouldImportGfRemote(remote: GfBackupPayload, remoteUpdatedAt: string |
   const localTodoIds = new Set((local.todos ?? []).map((t) => t.id))
   if ((remote.todos ?? []).some((t) => !localTodoIds.has(t.id))) return true
 
+  const localCryptoKeys = new Set((local.cryptoHoldings ?? []).map((h) => `${h.walletId}:${h.coinId}`))
+  if ((remote.cryptoHoldings ?? []).some((h) => !localCryptoKeys.has(`${h.walletId}:${h.coinId}`))) return true
+
+  for (const lh of local.cryptoHoldings ?? []) {
+    const rh = (remote.cryptoHoldings ?? []).find((h) => h.walletId === lh.walletId && h.coinId === lh.coinId)
+    if (!rh) continue
+    if (lh.quantity !== rh.quantity || lh.avgPriceUsd !== rh.avgPriceUsd) {
+      if (new Date(lh.updatedAt).getTime() > new Date(rh.updatedAt).getTime()) return false
+      if (new Date(rh.updatedAt).getTime() > new Date(lh.updatedAt).getTime()) return true
+    }
+  }
+
   if (remote.exportedAt && local.exportedAt) {
     return new Date(remote.exportedAt).getTime() > new Date(local.exportedAt).getTime()
   }
@@ -46,7 +59,18 @@ export async function pullGfFromNeon(): Promise<boolean> {
   if (!isGfPayload(remote.payload)) return false
   if (!shouldImportGfRemote(remote.payload, remote.updatedAt)) return false
 
-  importGfBackup(remote.payload)
+  const local = exportGfBackup()
+  const mergedHoldings = mergeGfCryptoHoldings(
+    local.cryptoHoldings ?? [],
+    remote.payload.cryptoHoldings ?? [],
+  )
+  importGfBackup({ ...remote.payload, cryptoHoldings: mergedHoldings })
+
+  const mergedKeys = new Set(mergedHoldings.map((h) => `${h.walletId}:${h.coinId}`))
+  for (const h of listGfCryptoHoldings()) {
+    if (!mergedKeys.has(`${h.walletId}:${h.coinId}`)) deleteGfCryptoHolding(h.id)
+  }
+
   if (remote.updatedAt) writeSyncMeta('gestao_financeira', remote.updatedAt)
   notifyGfDataChanged()
   return true
