@@ -23,4 +23,7 @@ export const NEON_USER_HEADER = 'x-yieldscan-user-id'
 
 export const NEON_DEVICE_USER_KEY = 'yieldscan_device_user_id_v1'
 
+/** Disparado após login/registo de sync por senha — reinicia pull na nuvem. */
+export const YIELDSCAN_SYNC_USER_CHANGED_EVENT = 'yieldscan-sync-user-changed'
+
 export const NEON_SYNC_META_KEY = 'yieldscan_neon_sync_meta_v1'

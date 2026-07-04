@@ -1,4 +1,4 @@
-import { NEON_DEVICE_USER_KEY } from '@/lib/neon/constants'
+import { NEON_DEVICE_USER_KEY, YIELDSCAN_SYNC_USER_CHANGED_EVENT } from '@/lib/neon/constants'
 
 const ENV_USER_ID = process.env.NEXT_PUBLIC_YIELDSCAN_USER_ID?.trim() || ''
 
@@ -25,4 +25,18 @@ export function getDeviceUserId(): string {
   } catch {
     return ENV_USER_ID || newId()
   }
+}
+
+export function isDeviceUserIdLockedByEnv(): boolean {
+  return Boolean(ENV_USER_ID)
+}
+
+/** Define o ID de sync (ex.: após login por senha noutro aparelho). */
+export function setDeviceUserId(id: string): void {
+  if (typeof window === 'undefined') return
+  if (ENV_USER_ID) return
+  const trimmed = id.trim()
+  if (!trimmed) return
+  localStorage.setItem(NEON_DEVICE_USER_KEY, trimmed)
+  window.dispatchEvent(new CustomEvent(YIELDSCAN_SYNC_USER_CHANGED_EVENT))
 }

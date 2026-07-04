@@ -8,3 +8,11 @@ CREATE TABLE IF NOT EXISTS yieldscan_sync (
 );
 
 CREATE INDEX IF NOT EXISTS idx_yieldscan_sync_updated ON yieldscan_sync (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS yieldscan_sync_passkeys (
+  pass_key TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_yieldscan_sync_passkeys_user ON yieldscan_sync_passkeys (user_id);

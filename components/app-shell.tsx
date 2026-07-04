@@ -14,6 +14,7 @@ import {
   LineChart,
   Newspaper,
   SlidersHorizontal,
+  Settings,
   Wallet,
 } from 'lucide-react'
 import {
@@ -63,6 +64,7 @@ const MAIN_NAV: NavItem[] = [
   { name: 'Unlocks', href: '/unlocks', icon: LockKeyhole, iconClassName: 'text-teal-400' },
   { name: 'DEX', href: '/dex', icon: LayoutGrid, iconClassName: 'text-fuchsia-400' },
   { name: 'Trocas', href: '/swap', icon: ArrowLeftRight, iconClassName: 'text-rose-400' },
+  { name: 'Configurações', href: '/settings', icon: Settings, iconClassName: 'text-indigo-400' },
 ]
 
 function isNewsNavActive(pathname: string): boolean {
@@ -85,6 +87,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/unlocks')) return 'Unlocks'
   if (pathname.startsWith('/dex')) return 'DEX'
   if (pathname.startsWith('/swap')) return 'Trocas'
+  if (pathname.startsWith('/settings')) return 'Configurações'
   if (pathname.startsWith('/token/')) {
     const sym = pathname.slice('/token/'.length)
     return sym ? `Token · ${decodeURIComponent(sym)}` : 'Token'
@@ -212,7 +215,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                       ? pathname.startsWith('/calculator')
                                       : item.href === '/unlocks'
                                         ? pathname.startsWith('/unlocks')
-                                        : pathname === item.href
+                                        : item.href === '/settings'
+                                          ? pathname.startsWith('/settings')
+                                          : pathname === item.href
                       }
                       tooltip={item.name}
                     >
