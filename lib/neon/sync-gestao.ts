@@ -12,21 +12,43 @@ function isGfPayload(v: unknown): v is GfBackupPayload {
   return Array.isArray(p.categories) && Array.isArray(p.transactions)
 }
 
-/** Puxa Gestão Financeira + afazeres do Neon se a nuvem for mais recente ou local vazio. */
+/** Importa nuvem se tiver dados novos (mesmo ID) — merge, não apaga local. */
+function shouldImportGfRemote(remote: GfBackupPayload, remoteUpdatedAt: string | null): boolean {
+  if (!hasGfUserData()) return true
+  if (isRemoteNewer('gestao_financeira', remoteUpdatedAt)) return true
+
+  const local = exportGfBackup()
+  const localTxIds = new Set(local.transactions.map((t) => t.id))
+  if ((remote.transactions ?? []).some((t) => !localTxIds.has(t.id))) return true
+
+  const localTodoIds = new Set((local.todos ?? []).map((t) => t.id))
+  if ((remote.todos ?? []).some((t) => !localTodoIds.has(t.id))) return true
+
+  if (remote.exportedAt && local.exportedAt) {
+    return new Date(remote.exportedAt).getTime() > new Date(local.exportedAt).getTime()
+  }
+
+  return false
+}
+
+function notifyGfDataChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(GF_DATA_CHANGED_EVENT))
+  }
+}
+
+/** Puxa Gestão Financeira + afazeres do Neon (merge por id). */
 export async function pullGfFromNeon(): Promise<boolean> {
   await ensureGfDb()
   const remote = await pullNeonSync('gestao_financeira')
   if (!remote.configured || !remote.ok || !remote.payload) return false
 
   if (!isGfPayload(remote.payload)) return false
-  const shouldImport = isRemoteNewer('gestao_financeira', remote.updatedAt) || !hasGfUserData()
-  if (!shouldImport) return false
+  if (!shouldImportGfRemote(remote.payload, remote.updatedAt)) return false
 
   importGfBackup(remote.payload)
   if (remote.updatedAt) writeSyncMeta('gestao_financeira', remote.updatedAt)
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(GF_DATA_CHANGED_EVENT))
-  }
+  notifyGfDataChanged()
   return true
 }
 
@@ -41,6 +63,7 @@ export function schedulePushGfToNeon(): void {
 
 export async function pushGfToNeonNow(): Promise<void> {
   await ensureGfDb()
+  await pullGfFromNeon()
   const payload = exportGfBackup()
   await pushNeonSync('gestao_financeira', payload)
 }
@@ -50,10 +73,16 @@ export function initGfNeonSync(): () => void {
 
   void pullGfFromNeon()
 
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') void pullGfFromNeon()
+  }
+  document.addEventListener('visibilitychange', onVisible)
+
   const onChange = () => schedulePushGfToNeon()
   window.addEventListener(GF_DATA_CHANGED_EVENT, onChange)
 
   return () => {
+    document.removeEventListener('visibilitychange', onVisible)
     window.removeEventListener(GF_DATA_CHANGED_EVENT, onChange)
     if (pushTimer) clearTimeout(pushTimer)
   }

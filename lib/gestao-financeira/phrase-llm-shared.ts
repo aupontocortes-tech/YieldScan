@@ -40,7 +40,9 @@ JSON:
 }
 
 Regras:
-- Escolha UM intent principal. Se a frase misturar assuntos, priorize movimentação com valor > afazer > dívida > relatório.
+- Horários (ex.: «às 17:00», «17h») NÃO são valores em reais — use intent "todos".
+- Eventos com data/hora (jogo, partida, consulta, reunião) → "todos", não "transaction".
+- Escolha UM intent principal. Se a frase misturar assuntos, priorize movimentação com valor explícito (R$, reais) > afazer > dívida > relatório.
 - Para todo_action: use existingTodos do contexto; titleMatch deve bater com parte do título.
 - reschedule: preencha dueDate/dueTime; action pending = desmarcar concluído.
 - Para todos: pode haver vários items numa frase.

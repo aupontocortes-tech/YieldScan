@@ -57,7 +57,8 @@ export function requestMicStreamSync(): Promise<MediaStream> | null {
   return navigator.mediaDevices.getUserMedia({ audio: true, video: false })
 }
 
-function resolveSpeechMode(): GfSpeechMode {
+function resolveSpeechMode(preferRealtime?: boolean): GfSpeechMode {
+  if (preferRealtime && getSpeechRecognition()) return 'browser'
   const settings = loadGfOpenAiSettings()
   const openAiReady = settings.enabled && settings.apiKey.trim()
 
@@ -84,7 +85,8 @@ function prepareStream(stream: MediaStream): MediaStream {
   return stream
 }
 
-export function useGfSpeechInput() {
+export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
+  const preferRealtime = opts?.preferRealtime ?? false
   const [listening, setListening] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [requestingPermission, setRequestingPermission] = useState(false)
@@ -103,13 +105,13 @@ export function useGfSpeechInput() {
   const lastTranscriptRef = useRef('')
 
   useEffect(() => {
-    setMode(resolveSpeechMode())
+    setMode(resolveSpeechMode(preferRealtime))
     return () => {
       recRef.current?.abort()
       stopWhisperRecording()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [preferRealtime])
 
   const stopStream = useCallback(() => {
     releaseStream(streamRef.current)
@@ -271,7 +273,7 @@ export function useGfSpeechInput() {
 
   const continueWithStream = useCallback(
     (stream: MediaStream, onFinal: (text: string) => void) => {
-      const currentMode = resolveSpeechMode()
+      const currentMode = resolveSpeechMode(preferRealtime)
       setMode(currentMode)
 
       if (currentMode === 'whisper') {
@@ -293,7 +295,7 @@ export function useGfSpeechInput() {
       releaseStream(stream)
       setMicError('Configure Uso da API.')
     },
-    [beginWhisperRecording, startBrowser],
+    [beginWhisperRecording, startBrowser, preferRealtime],
   )
 
   const toggle = useCallback(
@@ -304,7 +306,7 @@ export function useGfSpeechInput() {
     ) => {
       onFinalRef.current = onFinal
       onInterimRef.current = onInterim ?? (() => {})
-      const currentMode = resolveSpeechMode()
+      const currentMode = resolveSpeechMode(preferRealtime)
       setMode(currentMode)
 
       if (listening || transcribing) {
@@ -346,7 +348,7 @@ export function useGfSpeechInput() {
           setMicError(micErrorFromException(err))
         })
     },
-    [listening, transcribing, continueWithStream, stopBrowser, stopWhisperRecording],
+    [listening, transcribing, continueWithStream, stopBrowser, stopWhisperRecording, preferRealtime],
   )
 
   return {

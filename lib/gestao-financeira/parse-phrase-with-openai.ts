@@ -72,7 +72,9 @@ export async function interpretGfPhrase(
   ctx: GfPhraseRouteContext,
 ): Promise<{ result: GfPhraseParseResult | null; error: string | null }> {
   const local = routeGfPhraseLocally(text, ctx)
-  if (local) return { result: local, error: null }
+  if (local && !(local.kind === 'transaction' && local.entry.confidence === 'low')) {
+    return { result: local, error: null }
+  }
 
   const settings = loadGfOpenAiSettings()
   if (settings.enabled && settings.apiKey.trim()) {

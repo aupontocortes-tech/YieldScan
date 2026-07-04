@@ -44,6 +44,7 @@ import {
   type GfCryptoCoinPick,
 } from '@/components/gestao-financeira/gf-crypto-coin-picker'
 import { GfCryptoHoldingCard } from '@/components/gestao-financeira/gf-crypto-holding-card'
+import { GfTransactionHistory } from '@/components/gestao-financeira/gf-transaction-history'
 import { loadGfOpenAiSettings, summarizeGfOpenAiUsage } from '@/lib/gestao-financeira/openai-config'
 import {
   defaultReportPeriodState,
@@ -60,7 +61,6 @@ import {
   Gauge,
   Landmark,
   PiggyBank,
-  Plus,
   Printer,
   RefreshCw,
   Trash2,
@@ -206,12 +206,6 @@ export function GestaoFinanceiraPage() {
     }
   }, [deleteTarget, gf])
 
-  // Form manual
-  const [formType, setFormType] = useState<'income' | 'expense'>('expense')
-  const [formAmount, setFormAmount] = useState('')
-  const [formDesc, setFormDesc] = useState('')
-  const [formCategory, setFormCategory] = useState('')
-
   // Crypto form
   const [cryptoWallet, setCryptoWallet] = useState('')
   const [cryptoCoin, setCryptoCoin] = useState<GfCryptoCoinPick | null>({
@@ -351,32 +345,6 @@ export function GestaoFinanceiraPage() {
     }))
   }
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const amount = Number(formAmount.replace(',', '.'))
-    if (!amount || !gf.cashBoxes[0]) return
-    const cat = formCategory.trim()
-    let categoryId: string | null = null
-    if (cat) {
-      const found = gf.categories.find((c) => c.name.toLowerCase() === cat.toLowerCase())
-      if (found) categoryId = found.id
-      else {
-        const created = await gf.addCategory(cat, formType)
-        categoryId = created.id
-      }
-    }
-    await gf.addTransaction({
-      type: formType,
-      amount,
-      categoryId,
-      cashBoxId: gf.cashBoxes[0].id,
-      description: formDesc || null,
-    })
-    setFormAmount('')
-    setFormDesc('')
-    setFormCategory('')
-  }
-
   const handleCryptoSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!cryptoWallet || !cryptoCoin) return
@@ -459,12 +427,8 @@ export function GestaoFinanceiraPage() {
 
       {gf.ready ? <GfTodoNotifyBanner todos={gf.todos} className="mt-4" /> : null}
 
-      {!gf.ready || !s ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-2xl" />
-          ))}
-        </div>
+      {!gf.ready ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">A carregar…</p>
       ) : (
         <>
       {s ? <GfVoicePanel gf={gf} insights={gf.insights} /> : null}
@@ -473,6 +437,13 @@ export function GestaoFinanceiraPage() {
         <GfNavTabs pendingToday={pendingTodosToday} />
 
         <TabsContent value="dashboard" className="mt-4 space-y-6">
+          {!s ? (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 rounded-2xl bg-muted/30" />
+              ))}
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
             <StatCard label="Patrimônio total" value={fmtBrl(s.totalPatrimony)} icon={TrendingUp} tone="blue" />
             <StatCard label="Patrimônio líquido" value={fmtBrl(s.netWorth)} icon={Landmark} tone="green" />
@@ -484,8 +455,9 @@ export function GestaoFinanceiraPage() {
             <StatCard label="Total investido" value={fmtBrl(s.totalInvested)} icon={TrendingUp} tone="blue" />
             <StatCard label="Total em cripto" value={fmtBrl(s.totalCrypto)} icon={Bitcoin} tone="amber" />
           </div>
+          )}
 
-          {dueSoon.length > 0 ? (
+          {s && dueSoon.length > 0 ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-950/15 px-4 py-3 text-sm">
               <p className="font-medium text-amber-200">Vencimentos próximos</p>
               <ul className="mt-1 text-muted-foreground">
@@ -498,6 +470,7 @@ export function GestaoFinanceiraPage() {
             </div>
           ) : null}
 
+          {s ? (
           <GfCharts
             transactions={gf.transactions}
             categories={gf.categories}
@@ -505,88 +478,16 @@ export function GestaoFinanceiraPage() {
             stats={s}
             cryptoBreakdown={cryptoBreakdown}
           />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="movimentos" className="mt-4 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <form onSubmit={(e) => void handleManualSubmit(e)} className="rounded-2xl border border-border/50 bg-card/40 p-4 space-y-3">
-              <h3 className="font-semibold">Registro manual</h3>
-              <div className="flex gap-2">
-                <Button type="button" size="sm" variant={formType === 'expense' ? 'default' : 'outline'} onClick={() => setFormType('expense')}>
-                  Despesa
-                </Button>
-                <Button type="button" size="sm" variant={formType === 'income' ? 'default' : 'outline'} onClick={() => setFormType('income')}>
-                  Receita
-                </Button>
-              </div>
-              <div>
-                <Label>Valor (R$)</Label>
-                <Input value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="120,50" required />
-              </div>
-              <div>
-                <Label>Categoria</Label>
-                <Input value={formCategory} onChange={(e) => setFormCategory(e.target.value)} placeholder="Mercado" list="gf-cats" />
-                <datalist id="gf-cats">
-                  {gf.categories.map((c) => (
-                    <option key={c.id} value={c.name} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <Label>Descrição</Label>
-                <Input value={formDesc} onChange={(e) => setFormDesc(e.target.value)} placeholder="Supermercado" />
-              </div>
-              <Button type="submit" className="w-full gap-2">
-                <Plus className="h-4 w-4" />
-                Salvar
-              </Button>
-            </form>
-
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4">
-              <h3 className="font-semibold">Registrar em uma frase</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Use o campo no topo da página.</p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border/50 overflow-hidden">
-            <div className="border-b border-border/40 px-4 py-3 font-semibold">Histórico recente</div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-border/30">
-              {gf.transactions.slice(0, 40).map((t) => {
-                const cat = gf.categories.find((c) => c.id === t.categoryId)
-                const label = t.description ?? cat?.name ?? t.type
-                return (
-                  <div key={t.id} className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{label}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(t.occurredAt).toLocaleString('pt-BR')}</p>
-                    </div>
-                    <span
-                      className={cn(
-                        'shrink-0 font-semibold',
-                        t.type === 'income' ? 'text-emerald-400' : t.type === 'expense' ? 'text-red-400' : 'text-blue-300',
-                      )}
-                    >
-                      {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : '↔'}
-                      {fmtBrl(t.amount)}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-400"
-                      aria-label={`Excluir ${label}`}
-                      onClick={() => setDeleteTarget({ kind: 'transaction', id: t.id, label })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )
-              })}
-              {gf.transactions.length === 0 ? (
-                <p className="p-6 text-center text-sm text-muted-foreground">Nenhuma movimentação ainda.</p>
-              ) : null}
-            </div>
-          </div>
+          <GfTransactionHistory
+            transactions={gf.transactions}
+            categories={gf.categories}
+            fmtBrl={fmtBrl}
+            onDelete={(id, label) => setDeleteTarget({ kind: 'transaction', id, label })}
+          />
         </TabsContent>
 
         <TabsContent value="caixas" className="mt-4 space-y-4">

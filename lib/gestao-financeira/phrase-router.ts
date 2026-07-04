@@ -8,6 +8,7 @@ import type {
   GfTodo,
   GfTransaction,
 } from '@/lib/gestao-financeira/types'
+import { looksLikeScheduledTodo, parseMoneyAmount } from '@/lib/gestao-financeira/time-vs-amount'
 import { parseGfVoiceText } from '@/lib/gestao-financeira/voice-parser'
 
 export type GfPhraseRouteContext = GfParseVoiceContext & {
@@ -18,8 +19,6 @@ export type GfPhraseRouteContext = GfParseVoiceContext & {
   monthSavings: number
 }
 
-const TODO_HINT =
-  /\b(amanh[ãa]|depois de amanh[ãa]|segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo|às\s+\d|lembrete|lembrar|preciso|tenho que|devo|marcar|reunião|reuniao|dentista|consulta|pagar\s+luz|ir ao|ligar para)\b/i
 const DEBT_HINT = /\b(dívida|divida|empréstimo|emprestimo|financiamento|parcela do|devo ao|devo para)\b/i
 const REPORT_HINT =
   /\b(relatório|relatorio|quanto\s+gastei|quanto\s+recebi|quanto\s+economizei|resumo\s+do\s+m[eê]s|resumo\s+da\s+semana|balanço|balanco)\b/i
@@ -58,17 +57,14 @@ function tryLocalTodosQuery(text: string, ctx: GfPhraseRouteContext): GfPhrasePa
 }
 
 function parseAmountLocal(text: string): number | null {
-  const normalized = text
-    .toLowerCase()
-    .replace(/r\$\s*/g, '')
-    .replace(/\s+/g, ' ')
-  const match = normalized.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/)
-  if (!match) return null
-  let raw = match[1]!
-  if (raw.includes('.') && raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.')
-  else if (raw.includes(',')) raw = raw.replace(',', '.')
-  const n = Number(raw)
-  return Number.isFinite(n) && n > 0 ? n : null
+  return parseMoneyAmount(text)
+}
+
+function tryParseAsTodo(phrase: string, ctx: GfPhraseRouteContext): GfPhraseParseResult | null {
+  if (!looksLikeScheduledTodo(phrase)) return null
+  const todos = parseGfTodosText(phrase, ctx.todayIso)
+  if (todos.length) return { kind: 'todos', items: todos, source: 'local' }
+  return null
 }
 
 function parseGfDebtText(text: string): GfParsedDebtEntry | null {
@@ -141,11 +137,7 @@ function tryLocalReportQuery(text: string, ctx: GfPhraseRouteContext): GfPhraseP
 }
 
 function looksLikeNewTodo(text: string): boolean {
-  if (TODO_HINT.test(text)) return true
-  if (/\b(pagar|ir|ligar|comprar|enviar|buscar|levar)\b/i.test(text) && /\b(amanh|segunda|terça|quarta|quinta|sexta|hoje)\b/i.test(text)) {
-    return true
-  }
-  return false
+  return looksLikeScheduledTodo(text)
 }
 
 /** Router local — tenta classificar antes da OpenAI. */
@@ -166,19 +158,17 @@ export function routeGfPhraseLocally(text: string, ctx: GfPhraseRouteContext): G
   const todoQuery = tryLocalTodosQuery(phrase, ctx)
   if (todoQuery) return todoQuery
 
+  const todoNew = tryParseAsTodo(phrase, ctx)
+  if (todoNew) return todoNew
+
   const report = tryLocalReportQuery(phrase, ctx)
   if (report) return report
 
   const balance = tryLocalBalanceQuery(phrase, ctx)
   if (balance) return balance
 
-  if (looksLikeNewTodo(phrase) && !parseAmountLocal(phrase)) {
-    const todos = parseGfTodosText(phrase, ctx.todayIso)
-    if (todos.length) return { kind: 'todos', items: todos, source: 'local' }
-  }
-
   const tx = parseGfVoiceText(phrase)
-  if (tx) return { kind: 'transaction', entry: tx, source: 'local' }
+  if (tx && tx.confidence !== 'low') return { kind: 'transaction', entry: tx, source: 'local' }
 
   if (looksLikeNewTodo(phrase)) {
     const todos = parseGfTodosText(phrase, ctx.todayIso)

@@ -38,8 +38,9 @@ type Props = {
 
 /** Registro inteligente — a frase é encaminhada para o destino certo (qualquer aba). */
 export function GfQuickRegister({ gf, onTabChange }: Props) {
-  const speech = useGfSpeechInput()
+  const speech = useGfSpeechInput({ preferRealtime: true })
   const interpretRef = useRef<(phrase: string) => Promise<void>>(async () => {})
+  const phraseInputRef = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState<GfPhraseParseResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -80,15 +81,27 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
 
   interpretRef.current = handleInterpret
 
+  const selectPhraseText = (phrase: string) => {
+    requestAnimationFrame(() => {
+      const el = phraseInputRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(0, phrase.length)
+    })
+  }
+
   const handleMic = () => {
     speech.clearError()
     const onInterim = (transcript: string) => {
       setText(transcript)
     }
     const onFinal = (transcript: string) => {
-      setText(transcript)
+      const trimmed = transcript.trim()
+      if (!trimmed) return
+      setText(trimmed)
       clearParsed()
-      if (transcript.trim()) void interpretRef.current(transcript)
+      selectPhraseText(trimmed)
+      void interpretRef.current(trimmed)
     }
     speech.toggle(onFinal, requestMicStreamSync(), onInterim)
   }
@@ -174,6 +187,7 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
       </div>
 
       <GfPhraseInput
+        inputRef={phraseInputRef}
         value={text}
         onChange={(v) => {
           setText(v)
@@ -181,6 +195,7 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
           speech.clearError()
         }}
         placeholder={PLACEHOLDER}
+        listeningPlaceholder=""
         listening={speech.listening || speech.transcribing}
         transcribing={speech.transcribing}
         requestingPermission={speech.requestingPermission}

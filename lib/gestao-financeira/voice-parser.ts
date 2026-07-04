@@ -1,4 +1,5 @@
 import type { GfParsedVoiceEntry, GfTransactionType } from '@/lib/gestao-financeira/types'
+import { looksLikeScheduledTodo, parseMoneyAmount } from '@/lib/gestao-financeira/time-vs-amount'
 
 const INCOME_WORDS =
   /\b(recebi|ganhei|entrada|entrou|entrou\s+dinheiro|caiu|salário|salario|folha|depositou|depósito|deposito|renda|rendeu|adicionar|adicionei|coloquei|depositei|creditei|lucrei|vendi|dividendo|dividendos|cashback|estorno|reembolso|devolução|devolucao|herança|heranca|presente|gorjeta|bônus|bonus|gratificação|gratificacao|13º|décimo\s+terceiro|decimo\s+terceiro|pix\s+recebido)\b/i
@@ -17,8 +18,10 @@ const DEPOSIT_WORDS =
   /\b(adicionar|adicionei|adiciona|coloquei|colocar|coloca|depositei|depositar|deposita|entrou|creditei)\b/i
 
 const CATEGORY_HINTS: { pattern: RegExp; category: string }[] = [
+  { pattern: /\b(cart[aã]o\s+de\s+cr[eé]dito|fatura\s+do\s+cart[aã]o|anuidade\s+do\s+cart[aã]o)\b/i, category: 'Cartão de crédito' },
   { pattern: /\b(supermercado|mercado|compras|extra|carrefour|pão de açúcar|pao de acucar|atacadão|atacadao|assai)\b/i, category: 'Mercado' },
-  { pattern: /\b(alimenta|restaurante|lanche|ifood|delivery|padaria|mcdonald|burger)\b/i, category: 'Alimentação' },
+  { pattern: /\b(padaria|padoca|padariao)\b/i, category: 'Padaria' },
+  { pattern: /\b(alimenta|restaurante|lanche|ifood|delivery|mcdonald|burger)\b/i, category: 'Alimentação' },
   { pattern: /\b(combustível|combustivel|gasolina|posto|etanol|álcool|alcool|abasteci)\b/i, category: 'Combustível' },
   { pattern: /\b(uber|99|transporte|ônibus|onibus|metrô|metro|taxi|táxi|passagem|estacionamento|pedágio|pedagio)\b/i, category: 'Transporte' },
   { pattern: /\b(aluguel|moradia|condomínio|condominio|iptu|aluguei|financiamento\s+imobiliário|financiamento\s+imobiliario)\b/i, category: 'Moradia' },
@@ -51,35 +54,7 @@ const CASH_BOX_HINTS: { pattern: RegExp; name: string }[] = [
 ]
 
 function parseAmount(text: string): number | null {
-  const normalized = text
-    .toLowerCase()
-    .replace(/r\$\s*/g, '')
-    .replace(/\s+/g, ' ')
-
-  const mil = normalized.match(/(\d+(?:[.,]\d+)?)\s*mil\b/)
-  if (mil) {
-    const n = Number(mil[1]!.replace(',', '.'))
-    return Number.isFinite(n) ? n * 1000 : null
-  }
-
-  const reaisCentavos = normalized.match(/(\d+)\s*reais?\s*(?:e\s*)?(\d{1,2})?\s*centavos?/)
-  if (reaisCentavos) {
-    const reais = Number(reaisCentavos[1])
-    const cent = reaisCentavos[2] ? Number(reaisCentavos[2]) / 100 : 0
-    return reais + cent
-  }
-
-  const match = normalized.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/)
-  if (!match) return null
-
-  let raw = match[1]!
-  if (raw.includes('.') && raw.includes(',')) {
-    raw = raw.replace(/\./g, '').replace(',', '.')
-  } else if (raw.includes(',')) {
-    raw = raw.replace(',', '.')
-  }
-  const n = Number(raw)
-  return Number.isFinite(n) && n > 0 ? n : null
+  return parseMoneyAmount(text)
 }
 
 function detectType(text: string): GfTransactionType {
@@ -373,6 +348,7 @@ function stripDatePhrases(text: string): string {
 export function parseGfVoiceText(text: string, referenceDate = new Date()): GfParsedVoiceEntry | null {
   const raw = text.trim()
   if (!raw) return null
+  if (looksLikeScheduledTodo(raw)) return null
 
   const amount = parseAmount(raw)
   if (amount == null) return null

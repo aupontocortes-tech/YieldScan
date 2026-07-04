@@ -127,11 +127,10 @@ export function useGestaoFinanceira() {
 
   const reload = useCallback(async () => {
     await ensureGfDb()
-    await pullGfFromNeon()
     const holdings = listGfCryptoHoldings()
     const coinIds = [...new Set(holdings.map((h) => h.coinId))]
 
-    // Fase 1: SQLite local — painel abre já (rápido)
+    // Fase 1: SQLite local — abre já (não espera Neon)
     const { dashboard, snaps } = applyLocalData({}, 5.1)
     setReady(true)
 
@@ -140,6 +139,11 @@ export function useGestaoFinanceira() {
     if (!lastSnap || lastSnap.recordedAt.slice(0, 10) !== today) {
       insertGfPatrimonySnapshot(buildPatrimonySnapshot(dashboard))
     }
+
+    // Fase 1b: merge Neon em background
+    void pullGfFromNeon().then(() => {
+      applyLocalData({}, 5.1)
+    })
 
     // Fase 2: preços cripto em background (só se houver posições)
     if (coinIds.length === 0) return

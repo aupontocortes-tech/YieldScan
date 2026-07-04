@@ -4,6 +4,8 @@ export const DEFAULT_GF_CATEGORIES: { name: string; type: GfCategoryType; icon: 
   { name: 'Salário', type: 'income', icon: '💼' },
   { name: 'Freelance', type: 'income', icon: '💻' },
   { name: 'Mercado', type: 'expense', icon: '🛒' },
+  { name: 'Padaria', type: 'expense', icon: '🥖' },
+  { name: 'Cartão de crédito', type: 'expense', icon: '💳' },
   { name: 'Alimentação', type: 'expense', icon: '🍽️' },
   { name: 'Combustível', type: 'expense', icon: '⛽' },
   { name: 'Transporte', type: 'expense', icon: '🚌' },
