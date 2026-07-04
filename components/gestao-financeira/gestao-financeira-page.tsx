@@ -148,23 +148,56 @@ function StatCard({
   label: string
   value: string
   icon: typeof Wallet
-  tone?: 'default' | 'green' | 'red' | 'blue' | 'amber'
+  tone?: 'default' | 'green' | 'red' | 'blue' | 'amber' | 'cyan' | 'violet'
 }) {
   const tones = {
-    default: 'border-border/50',
-    green: 'border-emerald-500/30 bg-emerald-950/10',
-    red: 'border-red-500/25 bg-red-950/10',
-    blue: 'border-blue-500/30 bg-blue-950/10',
-    amber: 'border-amber-500/30 bg-amber-950/10',
+    default: {
+      card: 'border-slate-400/45 bg-gradient-to-br from-slate-600/55 via-slate-700/60 to-slate-900/75',
+      iconWrap: 'bg-gradient-to-br from-slate-300 to-slate-500 shadow-slate-500/40',
+      icon: 'text-slate-950',
+    },
+    green: {
+      card: 'border-emerald-400/50 bg-gradient-to-br from-emerald-500/50 via-emerald-700/55 to-emerald-950/80',
+      iconWrap: 'bg-gradient-to-br from-emerald-200 to-emerald-500 shadow-emerald-500/45',
+      icon: 'text-emerald-950',
+    },
+    red: {
+      card: 'border-red-400/50 bg-gradient-to-br from-red-500/45 via-red-700/55 to-red-950/80',
+      iconWrap: 'bg-gradient-to-br from-red-200 to-red-500 shadow-red-500/45',
+      icon: 'text-red-950',
+    },
+    blue: {
+      card: 'border-blue-400/50 bg-gradient-to-br from-blue-500/50 via-blue-700/55 to-blue-950/80',
+      iconWrap: 'bg-gradient-to-br from-sky-200 to-blue-500 shadow-blue-500/45',
+      icon: 'text-blue-950',
+    },
+    amber: {
+      card: 'border-amber-400/50 bg-gradient-to-br from-amber-500/50 via-amber-700/55 to-amber-950/80',
+      iconWrap: 'bg-gradient-to-br from-amber-200 to-amber-500 shadow-amber-500/45',
+      icon: 'text-amber-950',
+    },
+    cyan: {
+      card: 'border-cyan-400/50 bg-gradient-to-br from-cyan-500/45 via-cyan-700/55 to-cyan-950/80',
+      iconWrap: 'bg-gradient-to-br from-cyan-200 to-cyan-500 shadow-cyan-500/45',
+      icon: 'text-cyan-950',
+    },
+    violet: {
+      card: 'border-violet-400/50 bg-gradient-to-br from-violet-500/50 via-violet-700/55 to-violet-950/80',
+      iconWrap: 'bg-gradient-to-br from-violet-200 to-violet-500 shadow-violet-500/45',
+      icon: 'text-violet-950',
+    },
   }
+  const t = tones[tone]
   return (
-    <div className={cn('rounded-2xl border p-4 backdrop-blur-sm', tones[tone])}>
+    <div className={cn('rounded-2xl border p-4', t.card)}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="mt-1 text-lg font-bold tracking-tight sm:text-xl">{value}</p>
+          <p className="text-xs text-white/75">{label}</p>
+          <p className="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">{value}</p>
         </div>
-        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-md', t.iconWrap)}>
+          <Icon className={cn('h-4 w-4', t.icon)} strokeWidth={2.25} />
+        </div>
       </div>
     </div>
   )
@@ -447,13 +480,13 @@ export function GestaoFinanceiraPage() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
             <StatCard label="Patrimônio total" value={fmtBrl(s.totalPatrimony)} icon={TrendingUp} tone="blue" />
             <StatCard label="Patrimônio líquido" value={fmtBrl(s.netWorth)} icon={Landmark} tone="green" />
-            <StatCard label="Saldo em caixa" value={fmtBrl(s.cashBalance)} icon={Wallet} />
+            <StatCard label="Saldo em caixa" value={fmtBrl(s.cashBalance)} icon={Wallet} tone="cyan" />
             <StatCard label="Receitas do mês" value={fmtBrl(s.monthIncome)} icon={ArrowDownLeft} tone="green" />
             <StatCard label="Despesas do mês" value={fmtBrl(s.monthExpense)} icon={ArrowUpRight} tone="red" />
             <StatCard label="Economia do mês" value={fmtBrl(s.monthSavings)} icon={PiggyBank} tone="amber" />
             <StatCard label="Dívidas pendentes" value={fmtBrl(s.pendingDebts)} icon={ArrowUpRight} tone="red" />
             <StatCard label="Total investido" value={fmtBrl(s.totalInvested)} icon={TrendingUp} tone="blue" />
-            <StatCard label="Total em cripto" value={fmtBrl(s.totalCrypto)} icon={Bitcoin} tone="amber" />
+            <StatCard label="Total em cripto" value={fmtBrl(s.totalCrypto)} icon={Bitcoin} tone="violet" />
           </div>
           )}
 

@@ -5,6 +5,13 @@
 let activeId: string | null = null
 const listeners = new Set<() => void>()
 
+type UtterRef = {
+  id: string
+  cancelled: boolean
+}
+
+let currentUtteranceRef: UtterRef | null = null
+
 function emit() {
   listeners.forEach((l) => l())
 }
@@ -38,10 +45,20 @@ function aplicarVozPortugues(syn: SpeechSynthesis, u: SpeechSynthesisUtterance) 
   if (pt) u.voice = pt
 }
 
+function stopSynth(syn: SpeechSynthesis) {
+  if (currentUtteranceRef) currentUtteranceRef.cancelled = true
+  syn.cancel()
+  if (syn.speaking || syn.pending) {
+    syn.pause()
+    syn.cancel()
+  }
+}
+
 export function cancelGfSpeech() {
   const syn = getSynth()
-  syn?.cancel()
+  if (syn) stopSynth(syn)
   activeId = null
+  currentUtteranceRef = null
   emit()
 }
 
@@ -51,29 +68,53 @@ export function toggleGfSpeech(id: string, text: string) {
   const trimmed = text.trim()
   if (!trimmed) return
 
-  if (activeId === id) {
-    syn.cancel()
-    activeId = null
-    emit()
+  const isThisPlaying =
+    activeId === id || (currentUtteranceRef?.id === id && (syn.speaking || syn.pending))
+
+  if (isThisPlaying) {
+    cancelGfSpeech()
     return
   }
 
-  syn.cancel()
+  internalStart(id, trimmed, syn)
+}
+
+function internalStart(id: string, text: string, syn: SpeechSynthesis) {
+  stopSynth(syn)
   activeId = id
 
-  const u = new SpeechSynthesisUtterance(trimmed)
+  const utterRef: UtterRef = { id, cancelled: false }
+  currentUtteranceRef = utterRef
+
+  const u = new SpeechSynthesisUtterance(text)
   u.lang = 'pt-BR'
   u.rate = 0.92
 
   const finish = () => {
+    if (utterRef.cancelled) {
+      if (currentUtteranceRef === utterRef) currentUtteranceRef = null
+      emit()
+      return
+    }
+    if (currentUtteranceRef === utterRef) currentUtteranceRef = null
     if (activeId === id) activeId = null
     emit()
   }
 
-  u.onend = finish
+  u.onend = () => {
+    if (utterRef.cancelled) {
+      finish()
+      return
+    }
+    if (syn.speaking || syn.pending) return
+    finish()
+  }
   u.onerror = finish
 
+  let iniciou = false
   const falar = () => {
+    if (iniciou || utterRef.cancelled) return
+    iniciou = true
     aplicarVozPortugues(syn, u)
     syn.speak(u)
   }

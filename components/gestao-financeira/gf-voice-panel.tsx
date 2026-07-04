@@ -88,6 +88,7 @@ export function GfVoicePanel({ gf, insights }: Props) {
             )}
             title={narrativePlaying ? 'Parar leitura' : 'Ouvir resumo'}
             aria-label={narrativePlaying ? 'Parar leitura' : 'Ouvir resumo'}
+            aria-pressed={narrativePlaying}
           >
             <Volume2 className="h-4 w-4" strokeWidth={2.25} />
           </button>
