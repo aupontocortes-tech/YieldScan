@@ -85,6 +85,42 @@ function prepareStream(stream: MediaStream): MediaStream {
   return stream
 }
 
+/** Monta o texto a mostrar sem repetir segmentos finais iguais ou cumulativos (bug comum no Chrome). */
+function mergeFinalParts(parts: string[]): string {
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0]!.trim()
+
+  const trimmed = parts.map((p) => p.trim()).filter(Boolean)
+  if (trimmed.length === 0) return ''
+  if (trimmed.every((p) => p === trimmed[0])) return trimmed[0]!
+
+  const last = trimmed[trimmed.length - 1]!
+  const cumulative = trimmed.every((part, i) => {
+    if (i === 0) return true
+    const prev = trimmed[i - 1]!
+    return last.includes(part) || last.includes(prev) || part.startsWith(prev)
+  })
+  if (cumulative) return last
+
+  return trimmed.join('')
+}
+
+function buildSpeechDisplay(
+  results: SpeechRecognitionEventLike['results'],
+): string {
+  const finalParts: string[] = []
+  let interim = ''
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]!
+    const piece = result[0]!.transcript
+    if (result.isFinal) finalParts.push(piece)
+    else interim = piece
+  }
+
+  const stable = mergeFinalParts(finalParts)
+  return (stable + interim).trim()
+}
+
 export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
   const preferRealtime = opts?.preferRealtime ?? false
   const [listening, setListening] = useState(false)
@@ -94,7 +130,8 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
   const [micError, setMicError] = useState<string | null>(null)
 
   const recRef = useRef<SpeechRecognitionInstance | null>(null)
-  const wantListenRef = useRef(false)
+  const sessionIdRef = useRef(0)
+  const listeningRef = useRef(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -103,8 +140,12 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
   const onFinalRef = useRef<(text: string) => void>(() => {})
   const onInterimRef = useRef<(text: string) => void>(() => {})
   const lastTranscriptRef = useRef('')
-  const committedTranscriptRef = useRef('')
   const finalDeliveredRef = useRef(false)
+
+  const setListeningState = useCallback((active: boolean) => {
+    listeningRef.current = active
+    setListening(active)
+  }, [])
 
   const deliverFinal = useCallback(() => {
     if (finalDeliveredRef.current) return
@@ -114,14 +155,27 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
     onFinalRef.current(final)
   }, [])
 
+  const teardownBrowserRec = useCallback((rec: SpeechRecognitionInstance | null) => {
+    if (!rec) return
+    rec.onresult = null
+    rec.onerror = null
+    rec.onend = null
+    try {
+      rec.abort()
+    } catch {
+      /* ignore */
+    }
+    if (recRef.current === rec) recRef.current = null
+  }, [])
+
   useEffect(() => {
     setMode(resolveSpeechMode(preferRealtime))
     return () => {
-      recRef.current?.abort()
+      teardownBrowserRec(recRef.current)
       stopWhisperRecording()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preferRealtime])
+  }, [preferRealtime, teardownBrowserRec])
 
   const stopStream = useCallback(() => {
     releaseStream(streamRef.current)
@@ -143,9 +197,9 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       rec.stop()
     } else {
       stopStream()
-      setListening(false)
+      setListeningState(false)
     }
-  }, [stopStream])
+  }, [stopStream, setListeningState])
 
   const finishWhisper = useCallback(async (blob: Blob, durationSeconds: number) => {
     setTranscribing(true)
@@ -155,9 +209,9 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       else if (error) setMicError(error)
     } finally {
       setTranscribing(false)
-      setListening(false)
+      setListeningState(false)
     }
-  }, [])
+  }, [setListeningState])
 
   const beginWhisperRecording = useCallback(
     (stream: MediaStream) => {
@@ -182,7 +236,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       recorder.onerror = () => {
         setMicError('Erro ao gravar áudio.')
         stopStream()
-        setListening(false)
+        setListeningState(false)
       }
 
       recorder.onstop = () => {
@@ -195,7 +249,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
 
         const elapsedMs = Date.now() - recordStartRef.current
         if (blob.size < MIN_AUDIO_BLOB_BYTES || elapsedMs < MIN_RECORD_MS) {
-          setListening(false)
+          setListeningState(false)
           return
         }
 
@@ -206,13 +260,23 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       if (timeslice != null) recorder.start(timeslice)
       else recorder.start()
 
-      setListening(true)
+      setListeningState(true)
 
       maxTimerRef.current = window.setTimeout(() => {
         stopWhisperRecording()
       }, MAX_RECORD_SECONDS * 1000)
     },
-    [finishWhisper, stopStream, stopWhisperRecording],
+    [finishWhisper, stopStream, stopWhisperRecording, setListeningState],
+  )
+
+  const finishBrowserSession = useCallback(
+    (sessionId: number, rec: SpeechRecognitionInstance) => {
+      if (sessionId !== sessionIdRef.current) return
+      teardownBrowserRec(rec)
+      setListeningState(false)
+      deliverFinal()
+    },
+    [deliverFinal, setListeningState, teardownBrowserRec],
   )
 
   const startBrowser = useCallback((onFinal: (text: string) => void, stream: MediaStream): boolean => {
@@ -225,50 +289,35 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
 
     releaseStream(stream)
 
-    recRef.current?.abort()
+    teardownBrowserRec(recRef.current)
+
+    const sessionId = ++sessionIdRef.current
     const rec = new Ctor()
     rec.lang = 'pt-BR'
     rec.continuous = true
     rec.interimResults = true
     rec.maxAlternatives = 1
 
-    committedTranscriptRef.current = ''
     lastTranscriptRef.current = ''
     finalDeliveredRef.current = false
-    wantListenRef.current = true
-    setListening(true)
+    setListeningState(true)
 
     rec.onresult = (ev) => {
-      let interim = ''
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        const result = ev.results[i]!
-        const piece = result[0]!.transcript
-        if (result.isFinal) committedTranscriptRef.current += piece
-        else interim += piece
-      }
-      const display = (committedTranscriptRef.current + interim).trim()
+      if (sessionId !== sessionIdRef.current) return
+      const display = buildSpeechDisplay(ev.results)
       if (!display) return
       lastTranscriptRef.current = display
       onInterimRef.current(display)
     }
 
     rec.onerror = (ev) => {
+      if (sessionId !== sessionIdRef.current) return
       if (ev.error === 'aborted' || ev.error === 'no-speech') return
       setMicError(ev.error === 'not-allowed' ? 'Microfone bloqueado.' : `Erro: ${ev.error}`)
     }
 
     rec.onend = () => {
-      if (wantListenRef.current) {
-        try {
-          rec.start()
-          return
-        } catch {
-          /* sessão encerrada pelo utilizador ou pelo SO */
-        }
-      }
-      setListening(false)
-      wantListenRef.current = false
-      deliverFinal()
+      finishBrowserSession(sessionId, rec)
     }
 
     recRef.current = rec
@@ -276,18 +325,25 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       rec.start()
       return true
     } catch {
-      setListening(false)
+      finishBrowserSession(sessionId, rec)
       setMicError('Erro no microfone.')
       return false
     }
-  }, [deliverFinal])
+  }, [deliverFinal, finishBrowserSession, setListeningState, teardownBrowserRec])
 
   const stopBrowser = useCallback(() => {
-    wantListenRef.current = false
-    recRef.current?.stop()
-    setListening(false)
-    deliverFinal()
-  }, [deliverFinal])
+    const rec = recRef.current
+    if (!rec) {
+      setListeningState(false)
+      deliverFinal()
+      return
+    }
+    try {
+      rec.stop()
+    } catch {
+      finishBrowserSession(sessionIdRef.current, rec)
+    }
+  }, [deliverFinal, finishBrowserSession, setListeningState])
 
   const continueWithStream = useCallback(
     (stream: MediaStream, onFinal: (text: string) => void) => {
@@ -327,7 +383,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       const currentMode = resolveSpeechMode(preferRealtime)
       setMode(currentMode)
 
-      if (listening || transcribing) {
+      if (listeningRef.current || transcribing) {
         if (currentMode === 'whisper') stopWhisperRecording()
         else stopBrowser()
         return
@@ -366,7 +422,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
           setMicError(micErrorFromException(err))
         })
     },
-    [listening, transcribing, continueWithStream, stopBrowser, stopWhisperRecording, preferRealtime],
+    [transcribing, continueWithStream, stopBrowser, stopWhisperRecording, preferRealtime],
   )
 
   return {

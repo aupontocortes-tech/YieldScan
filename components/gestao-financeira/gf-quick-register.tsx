@@ -92,6 +92,10 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
 
   const handleMic = () => {
     speech.clearError()
+    if (!speech.listening && !speech.transcribing) {
+      setText('')
+      clearParsed()
+    }
     const onInterim = (transcript: string) => {
       setText(transcript)
     }
