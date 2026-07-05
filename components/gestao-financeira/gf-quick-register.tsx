@@ -195,7 +195,7 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
           speech.clearError()
         }}
         placeholder={PLACEHOLDER}
-        listeningPlaceholder=""
+        listeningPlaceholder="A ouvir… fale agora"
         listening={speech.listening || speech.transcribing}
         transcribing={speech.transcribing}
         requestingPermission={speech.requestingPermission}

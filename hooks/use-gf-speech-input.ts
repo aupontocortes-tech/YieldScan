@@ -161,7 +161,6 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       streamRef.current = active
       chunksRef.current = []
       recordStartRef.current = Date.now()
-      onInterimRef.current('')
 
       const { recorder, mime } = createAudioRecorder(active)
       mediaRecorderRef.current = recorder
@@ -224,19 +223,21 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
     rec.maxAlternatives = 1
 
     lastTranscriptRef.current = ''
-    onInterimRef.current('')
     wantListenRef.current = true
     setListening(true)
 
     rec.onresult = (ev) => {
-      let transcript = ''
+      let interim = ''
+      let final = ''
       for (let i = 0; i < ev.results.length; i++) {
-        transcript += ev.results[i]![0].transcript
+        const piece = ev.results[i]![0].transcript
+        if (ev.results[i]!.isFinal) final += piece
+        else interim += piece
       }
-      const trimmed = transcript.trim()
-      if (!trimmed) return
-      lastTranscriptRef.current = trimmed
-      onInterimRef.current(trimmed)
+      const display = (final + interim).trim()
+      if (!display) return
+      lastTranscriptRef.current = display
+      onInterimRef.current(display)
     }
 
     rec.onerror = (ev) => {
@@ -245,8 +246,15 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
     }
 
     rec.onend = () => {
+      if (wantListenRef.current) {
+        try {
+          rec.start()
+          return
+        } catch {
+          /* sessão encerrada pelo utilizador ou pelo SO */
+        }
+      }
       setListening(false)
-      if (!wantListenRef.current) return
       wantListenRef.current = false
       const final = lastTranscriptRef.current.trim()
       if (final) onFinal(final)
