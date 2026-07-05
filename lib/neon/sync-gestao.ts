@@ -1,6 +1,7 @@
-import { ensureGfDb, deleteGfCryptoHolding, exportGfBackup, importGfBackup, hasGfUserData, listGfCryptoHoldings } from '@/lib/gestao-financeira/db'
+import { ensureGfDb, deleteGfCryptoHolding, exportGfBackup, importGfBackup, hasGfUserData, listGfCryptoHoldings, purgeGfTombstonedRecords } from '@/lib/gestao-financeira/db'
 import type { GfBackupPayload } from '@/lib/gestao-financeira/types'
-import { mergeGfCryptoHoldings } from '@/lib/gestao-financeira/merge-backup-crypto'
+import { mergeGfBackups } from '@/lib/gestao-financeira/merge-gf-backup'
+import { readGfTombstones } from '@/lib/gestao-financeira/sync-tombstones'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { isRemoteNewer, pullNeonSync, pushNeonSync } from '@/lib/neon/sync-client'
 import { writeSyncMeta } from '@/lib/neon/sync-meta'
@@ -19,14 +20,25 @@ function shouldImportGfRemote(remote: GfBackupPayload, remoteUpdatedAt: string |
   if (isRemoteNewer('gestao_financeira', remoteUpdatedAt)) return true
 
   const local = exportGfBackup()
+  const tomb = readGfTombstones()
   const localTxIds = new Set(local.transactions.map((t) => t.id))
-  if ((remote.transactions ?? []).some((t) => !localTxIds.has(t.id))) return true
+  if (
+    (remote.transactions ?? []).some((t) => !localTxIds.has(t.id) && !tomb.transactions.has(t.id))
+  ) {
+    return true
+  }
 
   const localTodoIds = new Set((local.todos ?? []).map((t) => t.id))
-  if ((remote.todos ?? []).some((t) => !localTodoIds.has(t.id))) return true
+  if ((remote.todos ?? []).some((t) => !localTodoIds.has(t.id) && !tomb.todos.has(t.id))) return true
 
   const localCryptoKeys = new Set((local.cryptoHoldings ?? []).map((h) => `${h.walletId}:${h.coinId}`))
-  if ((remote.cryptoHoldings ?? []).some((h) => !localCryptoKeys.has(`${h.walletId}:${h.coinId}`))) return true
+  if (
+    (remote.cryptoHoldings ?? []).some(
+      (h) => !tomb.cryptoHoldings.has(h.id) && !localCryptoKeys.has(`${h.walletId}:${h.coinId}`),
+    )
+  ) {
+    return true
+  }
 
   for (const lh of local.cryptoHoldings ?? []) {
     const rh = (remote.cryptoHoldings ?? []).find((h) => h.walletId === lh.walletId && h.coinId === lh.coinId)
@@ -60,13 +72,11 @@ export async function pullGfFromNeon(): Promise<boolean> {
   if (!shouldImportGfRemote(remote.payload, remote.updatedAt)) return false
 
   const local = exportGfBackup()
-  const mergedHoldings = mergeGfCryptoHoldings(
-    local.cryptoHoldings ?? [],
-    remote.payload.cryptoHoldings ?? [],
-  )
-  importGfBackup({ ...remote.payload, cryptoHoldings: mergedHoldings })
+  const merged = mergeGfBackups(local, remote.payload)
+  importGfBackup(merged)
+  purgeGfTombstonedRecords()
 
-  const mergedKeys = new Set(mergedHoldings.map((h) => `${h.walletId}:${h.coinId}`))
+  const mergedKeys = new Set(merged.cryptoHoldings.map((h) => `${h.walletId}:${h.coinId}`))
   for (const h of listGfCryptoHoldings()) {
     if (!mergedKeys.has(`${h.walletId}:${h.coinId}`)) deleteGfCryptoHolding(h.id)
   }
@@ -87,7 +97,6 @@ export function schedulePushGfToNeon(): void {
 
 export async function pushGfToNeonNow(): Promise<void> {
   await ensureGfDb()
-  await pullGfFromNeon()
   const payload = exportGfBackup()
   await pushNeonSync('gestao_financeira', payload)
 }

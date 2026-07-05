@@ -12,6 +12,7 @@ import {
   DEFAULT_GF_CRYPTO_WALLETS,
 } from '@/lib/gestao-financeira/categories-default'
 import { canonicalHighlightCoinGeckoId } from '@/lib/mercado-highlight-ids'
+import { recordGfTombstone, readGfTombstones } from '@/lib/gestao-financeira/sync-tombstones'
 import type {
   GfBackupPayload,
   GfCashBox,
@@ -482,6 +483,7 @@ export function deleteGfTransaction(id: string): boolean {
   }
 
   sqlRun('DELETE FROM gf_transactions WHERE id = ?', [id])
+  recordGfTombstone('transactions', id)
   scheduleAutoBackup()
   return true
 }
@@ -538,6 +540,7 @@ export function deleteGfDebt(id: string): boolean {
   const row = sqlQuery<Record<string, unknown>>('SELECT id FROM gf_debts WHERE id = ? LIMIT 1', [id])[0]
   if (!row) return false
   sqlRun('DELETE FROM gf_debts WHERE id = ?', [id])
+  recordGfTombstone('debts', id)
   scheduleAutoBackup()
   return true
 }
@@ -729,6 +732,7 @@ export function deleteGfCryptoHolding(id: string): boolean {
   )[0]
   if (!row) return false
   sqlRun('DELETE FROM gf_crypto_holdings WHERE id = ?', [id])
+  recordGfTombstone('cryptoHoldings', id)
   scheduleAutoBackup()
   return true
 }
@@ -894,6 +898,7 @@ export function toggleGfTodoComplete(id: string): GfTodo | null {
 
 export function deleteGfTodo(id: string): boolean {
   sqlRun('DELETE FROM gf_todos WHERE id = ?', [id])
+  recordGfTombstone('todos', id)
   persistAutoBackup(exportGfBackup())
   return true
 }
@@ -989,6 +994,24 @@ export function importGfBackup(payload: GfBackupPayload): void {
     )
   }
   persistAutoBackup(exportGfBackup())
+  purgeGfTombstonedRecords()
+}
+
+/** Garante que exclusões locais não voltem após merge/import da nuvem. */
+export function purgeGfTombstonedRecords(): void {
+  const tomb = readGfTombstones()
+  for (const id of tomb.transactions) {
+    sqlRun('DELETE FROM gf_transactions WHERE id = ?', [id])
+  }
+  for (const id of tomb.debts) {
+    sqlRun('DELETE FROM gf_debts WHERE id = ?', [id])
+  }
+  for (const id of tomb.todos) {
+    sqlRun('DELETE FROM gf_todos WHERE id = ?', [id])
+  }
+  for (const id of tomb.cryptoHoldings) {
+    sqlRun('DELETE FROM gf_crypto_holdings WHERE id = ?', [id])
+  }
 }
 
 export function restoreGfFromAutoBackup(): boolean {

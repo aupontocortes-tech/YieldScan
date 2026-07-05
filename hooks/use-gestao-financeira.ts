@@ -39,7 +39,7 @@ import {
   getDefaultCashBox,
 } from '@/lib/gestao-financeira/db'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
-import { pullGfFromNeon } from '@/lib/neon/sync-gestao'
+import { pullGfFromNeon, pushGfToNeonNow } from '@/lib/neon/sync-gestao'
 import { loadPortfolio } from '@/lib/portfolio/storage'
 import { syncPortfolioToGfCrypto } from '@/lib/portfolio/gf-sync'
 import { generateGfInsights } from '@/lib/gestao-financeira/insights'
@@ -250,33 +250,36 @@ export function useGestaoFinanceira() {
     async (id: string) => {
       const ok = deleteGfTransaction(id)
       if (!ok) return false
-      await reload()
+      await pushGfToNeonNow()
+      applyLocalData(cryptoPrices, brlPerUsd)
       notifyDataChanged()
       return true
     },
-    [reload, notifyDataChanged],
+    [applyLocalData, cryptoPrices, brlPerUsd, notifyDataChanged],
   )
 
   const removeDebt = useCallback(
     async (id: string) => {
       const ok = deleteGfDebt(id)
       if (!ok) return false
-      await reload()
+      await pushGfToNeonNow()
+      applyLocalData(cryptoPrices, brlPerUsd)
       notifyDataChanged()
       return true
     },
-    [reload, notifyDataChanged],
+    [applyLocalData, cryptoPrices, brlPerUsd, notifyDataChanged],
   )
 
   const removeCryptoHolding = useCallback(
     async (id: string) => {
       const ok = deleteGfCryptoHolding(id)
       if (!ok) return false
-      await reload()
+      await pushGfToNeonNow()
+      applyLocalData(cryptoPrices, brlPerUsd)
       notifyDataChanged()
       return true
     },
-    [reload, notifyDataChanged],
+    [applyLocalData, cryptoPrices, brlPerUsd, notifyDataChanged],
   )
 
   const addTodo = useCallback(
