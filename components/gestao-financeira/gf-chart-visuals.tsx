@@ -49,7 +49,24 @@ export function ChartSvgDefs() {
 }
 
 export function fmtBrlChart(n: number): string {
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const v = Number.isFinite(n) ? n : 0
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+export type PieSliceRow = { name: string; value: number }
+
+/** Valores finitos e positivos; funde fatias com o mesmo nome (evita crash do Recharts). */
+export function sanitizePieSlices(rows: PieSliceRow[]): PieSliceRow[] {
+  const merged = new Map<string, number>()
+  for (const row of rows) {
+    const name = String(row.name ?? '').trim() || 'Outros'
+    const value = Number(row.value)
+    if (!Number.isFinite(value) || value <= 0) continue
+    merged.set(name, (merged.get(name) ?? 0) + value)
+  }
+  return [...merged.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
 }
 
 export function GfChartTooltip({

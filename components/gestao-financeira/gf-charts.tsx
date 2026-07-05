@@ -34,6 +34,7 @@ import {
   GfChartTooltip,
   GRID_STROKE,
   pieSliceColor,
+  sanitizePieSlices,
 } from '@/components/gestao-financeira/gf-chart-visuals'
 
 function pieLabel(intuitive: boolean, total: number) {
@@ -77,8 +78,10 @@ export function GfCharts({
   chartHint,
 }: Props) {
   const rangeSuffix = periodLabel ? ` (${periodLabel})` : ' (mês)'
-  const expensePie = categoryTotals(transactions, categories, 'expense', reportRange)
-  const incomePie = categoryTotals(transactions, categories, 'income', reportRange)
+  const expensePie = sanitizePieSlices(
+    categoryTotals(transactions, categories, 'expense', reportRange),
+  )
+  const incomePie = sanitizePieSlices(categoryTotals(transactions, categories, 'income', reportRange))
   const expenseTotal = expensePie.reduce((s, x) => s + x.value, 0)
   const incomeTotal = incomePie.reduce((s, x) => s + x.value, 0)
   const flow = reportRange
@@ -90,13 +93,14 @@ export function GfCharts({
       }))
   const patrimony = patrimonyEvolutionSeries(snapshots)
 
-  const patrimonyPie = [
+  const patrimonyPie = sanitizePieSlices([
     { name: 'Caixa', value: stats.cashBalance },
     { name: 'Investimentos', value: stats.totalInvested },
     { name: 'Cripto', value: stats.totalCrypto },
-  ].filter((x) => x.value > 0)
-  const patrimonyTotal = stats.cashBalance + stats.totalInvested + stats.totalCrypto
-  const cryptoTotal = cryptoBreakdown.reduce((sum, x) => sum + x.value, 0)
+  ])
+  const patrimonyTotal = patrimonyPie.reduce((sum, x) => sum + x.value, 0)
+  const cryptoPie = sanitizePieSlices(cryptoBreakdown)
+  const cryptoTotal = cryptoPie.reduce((sum, x) => sum + x.value, 0)
 
   const expenseTitle = intuitive ? 'Para onde foi o dinheiro' : `Despesas por categoria${rangeSuffix}`
   const flowTitle = intuitive
@@ -134,7 +138,7 @@ export function GfCharts({
                 cornerRadius={6}
                 stroke="#0f172a"
                 strokeWidth={2}
-                label={intuitive ? pieLabel(intuitive, expenseTotal) : true}
+                label={pieLabel(intuitive, expenseTotal)}
                 labelLine={intuitive}
               >
                 {expensePie.map((_, i) => (
@@ -244,12 +248,12 @@ export function GfCharts({
       </ChartCard>
 
       <ChartCard themeIndex={3} title="Criptomoedas na carteira">
-        {cryptoBreakdown.length ? (
+        {cryptoPie.length ? (
           <ResponsiveContainer width="100%" height={chartHeight}>
             <PieChart>
               <ChartSvgDefs />
               <Pie
-                data={cryptoBreakdown}
+                data={cryptoPie}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
@@ -263,7 +267,7 @@ export function GfCharts({
                 label={pieLabel(intuitive, cryptoTotal)}
                 labelLine={intuitive}
               >
-                {cryptoBreakdown.map((_, i) => (
+                {cryptoPie.map((_, i) => (
                   <Cell key={i} fill={pieSliceColor(i)} />
                 ))}
                 <Label

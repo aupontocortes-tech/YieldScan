@@ -26,6 +26,17 @@ export function gfHoldingValueUsd(holding: GfCryptoHolding, prices: GfCryptoPric
   return holding.quantity * gfHoldingPriceUsd(holding, prices)
 }
 
+export function gfHoldingValueBrl(
+  holding: GfCryptoHolding,
+  prices: GfCryptoPriceMap,
+  brlPerUsd = 5.1,
+): number {
+  const brlLive = prices[holding.coinId]?.brl
+  if (brlLive != null && brlLive > 0) return holding.quantity * brlLive
+  const fx = Number.isFinite(brlPerUsd) && brlPerUsd > 0 ? brlPerUsd : 5.1
+  return gfHoldingValueUsd(holding, prices) * fx
+}
+
 const DAY_MS = 86_400_000
 
 function startOfDay(d: Date): Date {
@@ -250,10 +261,12 @@ export function sumCryptoHoldings(
   brlPerUsd = 5.1,
 ): { usd: number; brl: number } {
   let usd = 0
+  let brl = 0
   for (const h of holdings) {
     usd += gfHoldingValueUsd(h, prices)
+    brl += gfHoldingValueBrl(h, prices, brlPerUsd)
   }
-  return { usd, brl: usd * brlPerUsd }
+  return { usd, brl }
 }
 
 export function computeMonthFlow(transactions: GfTransaction[]): {

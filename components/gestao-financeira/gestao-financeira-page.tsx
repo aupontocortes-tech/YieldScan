@@ -22,7 +22,7 @@ import {
   buildPeriodSummary,
   dedupeGfCryptoHoldingsForStats,
   debtsDueSoon,
-  gfHoldingValueUsd,
+  gfHoldingValueBrl,
   resolvePeriodRange,
   shiftPeriodAnchor,
 } from '@/lib/gestao-financeira/calculations'
@@ -280,7 +280,7 @@ export function GestaoFinanceiraPage() {
     return cryptoHoldingsForDisplay
       .map((h) => ({
         name: h.symbol,
-        value: gfHoldingValueUsd(h, gf.cryptoPrices) * gf.brlPerUsd,
+        value: gfHoldingValueBrl(h, gf.cryptoPrices, gf.brlPerUsd),
       }))
       .filter((x) => x.value > 0)
   }, [cryptoHoldingsForDisplay, gf.cryptoPrices, gf.brlPerUsd])
