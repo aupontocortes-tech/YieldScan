@@ -103,6 +103,16 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
   const onFinalRef = useRef<(text: string) => void>(() => {})
   const onInterimRef = useRef<(text: string) => void>(() => {})
   const lastTranscriptRef = useRef('')
+  const committedTranscriptRef = useRef('')
+  const finalDeliveredRef = useRef(false)
+
+  const deliverFinal = useCallback(() => {
+    if (finalDeliveredRef.current) return
+    const final = lastTranscriptRef.current.trim()
+    if (!final) return
+    finalDeliveredRef.current = true
+    onFinalRef.current(final)
+  }, [])
 
   useEffect(() => {
     setMode(resolveSpeechMode(preferRealtime))
@@ -222,19 +232,21 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
     rec.interimResults = true
     rec.maxAlternatives = 1
 
+    committedTranscriptRef.current = ''
     lastTranscriptRef.current = ''
+    finalDeliveredRef.current = false
     wantListenRef.current = true
     setListening(true)
 
     rec.onresult = (ev) => {
       let interim = ''
-      let final = ''
-      for (let i = 0; i < ev.results.length; i++) {
-        const piece = ev.results[i]![0].transcript
-        if (ev.results[i]!.isFinal) final += piece
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const result = ev.results[i]!
+        const piece = result[0]!.transcript
+        if (result.isFinal) committedTranscriptRef.current += piece
         else interim += piece
       }
-      const display = (final + interim).trim()
+      const display = (committedTranscriptRef.current + interim).trim()
       if (!display) return
       lastTranscriptRef.current = display
       onInterimRef.current(display)
@@ -256,8 +268,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       }
       setListening(false)
       wantListenRef.current = false
-      const final = lastTranscriptRef.current.trim()
-      if (final) onFinal(final)
+      deliverFinal()
     }
 
     recRef.current = rec
@@ -269,15 +280,14 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       setMicError('Erro no microfone.')
       return false
     }
-  }, [])
+  }, [deliverFinal])
 
   const stopBrowser = useCallback(() => {
     wantListenRef.current = false
-    const final = lastTranscriptRef.current.trim()
     recRef.current?.stop()
     setListening(false)
-    if (final) onFinalRef.current(final)
-  }, [])
+    deliverFinal()
+  }, [deliverFinal])
 
   const continueWithStream = useCallback(
     (stream: MediaStream, onFinal: (text: string) => void) => {
