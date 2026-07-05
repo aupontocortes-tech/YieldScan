@@ -20,6 +20,7 @@ import {
 import { useGestaoFinanceira } from '@/hooks/use-gestao-financeira'
 import {
   buildPeriodSummary,
+  dedupeGfCryptoHoldingsForStats,
   debtsDueSoon,
   gfHoldingValueUsd,
   resolvePeriodRange,
@@ -270,14 +271,19 @@ export function GestaoFinanceiraPage() {
     void gf.refreshCryptoPrices([cryptoCoin.id])
   }, [cryptoCoin?.id, gf.refreshCryptoPrices])
 
+  const cryptoHoldingsForDisplay = useMemo(
+    () => dedupeGfCryptoHoldingsForStats(gf.cryptoHoldings, gf.cryptoWallets),
+    [gf.cryptoHoldings, gf.cryptoWallets],
+  )
+
   const cryptoBreakdown = useMemo(() => {
-    return gf.cryptoHoldings
+    return cryptoHoldingsForDisplay
       .map((h) => ({
         name: h.symbol,
         value: gfHoldingValueUsd(h, gf.cryptoPrices) * gf.brlPerUsd,
       }))
       .filter((x) => x.value > 0)
-  }, [gf.cryptoHoldings, gf.cryptoPrices, gf.brlPerUsd])
+  }, [cryptoHoldingsForDisplay, gf.cryptoPrices, gf.brlPerUsd])
 
   const dueSoon = useMemo(() => debtsDueSoon(gf.debts), [gf.debts])
   const pendingTodosToday = useMemo(() => countGfTodosToday(gf.todos), [gf.todos])
@@ -669,7 +675,7 @@ export function GestaoFinanceiraPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {gf.cryptoHoldings.map((h) => {
+            {cryptoHoldingsForDisplay.map((h) => {
               const wallet = gf.cryptoWallets.find((w) => w.id === h.walletId)
               const fromPortfolio = wallet?.walletType === 'portfolio'
               return (
@@ -684,7 +690,7 @@ export function GestaoFinanceiraPage() {
                 onDelete={() => setDeleteTarget({ kind: 'crypto', id: h.id, label: h.symbol })}
               />
             )})}
-            {gf.cryptoHoldings.length === 0 ? (
+            {cryptoHoldingsForDisplay.length === 0 ? (
               <p className="text-sm text-muted-foreground sm:col-span-2">Adicione posições em BTC, ETH, SOL e outras moedas CoinGecko.</p>
             ) : null}
           </div>

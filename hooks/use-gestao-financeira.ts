@@ -40,6 +40,8 @@ import {
 } from '@/lib/gestao-financeira/db'
 import { GF_DATA_CHANGED_EVENT } from '@/lib/gestao-financeira/save-parsed-voice'
 import { pullGfFromNeon } from '@/lib/neon/sync-gestao'
+import { loadPortfolio } from '@/lib/portfolio/storage'
+import { syncPortfolioToGfCrypto } from '@/lib/portfolio/gf-sync'
 import { generateGfInsights } from '@/lib/gestao-financeira/insights'
 import { findGfTodoByTitleMatch } from '@/lib/gestao-financeira/todos-utils'
 import { resolveCashBoxId } from '@/lib/gestao-financeira/voice-parser'
@@ -94,6 +96,7 @@ export function useGestaoFinanceira() {
         debts: d,
         investments: inv,
         cryptoHoldings: holdings,
+        cryptoWallets: wallets,
         cryptoPrices: prices,
         brlPerUsd: fx,
       })
@@ -127,6 +130,7 @@ export function useGestaoFinanceira() {
 
   const reload = useCallback(async () => {
     await ensureGfDb()
+    await syncPortfolioToGfCrypto(loadPortfolio())
     const holdings = listGfCryptoHoldings()
     const coinIds = [...new Set(holdings.map((h) => h.coinId))]
 
@@ -141,7 +145,8 @@ export function useGestaoFinanceira() {
     }
 
     // Fase 1b: merge Neon em background
-    void pullGfFromNeon().then(() => {
+    void pullGfFromNeon().then(async () => {
+      await syncPortfolioToGfCrypto(loadPortfolio())
       applyLocalData({}, 5.1)
     })
 

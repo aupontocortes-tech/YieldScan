@@ -1,5 +1,7 @@
+import { canonicalHighlightCoinGeckoId } from '@/lib/mercado-highlight-ids'
 import type {
   GfCryptoHolding,
+  GfCryptoWallet,
   GfDashboardStats,
   GfDateRange,
   GfDebt,
@@ -211,6 +213,37 @@ export function sumInvestments(investments: GfInvestment[]): number {
   return investments.reduce((s, i) => s + (i.currentValue ?? i.amountInvested), 0)
 }
 
+function cryptoHoldingDedupeKey(h: GfCryptoHolding): string {
+  const sym = h.symbol.trim().toUpperCase()
+  if (sym) return `sym:${sym}`
+  const coin = canonicalHighlightCoinGeckoId(h.coinId)
+  if (coin) return `coin:${coin}`
+  return h.id
+}
+
+/** Evita contar duas vezes a mesma moeda (ex.: Hold manual + espelho da Carteira). */
+export function dedupeGfCryptoHoldingsForStats(
+  holdings: GfCryptoHolding[],
+  wallets: Pick<GfCryptoWallet, 'id' | 'walletType'>[],
+): GfCryptoHolding[] {
+  const portfolioIds = new Set(
+    wallets.filter((w) => w.walletType === 'portfolio').map((w) => w.id),
+  )
+  const best = new Map<string, GfCryptoHolding>()
+  for (const h of holdings) {
+    const key = cryptoHoldingDedupeKey(h)
+    const prev = best.get(key)
+    if (!prev) {
+      best.set(key, h)
+      continue
+    }
+    const hPortfolio = portfolioIds.has(h.walletId)
+    const prevPortfolio = portfolioIds.has(prev.walletId)
+    if (hPortfolio && !prevPortfolio) best.set(key, h)
+  }
+  return [...best.values()]
+}
+
 export function sumCryptoHoldings(
   holdings: GfCryptoHolding[],
   prices: GfCryptoPriceMap,
@@ -244,13 +277,18 @@ export function computeDashboardStats(input: {
   debts: GfDebt[]
   investments: GfInvestment[]
   cryptoHoldings: GfCryptoHolding[]
+  cryptoWallets?: Pick<GfCryptoWallet, 'id' | 'walletType'>[]
   cryptoPrices: GfCryptoPriceMap
   brlPerUsd?: number
 }): GfDashboardStats {
   const cashBalance = sumCashBalance(input.cashBoxes)
   const pendingDebts = sumDebtsRemaining(input.debts)
   const totalInvested = sumInvestments(input.investments)
-  const crypto = sumCryptoHoldings(input.cryptoHoldings, input.cryptoPrices, input.brlPerUsd)
+  const holdingsForStats =
+    input.cryptoWallets && input.cryptoWallets.length > 0
+      ? dedupeGfCryptoHoldingsForStats(input.cryptoHoldings, input.cryptoWallets)
+      : input.cryptoHoldings
+  const crypto = sumCryptoHoldings(holdingsForStats, input.cryptoPrices, input.brlPerUsd)
   const totalCrypto = crypto.brl
   const totalPatrimony = cashBalance + totalInvested + totalCrypto
   const netWorth = totalPatrimony - pendingDebts

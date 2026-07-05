@@ -11,6 +11,7 @@ import {
   DEFAULT_GF_CATEGORIES,
   DEFAULT_GF_CRYPTO_WALLETS,
 } from '@/lib/gestao-financeira/categories-default'
+import { canonicalHighlightCoinGeckoId } from '@/lib/mercado-highlight-ids'
 import type {
   GfBackupPayload,
   GfCashBox,
@@ -316,6 +317,7 @@ export async function ensureGfDb(): Promise<void> {
   if (!migrated) {
     runMigrations()
     migrated = true
+    pruneDuplicateGfCryptoHoldings()
     scheduleAutoBackup()
   }
 }
@@ -546,18 +548,107 @@ export function listGfCryptoWallets(): GfCryptoWallet[] {
   ).map(rowCryptoWallet)
 }
 
+function gfHoldingDedupeKey(h: Pick<GfCryptoHolding, 'coinId' | 'symbol'>): string {
+  const sym = h.symbol.trim().toUpperCase()
+  if (sym) return sym
+  const coin = canonicalHighlightCoinGeckoId(h.coinId)
+  return coin || h.coinId.trim().toLowerCase()
+}
+
+function findGfCryptoHoldingInWallet(
+  walletId: string,
+  coinId: string,
+  symbol: string,
+): Record<string, unknown> | undefined {
+  const exact = sqlQuery<Record<string, unknown>>(
+    'SELECT * FROM gf_crypto_holdings WHERE wallet_id = ? AND coin_id = ? LIMIT 1',
+    [walletId, coinId],
+  )[0]
+  if (exact) return exact
+
+  const sym = symbol.trim().toUpperCase()
+  if (!sym) return undefined
+  return sqlQuery<Record<string, unknown>>(
+    'SELECT * FROM gf_crypto_holdings WHERE wallet_id = ? AND UPPER(symbol) = ? LIMIT 1',
+    [walletId, sym],
+  )[0]
+}
+
+/** Funde carteiras portfolio extra na canónica e remove duplicados (backup nuvem + sync). */
+export function pruneDuplicateGfCryptoHoldings(canonicalPortfolioWalletId?: string): boolean {
+  const wallets = listGfCryptoWallets()
+  const portfolioIds = new Set(
+    wallets.filter((w) => w.walletType === 'portfolio').map((w) => w.id),
+  )
+  const canonicalId =
+    canonicalPortfolioWalletId ??
+    wallets.find((w) => w.walletType === 'portfolio')?.id
+
+  let changed = false
+
+  if (canonicalId) {
+    for (const w of wallets) {
+      if (w.walletType !== 'portfolio' || w.id === canonicalId) continue
+      for (const h of listGfCryptoHoldings().filter((x) => x.walletId === w.id)) {
+        upsertGfCryptoHolding({
+          walletId: canonicalId,
+          coinId: h.coinId,
+          symbol: h.symbol,
+          quantity: h.quantity,
+          avgPriceUsd: h.avgPriceUsd,
+        })
+        deleteGfCryptoHolding(h.id)
+        changed = true
+      }
+      sqlRun('DELETE FROM gf_crypto_wallets WHERE id = ?', [w.id])
+      changed = true
+    }
+  }
+
+  const groups = new Map<string, GfCryptoHolding[]>()
+  for (const h of listGfCryptoHoldings()) {
+    const key = gfHoldingDedupeKey(h)
+    const list = groups.get(key) ?? []
+    list.push(h)
+    groups.set(key, list)
+  }
+
+  for (const group of groups.values()) {
+    if (group.length <= 1) continue
+    const sorted = [...group].sort((a, b) => {
+      const aPortfolio = portfolioIds.has(a.walletId) ? 1 : 0
+      const bPortfolio = portfolioIds.has(b.walletId) ? 1 : 0
+      if (aPortfolio !== bPortfolio) return bPortfolio - aPortfolio
+      if (canonicalId) {
+        const aCanon = a.walletId === canonicalId ? 1 : 0
+        const bCanon = b.walletId === canonicalId ? 1 : 0
+        if (aCanon !== bCanon) return bCanon - aCanon
+      }
+      return b.updatedAt.localeCompare(a.updatedAt)
+    })
+    for (const drop of sorted.slice(1)) {
+      if (deleteGfCryptoHolding(drop.id)) changed = true
+    }
+  }
+
+  if (changed) scheduleAutoBackup()
+  return changed
+}
+
 /** Carteira ligada ao módulo /portfolio (sync automático de posições). */
 export function ensureGfPortfolioWallet(displayName?: string): string {
   const existing = sqlQuery<Record<string, unknown>>(
     "SELECT * FROM gf_crypto_wallets WHERE wallet_type = 'portfolio' LIMIT 1",
   )[0]
   if (existing) {
+    const id = String(existing.id)
     const name = displayName?.trim()
     if (name && String(existing.name) !== name) {
-      sqlRun('UPDATE gf_crypto_wallets SET name = ? WHERE id = ?', [name, String(existing.id)])
+      sqlRun('UPDATE gf_crypto_wallets SET name = ? WHERE id = ?', [name, id])
       scheduleAutoBackup()
     }
-    return String(existing.id)
+    pruneDuplicateGfCryptoHoldings(id)
+    return id
   }
   const id = newId()
   const ts = nowIso()
@@ -567,6 +658,7 @@ export function ensureGfPortfolioWallet(displayName?: string): string {
     [id, name, 'portfolio', ts],
   )
   scheduleAutoBackup()
+  pruneDuplicateGfCryptoHoldings(id)
   return id
 }
 
@@ -583,16 +675,20 @@ export function upsertGfCryptoHolding(input: {
   quantity: number
   avgPriceUsd: number
 }): GfCryptoHolding {
-  const existing = sqlQuery<Record<string, unknown>>(
-    'SELECT * FROM gf_crypto_holdings WHERE wallet_id = ? AND coin_id = ? LIMIT 1',
-    [input.walletId, input.coinId],
-  )[0]
+  const existing = findGfCryptoHoldingInWallet(input.walletId, input.coinId, input.symbol)
 
   const ts = nowIso()
   if (existing) {
     sqlRun(
-      'UPDATE gf_crypto_holdings SET quantity = ?, avg_price_usd = ?, symbol = ?, updated_at = ? WHERE id = ?',
-      [input.quantity, input.avgPriceUsd, input.symbol.toUpperCase(), ts, String(existing.id)],
+      'UPDATE gf_crypto_holdings SET coin_id = ?, quantity = ?, avg_price_usd = ?, symbol = ?, updated_at = ? WHERE id = ?',
+      [
+        input.coinId,
+        input.quantity,
+        input.avgPriceUsd,
+        input.symbol.toUpperCase(),
+        ts,
+        String(existing.id),
+      ],
     )
     scheduleAutoBackup()
     return rowCryptoHolding({ ...existing, quantity: input.quantity, avg_price_usd: input.avgPriceUsd, symbol: input.symbol, updated_at: ts })
