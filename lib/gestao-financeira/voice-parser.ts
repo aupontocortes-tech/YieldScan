@@ -26,6 +26,7 @@ const CATEGORY_HINTS: { pattern: RegExp; category: string }[] = [
   { pattern: /\b(uber|99|transporte|ônibus|onibus|metrô|metro|taxi|táxi|passagem|estacionamento|pedágio|pedagio)\b/i, category: 'Transporte' },
   { pattern: /\b(aluguel|moradia|condomínio|condominio|iptu|aluguei|financiamento\s+imobiliário|financiamento\s+imobiliario)\b/i, category: 'Moradia' },
   { pattern: /\b(internet|wi-?fi|wifi|fibra|claro|vivo|tim|oi\s+internet)\b/i, category: 'Internet' },
+  { pattern: /\b(celular|telefone|plano\s+de\s+celular|operadora|recarga|chip)\b/i, category: 'Telefone' },
   { pattern: /\b(água|agua|sabesp|copasa)\b/i, category: 'Água' },
   { pattern: /\b(energia|luz|eletricidade|enel|cpfl|cemig|conta\s+de\s+luz)\b/i, category: 'Energia' },
   { pattern: /\b(saúde|saude|médico|medico|farmácia|farmacia|plano de saúde|hospital|dentista|consulta)\b/i, category: 'Saúde' },

@@ -5,7 +5,7 @@ import {
 } from '@/lib/gestao-financeira/openai-config'
 import type { GfPhraseParseResult } from '@/lib/gestao-financeira/types'
 import type { GfPhraseRouteContext } from '@/lib/gestao-financeira/phrase-router'
-import { routeGfPhraseLocally } from '@/lib/gestao-financeira/phrase-router'
+import { routeGfInstantPhraseLocally, routeGfPhraseLocally } from '@/lib/gestao-financeira/phrase-router'
 import { buildGfPhraseSystemPrompt, phraseResultFromApi } from '@/lib/gestao-financeira/phrase-llm-shared'
 
 type ApiResponse = {
@@ -23,9 +23,6 @@ export async function parseGfPhraseWithOpenAi(
   text: string,
   ctx: GfPhraseRouteContext,
 ): Promise<{ result: GfPhraseParseResult | null; error: string | null }> {
-  const local = routeGfPhraseLocally(text, ctx)
-  if (local) return { result: local, error: null }
-
   const settings = loadGfOpenAiSettings()
   const limit = checkGfOpenAiLimits(settings)
   if (!limit.ok) return { result: null, error: limit.reason }
@@ -66,20 +63,22 @@ export async function parseGfPhraseWithOpenAi(
   }
 }
 
-/** Interpreta frase: router local primeiro; OpenAI se activa. */
+/** Interpreta frase: com OpenAI activa, a IA classifica movimentos; sem API, regras locais. */
 export async function interpretGfPhrase(
   text: string,
   ctx: GfPhraseRouteContext,
 ): Promise<{ result: GfPhraseParseResult | null; error: string | null }> {
-  const local = routeGfPhraseLocally(text, ctx)
-  if (local && !(local.kind === 'transaction' && local.entry.confidence === 'low')) {
-    return { result: local, error: null }
-  }
-
   const settings = loadGfOpenAiSettings()
-  if (settings.enabled && settings.apiKey.trim()) {
+  const openAiReady = settings.enabled && settings.apiKey.trim()
+
+  if (openAiReady) {
+    const instant = routeGfInstantPhraseLocally(text, ctx)
+    if (instant) return { result: instant, error: null }
     return parseGfPhraseWithOpenAi(text, ctx)
   }
+
+  const local = routeGfPhraseLocally(text, ctx)
+  if (local) return { result: local, error: null }
 
   return {
     result: null,

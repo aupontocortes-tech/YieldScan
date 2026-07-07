@@ -38,7 +38,7 @@ type Props = {
 
 /** Registro inteligente — a frase é encaminhada para o destino certo (qualquer aba). */
 export function GfQuickRegister({ gf, onTabChange }: Props) {
-  const speech = useGfSpeechInput({ preferRealtime: true })
+  const speech = useGfSpeechInput()
   const interpretRef = useRef<(phrase: string) => Promise<void>>(async () => {})
   const phraseInputRef = useRef<HTMLTextAreaElement>(null)
   const [text, setText] = useState('')
@@ -199,7 +199,11 @@ export function GfQuickRegister({ gf, onTabChange }: Props) {
           speech.clearError()
         }}
         placeholder={PLACEHOLDER}
-        listeningPlaceholder="A ouvir… fale agora"
+        listeningPlaceholder={
+          speech.mode === 'whisper'
+            ? 'Gravando… toque ■ para parar'
+            : 'A ouvir… fale agora'
+        }
         listening={speech.listening || speech.transcribing}
         transcribing={speech.transcribing}
         requestingPermission={speech.requestingPermission}

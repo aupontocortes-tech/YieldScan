@@ -140,6 +140,23 @@ function looksLikeNewTodo(text: string): boolean {
   return looksLikeScheduledTodo(text)
 }
 
+/** Consultas instantâneas (saldo, relatório, afazeres) — não precisam da OpenAI. */
+export function routeGfInstantPhraseLocally(text: string, ctx: GfPhraseRouteContext): GfPhraseParseResult | null {
+  const phrase = text.trim()
+  if (!phrase) return null
+
+  const todoQuery = tryLocalTodosQuery(phrase, ctx)
+  if (todoQuery) return todoQuery
+
+  const report = tryLocalReportQuery(phrase, ctx)
+  if (report) return report
+
+  const balance = tryLocalBalanceQuery(phrase, ctx)
+  if (balance) return balance
+
+  return null
+}
+
 /** Router local — tenta classificar antes da OpenAI. */
 export function routeGfPhraseLocally(text: string, ctx: GfPhraseRouteContext): GfPhraseParseResult | null {
   const phrase = text.trim()

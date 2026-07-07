@@ -64,6 +64,11 @@ export function normalizeMoneyToken(raw: string): number | null {
 }
 
 function extractMoneyToken(text: string): string | null {
+  const spacedCents = text.match(/(\d{1,4})\s+(\d{2})\s*$/)
+  if (spacedCents) {
+    return `${spacedCents[1]},${spacedCents[2]}`
+  }
+
   const match = text.match(
     /(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d{1,3}(?:\.\d{3})+|\d+(?:,\d{1,2})?|\d+(?:\.\d{1,2})?)/,
   )

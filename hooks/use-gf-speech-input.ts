@@ -317,6 +317,15 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
     }
 
     rec.onend = () => {
+      if (sessionId !== sessionIdRef.current) return
+      if (listeningRef.current) {
+        try {
+          rec.start()
+          return
+        } catch {
+          /* sessão encerrada pelo utilizador */
+        }
+      }
       finishBrowserSession(sessionId, rec)
     }
 
@@ -332,9 +341,9 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
   }, [deliverFinal, finishBrowserSession, setListeningState, teardownBrowserRec])
 
   const stopBrowser = useCallback(() => {
+    setListeningState(false)
     const rec = recRef.current
     if (!rec) {
-      setListeningState(false)
       deliverFinal()
       return
     }
@@ -395,6 +404,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
       }
 
       setMicError(null)
+      setListeningState(true)
 
       const streamPromise = micPromise ?? requestMicStreamSync()
       if (!streamPromise) {
@@ -411,6 +421,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
         })
         .catch((err: unknown) => {
           setRequestingPermission(false)
+          setListeningState(false)
           if (
             isStandalonePwa() &&
             err instanceof DOMException &&
@@ -422,7 +433,7 @@ export function useGfSpeechInput(opts?: { preferRealtime?: boolean }) {
           setMicError(micErrorFromException(err))
         })
     },
-    [transcribing, continueWithStream, stopBrowser, stopWhisperRecording, preferRealtime],
+    [transcribing, continueWithStream, stopBrowser, stopWhisperRecording, preferRealtime, setListeningState],
   )
 
   return {
