@@ -49,7 +49,14 @@ Regras:
 - Para debt: totalAmount obrigatório; name curto (ex.: "Carro", "Cartão").
 - Para report: answer em português com números do contexto (monthIncome, monthExpense…).
 - Caixas: use nomes exactos do contexto quando possível.
-- todayIso do contexto é a referência de datas.`
+- todayIso do contexto é a referência de datas.
+- Para transaction: amount, type e summary são OBRIGATÓRIOS. summary curto em português.
+- Despesas comuns são sempre "transaction" + type "expense", nunca "todos" ou "report".
+
+Exemplos:
+- "gastei R$ 78,73 no plano de celular" → intent "transaction", type "expense", amount 78.73, categoryName "Telefone", description "plano de celular", summary "Despesa R$ 78,73 · Telefone · plano de celular"
+- "paguei a internet 120 reais" → intent "transaction", type "expense", amount 120, categoryName "Internet"
+- "recebi salário 3500" → intent "transaction", type "income", amount 3500, categoryName "Salário"`
 }
 
 function debtFromApi(raw: Record<string, unknown>): GfParsedDebtEntry | null {
@@ -116,6 +123,15 @@ export function phraseResultFromApi(parsed: Record<string, unknown>, todayIso: s
   }
 
   if (intent === 'transaction' || intent == null) {
+    const entry = entryFromApi(parsed)
+    if (entry) {
+      if (!entry.occurredAt) entry.occurredAt = todayIso
+      return { kind: 'transaction', entry, source: 'openai' }
+    }
+  }
+
+  // Resposta com campos de movimento mas intent errado ou ausente
+  if (parsed.type && parsed.amount != null) {
     const entry = entryFromApi(parsed)
     if (entry) {
       if (!entry.occurredAt) entry.occurredAt = todayIso

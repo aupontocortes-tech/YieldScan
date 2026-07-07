@@ -74,7 +74,21 @@ export async function interpretGfPhrase(
   if (openAiReady) {
     const instant = routeGfInstantPhraseLocally(text, ctx)
     if (instant) return { result: instant, error: null }
-    return parseGfPhraseWithOpenAi(text, ctx)
+
+    const local = routeGfPhraseLocally(text, ctx)
+    if (local?.kind === 'transaction' && local.entry.confidence !== 'low') {
+      return { result: local, error: null }
+    }
+    if (local && local.kind !== 'transaction') {
+      return { result: local, error: null }
+    }
+
+    const api = await parseGfPhraseWithOpenAi(text, ctx)
+    if (api.result) return api
+
+    if (local) return { result: local, error: null }
+
+    return api
   }
 
   const local = routeGfPhraseLocally(text, ctx)
