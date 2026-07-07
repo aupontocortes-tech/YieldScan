@@ -11,8 +11,8 @@ const USAGE_KEY = 'gf_openai_usage_v1'
 export const DEFAULT_GF_OPENAI_SETTINGS: GfOpenAiSettings = {
   apiKey: '',
   enabled: false,
-  monthlyBudgetUsd: 1,
-  maxCallsPerDay: 25,
+  monthlyBudgetUsd: 2,
+  maxCallsPerDay: 100,
 }
 
 /** Preços aproximados gpt-4o-mini (USD por 1M tokens). */
@@ -43,6 +43,14 @@ export function loadGfOpenAiSettings(): GfOpenAiSettings {
     ...DEFAULT_GF_OPENAI_SETTINGS,
     ...stored,
     apiKey: typeof stored.apiKey === 'string' ? stored.apiKey.trim() : '',
+    monthlyBudgetUsd:
+      typeof stored.monthlyBudgetUsd === 'number'
+        ? stored.monthlyBudgetUsd
+        : DEFAULT_GF_OPENAI_SETTINGS.monthlyBudgetUsd,
+    maxCallsPerDay:
+      typeof stored.maxCallsPerDay === 'number'
+        ? stored.maxCallsPerDay
+        : DEFAULT_GF_OPENAI_SETTINGS.maxCallsPerDay,
   }
 }
 
@@ -105,6 +113,16 @@ export function appendGfOpenAiUsage(record: Omit<GfOpenAiUsageRecord, 'id'>): Gf
 
 export function clearGfOpenAiUsage(): void {
   writeJson(USAGE_KEY, [])
+}
+
+/** Remove só as chamadas de hoje — libera o limite diário sem apagar o histórico do mês. */
+export function clearGfOpenAiUsageToday(): number {
+  const now = new Date()
+  const records = listGfOpenAiUsageRecords()
+  const kept = records.filter((r) => !isSameDay(new Date(r.at), now))
+  const removed = records.length - kept.length
+  writeJson(USAGE_KEY, kept)
+  return removed
 }
 
 /** Regista uma chamada fictícia mínima (só neste dispositivo) para testar o contador. */
@@ -175,7 +193,7 @@ export function checkGfOpenAiLimits(settings: GfOpenAiSettings): GfOpenAiLimitCh
   if (summary.callsToday >= settings.maxCallsPerDay) {
     return {
       ok: false,
-      reason: `Limite diário atingido (${settings.maxCallsPerDay} chamadas). Tente amanhã ou aumente o limite.`,
+      reason: `Limite diário atingido (${summary.callsToday}/${settings.maxCallsPerDay} chamadas). Abra «Uso da API» para aumentar o limite ou zerar o contador de hoje.`,
     }
   }
   if (summary.monthEstimatedUsd >= settings.monthlyBudgetUsd) {

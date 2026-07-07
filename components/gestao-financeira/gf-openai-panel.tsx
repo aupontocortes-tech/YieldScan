@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
   clearGfOpenAiUsage,
+  clearGfOpenAiUsageToday,
   DEFAULT_GF_OPENAI_SETTINGS,
   loadGfOpenAiSettings,
   maskOpenAiKey,
@@ -44,6 +45,7 @@ function fmtBrl(n: number): string {
 
 export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1 }: Props) {
   const [settings, setSettings] = useState<GfOpenAiSettings>(DEFAULT_GF_OPENAI_SETTINGS)
+  const [savedSettings, setSavedSettings] = useState<GfOpenAiSettings>(DEFAULT_GF_OPENAI_SETTINGS)
   const [keyInput, setKeyInput] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -54,6 +56,7 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
   const refresh = useCallback(() => {
     const s = loadGfOpenAiSettings()
     setSettings(s)
+    setSavedSettings(s)
     setKeyInput('')
     setUsageTick((t) => t + 1)
   }, [])
@@ -76,13 +79,22 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
     const next: GfOpenAiSettings = {
       ...settings,
       apiKey: keyInput.trim() || settings.apiKey,
+      monthlyBudgetUsd: Math.max(0.1, settings.monthlyBudgetUsd),
+      maxCallsPerDay: Math.max(1, Math.floor(settings.maxCallsPerDay)),
     }
     saveGfOpenAiSettings(next)
     setSettings(next)
+    setSavedSettings(next)
     setKeyInput('')
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
+
+  const hasUnsavedChanges =
+    keyInput.trim().length > 0 ||
+    settings.enabled !== savedSettings.enabled ||
+    settings.monthlyBudgetUsd !== savedSettings.monthlyBudgetUsd ||
+    settings.maxCallsPerDay !== savedSettings.maxCallsPerDay
 
   const budgetPct =
     settings.monthlyBudgetUsd > 0
@@ -97,7 +109,12 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) saveGfOpenAiSettings(settings)
+        if (!next && hasUnsavedChanges) {
+          const discard = window.confirm('Descartar alterações não guardadas?')
+          if (!discard) return
+          setSettings(savedSettings)
+          setKeyInput('')
+        }
         onOpenChange(next)
       }}
     >
@@ -151,16 +168,21 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowKey((v) => !v)}>
                   {showKey ? 'Ocultar' : 'Mostrar'}
                 </Button>
-                <Button type="button" size="sm" className="bg-violet-600 hover:bg-violet-500" onClick={handleSave}>
-                  {saved ? 'Guardado' : 'Guardar'}
-                </Button>
               </div>
             </div>
 
+            <div className="rounded-lg border border-border/50 bg-background/40 p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Seus limites</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Digite os valores que quiser e toque <strong>Guardar</strong> no final do painel.
+                </p>
+              </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Orçamento mensal (USD)</Label>
+                <Label htmlFor="gf-openai-budget" className="text-xs">Orçamento mensal (USD)</Label>
                 <Input
+                  id="gf-openai-budget"
                   type="number"
                   min={0.1}
                   step={0.1}
@@ -171,17 +193,39 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Máx. chamadas / dia</Label>
+                <Label htmlFor="gf-openai-calls" className="text-xs">Máx. chamadas / dia</Label>
                 <Input
+                  id="gf-openai-calls"
                   type="number"
                   min={1}
                   step={1}
                   value={settings.maxCallsPerDay}
                   onChange={(e) =>
-                    setSettings((s) => ({ ...s, maxCallsPerDay: Math.max(1, Math.floor(Number(e.target.value) || 1)) }))
+                    setSettings((s) => ({
+                      ...s,
+                      maxCallsPerDay: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                    }))
                   }
                 />
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Cada comando de voz usa ~2 chamadas (transcrever + interpretar).
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[50, 100, 200, 500].map((n) => (
+                    <Button
+                      key={n}
+                      type="button"
+                      variant={settings.maxCallsPerDay === n ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setSettings((s) => ({ ...s, maxCallsPerDay: n }))}
+                    >
+                      {n}
+                    </Button>
+                  ))}
+                </div>
               </div>
+            </div>
             </div>
           </section>
 
@@ -254,7 +298,9 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
             {(budgetPct >= 90 || callsPct >= 90) && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2 text-xs text-amber-100">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                Próximo do limite. A interpretação local continua grátis; a IA pausa ao atingir o tecto.
+                {callsPct >= 100
+                  ? 'Limite diário esgotado. Aumente «Máx. chamadas / dia» e toque Guardar no final, ou zere o contador de hoje.'
+                  : 'Próximo do limite. A interpretação local continua grátis; a IA pausa ao atingir o tecto.'}
               </div>
             )}
 
@@ -298,19 +344,33 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
               <p className="text-xs text-muted-foreground">Nenhuma chamada registada ainda.</p>
             )}
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2 text-destructive hover:text-destructive"
-              onClick={() => {
-                clearGfOpenAiUsage()
-                refresh()
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Limpar histórico de consumo
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  clearGfOpenAiUsageToday()
+                  refresh()
+                }}
+              >
+                Zerar contador de hoje
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2 text-destructive hover:text-destructive"
+                onClick={() => {
+                  clearGfOpenAiUsage()
+                  refresh()
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Limpar todo o histórico
+              </Button>
+            </div>
 
             <details
               className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2"
@@ -344,6 +404,17 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
             A chave fica no seu navegador. Finanças, afazeres e transcrição de voz usam a mesma API e contam no
             orçamento acima. Transacções simples podem ser interpretadas localmente, sem custo.
           </p>
+
+          <div className="sticky bottom-0 -mx-1 flex flex-col gap-2 border-t border-border/50 bg-background/95 pt-3 backdrop-blur-sm">
+            {hasUnsavedChanges ? (
+              <p className="text-xs text-amber-200/90">Alterações não guardadas — toque Guardar para aplicar.</p>
+            ) : saved ? (
+              <p className="text-xs text-emerald-300">Configurações guardadas neste dispositivo.</p>
+            ) : null}
+            <Button type="button" size="lg" className="w-full bg-violet-600 hover:bg-violet-500" onClick={handleSave}>
+              {saved ? 'Guardado ✓' : 'Guardar configurações'}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
