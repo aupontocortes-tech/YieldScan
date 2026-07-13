@@ -135,8 +135,8 @@ const STEP_GUIDE: Record<
     nextLabel: 'Ir para cortar',
   },
   editor: {
-    title: 'Corta o que não queres',
-    body: 'Define início/fim exactos, divide no playhead e ajusta o enquadramento se precisares.',
+    title: 'Corta o vídeo (começo e fim)',
+    body: 'No bloco Corte manual preenche Começo e Fim, ou marca com o tempo actual do player. Depois toca em “Cortar neste intervalo”.',
     nextLabel: 'Ir para legendas',
   },
   captions: {
@@ -1318,7 +1318,7 @@ export function CortesVideoPage() {
           {step === 'editor' && (
             <CortesPanel
               title="Editor de timeline"
-              subtitle="Tempos exactos, clips e enquadramento"
+              subtitle="Começo + fim do corte, clips e enquadramento"
               icon={Scissors}
             >
               <div className="space-y-4">
@@ -1341,48 +1341,93 @@ export function CortesVideoPage() {
                 </div>
 
                 <div className="rounded-xl border border-pink-500/20 bg-gradient-to-br from-pink-500/10 via-zinc-950/60 to-transparent p-4">
-                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-pink-300/90">
-                    Tempo manual
-                  </p>
+                  <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-pink-300/90">
+                        Corte manual
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Define o <span className="text-foreground">começo</span> e o{' '}
+                        <span className="text-foreground">fim</span> do pedaço a ficar no vídeo final.
+                      </p>
+                    </div>
+                    <p className="rounded-lg border border-white/[0.08] bg-black/40 px-2.5 py-1 font-mono text-[11px] text-pink-200">
+                      {formatTimecode(workRange.start)} → {formatTimecode(workRange.end)}
+                      <span className="ml-2 text-muted-foreground">
+                        ({formatDuration(rangeDuration(workRange))})
+                      </span>
+                    </p>
+                  </div>
+
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] text-muted-foreground">Início</Label>
+                    <div className="space-y-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                      <Label className="text-xs font-medium text-emerald-200">Começo do corte</Label>
                       <Input
-                        className="h-10 border-white/10 bg-black/50 font-mono text-sm"
+                        className="h-11 border-white/10 bg-black/50 font-mono text-base"
                         value={customStartTc}
                         onChange={(e) => setCustomStartTc(e.target.value)}
-                        placeholder="30:00"
+                        placeholder="0:00"
+                        inputMode="numeric"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            applyPreset('custom')
+                          }
+                        }}
                       />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full border-emerald-500/25 text-emerald-100"
+                        onClick={() => setRangeFromPlayhead('start')}
+                      >
+                        Usar tempo actual ({formatTimecode(currentTime)})
+                      </Button>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] text-muted-foreground">Fim</Label>
+                    <div className="space-y-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+                      <Label className="text-xs font-medium text-rose-200">Fim do corte</Label>
                       <Input
-                        className="h-10 border-white/10 bg-black/50 font-mono text-sm"
+                        className="h-11 border-white/10 bg-black/50 font-mono text-base"
                         value={customEndTc}
                         onChange={(e) => setCustomEndTc(e.target.value)}
                         placeholder="1:00:00"
+                        inputMode="numeric"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            applyPreset('custom')
+                          }
+                        }}
                       />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full border-rose-500/25 text-rose-100"
+                        onClick={() => setRangeFromPlayhead('end')}
+                      >
+                        Usar tempo actual ({formatTimecode(currentTime)})
+                      </Button>
                     </div>
                   </div>
+
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button type="button" size="sm" onClick={() => applyPreset('custom')}>
-                      Aplicar ao trecho
+                    <Button type="button" className="bg-pink-600 text-white hover:bg-pink-500" onClick={() => applyPreset('custom')}>
+                      <Scissors className="mr-1.5 h-4 w-4" />
+                      Cortar neste intervalo
                     </Button>
                     <Button type="button" size="sm" variant="outline" onClick={addManualClip}>
-                      + Adicionar clip
-                    </Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setRangeFromPlayhead('start')}>
-                      Início = {formatTimecode(currentTime)}
-                    </Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setRangeFromPlayhead('end')}>
-                      Fim = playhead
+                      + Guardar como clip extra
                     </Button>
                   </div>
                   {manualTimeError ? (
                     <p className="mt-2 text-[11px] text-red-400">{manualTimeError}</p>
                   ) : (
                     <p className="mt-2 text-[10px] text-muted-foreground">
-                      Ex.: <span className="font-mono">0:45</span> → <span className="font-mono">3:20</span>
+                      Formato: <span className="font-mono">M:SS</span> ou{' '}
+                      <span className="font-mono">H:MM:SS</span> — ex.: 0:45 → 3:20. O fim tem de ser
+                      depois do começo.
                     </p>
                   )}
                 </div>
@@ -1983,19 +2028,25 @@ function ClipManualRow({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Início</Label>
+          <Label className="text-[10px] font-medium uppercase tracking-wide text-emerald-300/90">
+            Começo
+          </Label>
           <Input
             className="h-9 border-white/10 bg-black/40 font-mono text-xs"
             value={startTc}
             onChange={(e) => setStartTc(e.target.value)}
+            placeholder="0:00"
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Fim</Label>
+          <Label className="text-[10px] font-medium uppercase tracking-wide text-rose-300/90">
+            Fim
+          </Label>
           <Input
             className="h-9 border-white/10 bg-black/40 font-mono text-xs"
             value={endTc}
             onChange={(e) => setEndTc(e.target.value)}
+            placeholder="0:30"
           />
         </div>
       </div>
@@ -2006,7 +2057,7 @@ function ClipManualRow({
         className="w-full border-pink-500/20"
         onClick={() => onApply(startTc, endTc)}
       >
-        Guardar tempos
+        Aplicar começo e fim
       </Button>
     </li>
   )
