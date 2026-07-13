@@ -19,8 +19,89 @@ Platform.shim.eval = async (data: { output: string }) => {
 
 type Body = { url?: string }
 
+type YtClient = 'ANDROID' | 'TV' | 'MWEB' | 'IOS' | 'WEB'
+
+const DOWNLOAD_CLIENTS: YtClient[] = ['ANDROID', 'TV', 'MWEB', 'IOS', 'WEB']
+
 async function getYt() {
   return Innertube.create({ cache: new UniversalCache(false) })
+}
+
+async function readStreamLimited(
+  stream: ReadableStream<Uint8Array>,
+): Promise<{ buffer: Buffer } | { error: string; status: number }> {
+  const chunks: Uint8Array[] = []
+  let total = 0
+  const reader = stream.getReader()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > YOUTUBE_MAX_BYTES) {
+      reader.cancel().catch(() => undefined)
+      return {
+        status: 400,
+        error: `Ficheiro demasiado grande (>${Math.round(YOUTUBE_MAX_BYTES / (1024 * 1024))} MB). Descarrega o vídeo e faz upload manual.`,
+      }
+    }
+    chunks.push(value)
+  }
+  if (!total) {
+    return { status: 502, error: 'O YouTube devolveu um ficheiro vazio.' }
+  }
+  return { buffer: Buffer.concat(chunks.map((c) => Buffer.from(c))) }
+}
+
+function mapYouTubeError(message: string): { error: string; status: number } {
+  const m = message.toLowerCase()
+
+  if (/private|members.?only|login|sign in|login required/.test(m)) {
+    return {
+      status: 403,
+      error:
+        'Este vídeo é privado ou só para membros. Abre no YouTube, descarrega o ficheiro e faz upload aqui.',
+    }
+  }
+  if (/age|confirm.?your.?age|inappropriate|restricted/.test(m)) {
+    return {
+      status: 403,
+      error:
+        'Vídeo com restrição de idade. Faz download no YouTube (conta com idade) e carrega o ficheiro no app.',
+    }
+  }
+  if (/live|premiere/.test(m)) {
+    return {
+      status: 400,
+      error: 'Lives / estreias em directo não são suportadas. Espera o vídeo acabar e tenta de novo.',
+    }
+  }
+  if (/copyright|blocked|not available in your country|geo/.test(m)) {
+    return {
+      status: 403,
+      error:
+        'YouTube bloqueou este vídeo (região/copyright). Descarrega noutra ferramenta e faz upload do ficheiro.',
+    }
+  }
+  if (/no matching formats|decipher|403|status code 4\d\d/.test(m)) {
+    return {
+      status: 502,
+      error:
+        'O YouTube bloqueou o download automático deste link. Solução: descarrega o MP4 e usa “Seleccionar ficheiro”.',
+    }
+  }
+  if (/unavailable|not available/.test(m)) {
+    return {
+      status: 502,
+      error:
+        'Não foi possível obter este vídeo pelo link. Confirma que é público; se continuar, faz upload do ficheiro.',
+    }
+  }
+
+  return {
+    status: 502,
+    error: `Não foi possível importar do YouTube. Tenta upload do ficheiro. (${message.slice(0, 120)})`,
+  }
 }
 
 export async function POST(req: Request) {
@@ -40,85 +121,101 @@ export async function POST(req: Request) {
     )
   }
 
+  const errors: string[] = []
+
   try {
     const yt = await getYt()
-    // ANDROID costuma devolver formatos muxados (vídeo+áudio num só ficheiro).
-    const info = await yt.getBasicInfo(videoId, { client: 'ANDROID' })
-    const basic = info.basic_info
-    const title = (basic?.title || `youtube-${videoId}`).trim()
-    const duration = Number(basic?.duration) || 0
 
-    if (basic?.is_live) {
-      return NextResponse.json(
-        { error: 'Lives em directo não são suportadas. Aguarda o vídeo terminar.' },
-        { status: 400 },
-      )
-    }
+    let title = `youtube-${videoId}`
+    let duration = 0
 
-    if (duration > YOUTUBE_MAX_DURATION_SEC) {
-      return NextResponse.json(
-        {
-          error: `Vídeo demasiado longo (${Math.round(duration / 60)} min). Máx. ${YOUTUBE_MAX_DURATION_SEC / 3600} h — descarrega e faz upload manual.`,
-        },
-        { status: 400 },
-      )
-    }
+    // Metadados — tenta vários clientes
+    for (const client of DOWNLOAD_CLIENTS) {
+      try {
+        const info = await yt.getBasicInfo(videoId, { client })
+        const basic = info.basic_info
+        title = (basic?.title || title).trim()
+        duration = Number(basic?.duration) || duration
 
-    const stream = await yt.download(videoId, {
-      client: 'ANDROID',
-      type: 'video+audio',
-      quality: 'best',
-    })
+        const playability = (info as { playability_status?: { status?: string; reason?: string } })
+          .playability_status
+        if (playability?.status && playability.status !== 'OK') {
+          errors.push(`${client}: ${playability.reason || playability.status}`)
+          continue
+        }
 
-    const chunks: Uint8Array[] = []
-    let total = 0
-    const reader = stream.getReader()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!value) continue
-      total += value.byteLength
-      if (total > YOUTUBE_MAX_BYTES) {
-        reader.cancel().catch(() => undefined)
-        return NextResponse.json(
-          {
-            error: `Ficheiro demasiado grande (>${Math.round(YOUTUBE_MAX_BYTES / (1024 * 1024))} MB). Descarrega e faz upload manual.`,
-          },
-          { status: 400 },
-        )
+        if (basic?.is_live) {
+          return NextResponse.json(
+            { error: 'Lives em directo não são suportadas. Aguarda o vídeo terminar.' },
+            { status: 400 },
+          )
+        }
+
+        if (duration > YOUTUBE_MAX_DURATION_SEC) {
+          return NextResponse.json(
+            {
+              error: `Vídeo demasiado longo (${Math.round(duration / 60)} min). Máx. ${YOUTUBE_MAX_DURATION_SEC / 3600} h — faz upload manual.`,
+            },
+            { status: 400 },
+          )
+        }
+
+        // Preferir mux video+audio; fallback só vídeo se precisar
+        for (const opts of [
+          { client, type: 'video+audio' as const, quality: 'best' as const },
+          { client, type: 'video+audio' as const, quality: '360p' as const },
+        ]) {
+          try {
+            const stream = await yt.download(videoId, opts)
+            const result = await readStreamLimited(stream)
+            if ('error' in result) {
+              return NextResponse.json({ error: result.error }, { status: result.status })
+            }
+
+            const filename = sanitizeYouTubeFilename(title, videoId)
+            return new NextResponse(result.buffer, {
+              status: 200,
+              headers: {
+                'Content-Type': 'video/mp4',
+                'Content-Length': String(result.buffer.byteLength),
+                'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+                'X-Video-Title': encodeURIComponent(title),
+                'X-Video-Id': videoId,
+                'X-Video-Duration': String(duration || 0),
+                'Cache-Control': 'no-store',
+              },
+            })
+          } catch (dlErr) {
+            const msg = dlErr instanceof Error ? dlErr.message : String(dlErr)
+            errors.push(`${client}/${opts.quality}: ${msg}`)
+          }
+        }
+      } catch (infoErr) {
+        const msg = infoErr instanceof Error ? infoErr.message : String(infoErr)
+        errors.push(`${client}/info: ${msg}`)
       }
-      chunks.push(value)
     }
 
-    if (!total) {
-      return NextResponse.json({ error: 'O YouTube devolveu um ficheiro vazio.' }, { status: 502 })
-    }
-
-    const buffer = Buffer.concat(chunks.map((c) => Buffer.from(c)))
-    const filename = sanitizeYouTubeFilename(title, videoId)
-
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'video/mp4',
-        'Content-Length': String(buffer.byteLength),
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        'X-Video-Title': encodeURIComponent(title),
-        'X-Video-Id': videoId,
-        'X-Video-Duration': String(duration || 0),
-        'Cache-Control': 'no-store',
+    const joined = errors.slice(-3).join(' | ') || 'sem formatos disponíveis'
+    console.error('[cortes-video/youtube]', videoId, joined)
+    const mapped = mapYouTubeError(joined)
+    return NextResponse.json(
+      {
+        error: mapped.error,
+        hint: 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.',
       },
-    })
+      { status: mapped.status },
+    )
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Falha ao obter o vídeo do YouTube.'
-    const known =
-      /unavailable|private|age|sign in|login|not available|copyright|members.only/i.test(message)
-        ? 'Este vídeo não está disponível para download (privado, idade, membros ou bloqueado).'
-        : message.includes('No matching formats')
-          ? 'Não foi possível obter um formato com vídeo+áudio. Tenta outro link ou faz upload do ficheiro.'
-          : `Não foi possível importar do YouTube: ${message}`
-
     console.error('[cortes-video/youtube]', videoId, message)
-    return NextResponse.json({ error: known }, { status: 502 })
+    const mapped = mapYouTubeError(message)
+    return NextResponse.json(
+      {
+        error: mapped.error,
+        hint: 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.',
+      },
+      { status: mapped.status },
+    )
   }
 }

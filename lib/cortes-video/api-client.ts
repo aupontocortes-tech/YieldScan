@@ -208,7 +208,9 @@ export async function fetchYouTubeVideoFile(url: string): Promise<File> {
   if (!res.ok) {
     if (contentType.includes('application/json')) {
       const data = await res.json().catch(() => ({}))
-      throw new Error(typeof data.error === 'string' ? data.error : 'Falha ao importar do YouTube.')
+      const err = typeof data.error === 'string' ? data.error : 'Falha ao importar do YouTube.'
+      const hint = typeof data.hint === 'string' ? data.hint : ''
+      throw new Error(hint ? `${err} ${hint}` : err)
     }
     throw new Error('Falha ao importar do YouTube.')
   }
