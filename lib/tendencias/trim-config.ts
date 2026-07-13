@@ -76,6 +76,41 @@ export const TRIM_NARRATIVE_RULES: Array<{
 export const SYMBOL_FROM_NEWS =
   /\b(BTC|ETH|SOL|XRP|BNB|DOGE|ADA|AVAX|LINK|DOT|MATIC|POL|UNI|AAVE|ARB|OP|PEPE|SHIB|HYPE|RENDER|FET|TAO|NEAR|USDT|USDC|ONDO|IMX|SUI|APT|INJ|SEI|WIF|BONK)\b/g
 
+/**
+ * Nomes de cripto → ticker (manchetes PT/EN sem sigla).
+ * Sem isto o top “mais falados” fica vazio quando o texto diz “Bitcoin” em vez de “BTC”.
+ */
+export const CRYPTO_NAME_TO_SYMBOL: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bbitcoins?\b/i, 'BTC'],
+  [/\bethereums?\b/i, 'ETH'],
+  [/\bethers?\b/i, 'ETH'],
+  [/\bsolanas?\b/i, 'SOL'],
+  [/\bripples?\b/i, 'XRP'],
+  [/\bbinance\s*coins?\b/i, 'BNB'],
+  [/\bdogecoins?\b/i, 'DOGE'],
+  [/\bcardanos?\b/i, 'ADA'],
+  [/\bavalanches?\b/i, 'AVAX'],
+  [/\bchainlinks?\b/i, 'LINK'],
+  [/\bpolkadots?\b/i, 'DOT'],
+  [/\bpolygons?\b/i, 'POL'],
+  [/\buniswaps?\b/i, 'UNI'],
+  [/\baaves?\b/i, 'AAVE'],
+  [/\barbitrum\b/i, 'ARB'],
+  [/\bpepe\b/i, 'PEPE'],
+  [/\bshiba\s*inu\b/i, 'SHIB'],
+  [/\bshibas?\b/i, 'SHIB'],
+  [/\brender\s*network\b/i, 'RENDER'],
+  [/\bbittensors?\b/i, 'TAO'],
+  [/\btethers?\b/i, 'USDT'],
+  [/\busd\s*coins?\b/i, 'USDC'],
+  [/\bondo\s*finance\b/i, 'ONDO'],
+  [/\bimmutables?\b/i, 'IMX'],
+  [/\baptos\b/i, 'APT'],
+  [/\binjective\b/i, 'INJ'],
+  [/\bsui\s*network\b/i, 'SUI'],
+  [/\bbonk\b/i, 'BONK'],
+]
+
 /** Tickers de ações US nas manchetes (case-sensitive). */
 export const STOCK_SYMBOL_FROM_NEWS =
   /\b(NVDA|MSFT|GOOGL|GOOG|META|AMZN|AAPL|AMD|AVGO|TSM|INTC|MU|QCOM|ARM|SMCI|PLTR|CRM|ORCL|ADBE|NFLX|COIN|MSTR|TSLA|SPY|QQQ|JPM|BAC|WMT|DIS|BA|XOM|JNJ|V|MA|HD|PG|UNH|COST|IBM|CSCO|UBER|ABNB|NKE|SBUX|PYPL|SHOP|SQ|SNOW|INTU|NOW|PANW|CRWD)\b/g

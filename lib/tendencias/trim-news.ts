@@ -1,6 +1,7 @@
 import type { NewsDataArticle } from '@/lib/news-article'
 import { pareceIngles } from '@/lib/news-lang'
 import {
+  CRYPTO_NAME_TO_SYMBOL,
   NEGATIVE_WORDS,
   POSITIVE_WORDS,
   STOCK_NAME_TO_TICKER,
@@ -50,7 +51,17 @@ function extractSymbols(text: string): string[] {
   for (const m of text.match(SYMBOL_FROM_NEWS) ?? []) {
     set.add(m.toUpperCase())
   }
+  for (const [pattern, symbol] of CRYPTO_NAME_TO_SYMBOL) {
+    if (pattern.test(text)) set.add(symbol)
+  }
   return [...set]
+}
+
+function normalizeHeadlineKey(title: string, link: string): string {
+  const t = title.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (t.length >= 12) return `t:${t}`
+  const l = link.trim().toLowerCase()
+  return l && l !== '#' ? `l:${l}` : `t:${t}`
 }
 
 function extractStockSymbols(text: string): string[] {
@@ -79,8 +90,11 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
     const title = (a.title ?? '').trim()
     const link = (a.link ?? '').trim()
     if (!title || title.length < 8) continue
-    if (seen.has(link)) continue
-    seen.add(link)
+    const key = normalizeHeadlineKey(title, link)
+    if (seen.has(key)) continue
+    if (link && link !== '#' && seen.has(`l:${link.toLowerCase()}`)) continue
+    seen.add(key)
+    if (link && link !== '#') seen.add(`l:${link.toLowerCase()}`)
 
     const summary = stripHtml([a.description, a.content].filter(Boolean).join(' ') || title)
     const text = `${title} ${summary}`.toLowerCase()
