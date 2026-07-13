@@ -125,8 +125,11 @@ export function GfOpenAiPanel({ open, onOpenChange, brlPerUsd: brlFallback = 5.1
             OpenAI · Interpretação e consumo
           </DialogTitle>
           <DialogDescription>
-            Uma chave para tudo: receitas/despesas, voz (Whisper) e afazeres. Modelo: {GF_OPENAI_MODEL}.
-            Limites e consumo são partilhados.
+            Uma chave para tudo: receitas/despesas, voz (Whisper) e afazeres. Preferes colá-la em{' '}
+            <a href="/settings" className="text-indigo-300 underline underline-offset-2">
+              Configurações
+            </a>
+            , onde também comparas gastos com Cortes de Vídeo. Modelo: {GF_OPENAI_MODEL}.
           </DialogDescription>
         </DialogHeader>
 

@@ -15,6 +15,7 @@ const nextConfig = {
     '@orca-so/whirlpools-core',
     '@orca-so/tx-sender',
     '@solana/kit',
+    'youtubei.js',
   ],
   typescript: {
     ignoreBuildErrors: true,
@@ -25,6 +26,13 @@ const nextConfig = {
   async headers() {
     /** Sem CSP global: o Next/React e integrações (Llama, Meteora, ícones) usam muitas origens; CSP fácil de quebrar o build. */
     return [
+      {
+        source: '/cortes-video',
+        headers: [
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          { key: 'Cross-Origin-Embedder-Policy', value: 'credentialless' },
+        ],
+      },
       {
         source: '/:path*',
         headers: [

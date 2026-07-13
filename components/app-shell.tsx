@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Calculator,
+  Clapperboard,
   LockKeyhole,
   Droplets,
   LayoutGrid,
@@ -62,6 +63,12 @@ const MAIN_NAV: NavItem[] = [
   { name: 'Indicadores', href: '/indicator', icon: LineChart, iconClassName: 'text-yellow-400' },
   { name: 'Calculadora', href: '/calculator', icon: Calculator, iconClassName: 'text-violet-400' },
   { name: 'Unlocks', href: '/unlocks', icon: LockKeyhole, iconClassName: 'text-teal-400' },
+  {
+    name: 'Cortes de Vídeo',
+    href: '/cortes-video',
+    icon: Clapperboard,
+    iconClassName: 'text-pink-400',
+  },
   { name: 'DEX', href: '/dex', icon: LayoutGrid, iconClassName: 'text-fuchsia-400' },
   { name: 'Trocas', href: '/swap', icon: ArrowLeftRight, iconClassName: 'text-rose-400' },
   { name: 'Configurações', href: '/settings', icon: Settings, iconClassName: 'text-indigo-400' },
@@ -85,6 +92,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/indicator')) return 'Indicadores'
   if (pathname.startsWith('/calculator')) return 'Calculadora'
   if (pathname.startsWith('/unlocks')) return 'Unlocks'
+  if (pathname.startsWith('/cortes-video')) return 'Cortes de Vídeo com IA'
   if (pathname.startsWith('/dex')) return 'DEX'
   if (pathname.startsWith('/swap')) return 'Trocas'
   if (pathname.startsWith('/settings')) return 'Configurações'

@@ -4,6 +4,11 @@ import type {
   GfOpenAiUsageSummary,
 } from '@/lib/gestao-financeira/types'
 import { scheduleNeonPush } from '@/lib/neon/sync-schedule'
+import {
+  loadCentralOpenAiSettings,
+  registerOpenAiAreaUsage,
+  saveCentralOpenAiSettings,
+} from '@/lib/openai/central-openai'
 
 const SETTINGS_KEY = 'gf_openai_settings_v1'
 const USAGE_KEY = 'gf_openai_usage_v1'
@@ -38,19 +43,15 @@ function writeJson(key: string, value: unknown): void {
 }
 
 export function loadGfOpenAiSettings(): GfOpenAiSettings {
+  const central = loadCentralOpenAiSettings()
   const stored = readJson<Partial<GfOpenAiSettings>>(SETTINGS_KEY, {})
   return {
     ...DEFAULT_GF_OPENAI_SETTINGS,
     ...stored,
-    apiKey: typeof stored.apiKey === 'string' ? stored.apiKey.trim() : '',
-    monthlyBudgetUsd:
-      typeof stored.monthlyBudgetUsd === 'number'
-        ? stored.monthlyBudgetUsd
-        : DEFAULT_GF_OPENAI_SETTINGS.monthlyBudgetUsd,
-    maxCallsPerDay:
-      typeof stored.maxCallsPerDay === 'number'
-        ? stored.maxCallsPerDay
-        : DEFAULT_GF_OPENAI_SETTINGS.maxCallsPerDay,
+    apiKey: central.apiKey || (typeof stored.apiKey === 'string' ? stored.apiKey.trim() : ''),
+    enabled: central.apiKey ? central.enabled : Boolean(stored.enabled),
+    monthlyBudgetUsd: central.monthlyBudgetUsd || DEFAULT_GF_OPENAI_SETTINGS.monthlyBudgetUsd,
+    maxCallsPerDay: central.maxCallsPerDay || DEFAULT_GF_OPENAI_SETTINGS.maxCallsPerDay,
   }
 }
 
@@ -58,6 +59,15 @@ export function saveGfOpenAiSettings(settings: GfOpenAiSettings, opts?: { skipNe
   writeJson(SETTINGS_KEY, {
     ...settings,
     apiKey: settings.apiKey.trim(),
+  })
+  // Mantém a Configurações central alinhada
+  const central = loadCentralOpenAiSettings()
+  saveCentralOpenAiSettings({
+    ...central,
+    apiKey: settings.apiKey.trim() || central.apiKey,
+    enabled: settings.enabled,
+    monthlyBudgetUsd: settings.monthlyBudgetUsd,
+    maxCallsPerDay: settings.maxCallsPerDay,
   })
   if (!opts?.skipNeon) scheduleNeonPush('gf_prefs')
 }
@@ -108,6 +118,12 @@ export function appendGfOpenAiUsage(record: Omit<GfOpenAiUsageRecord, 'id'>): Gf
   const list = listGfOpenAiUsageRecords()
   list.unshift(full)
   writeJson(USAGE_KEY, list.slice(0, 500))
+  registerOpenAiAreaUsage({
+    area: 'gestao_financeira',
+    estimatedUsd: full.estimatedUsd,
+    feature: full.feature,
+    model: full.model,
+  })
   return full
 }
 
