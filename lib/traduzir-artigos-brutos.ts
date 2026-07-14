@@ -73,9 +73,12 @@ export async function traduzirArtigosBrutos(
     else cryptoNeed.push(i)
   }
 
-  /** Reserva slots: ~70% cripto, resto ações — garante CoinDesk/cv antes da bolsa. */
-  const cryptoBudget = Math.min(cryptoNeed.length, Math.max(1, Math.ceil(limit * 0.72)))
-  const stocksBudget = Math.min(stocksNeed.length, Math.max(0, limit - cryptoBudget))
+  /** Reserva: mínimo de slots para ações + maioria cripto (top falados e feed). */
+  const cryptoBudget = Math.min(cryptoNeed.length, Math.max(1, Math.ceil(limit * 0.65)))
+  const stocksBudget = Math.min(
+    stocksNeed.length,
+    Math.max(stocksNeed.length > 0 ? 12 : 0, limit - cryptoBudget),
+  )
   const indices = [...cryptoNeed.slice(0, cryptoBudget), ...stocksNeed.slice(0, stocksBudget)]
 
   for (let b = 0; b < indices.length; b += LOTE_PARALELO) {

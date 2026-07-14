@@ -48,12 +48,22 @@ function scoreTextSentiment(text: string): {
   return { sentiment: 'NEUTRO', score }
 }
 
+/** Tickers curtos seguros em minúsculas (evita near→NEAR, sol→SOL, link→LINK). */
+const CRYPTO_TICKER_CI =
+  /\b(btc|eth|xrp|bnb|doge|avax|dot|matic|uni|aave|arb|pepe|shib|usdt|usdc|ondo|imx|apt|inj|bonk|wif|tao|fet)\b/gi
+
 function extractSymbols(text: string): string[] {
   const set = new Set<string>()
-  for (const m of text.match(SYMBOL_FROM_NEWS) ?? []) {
+  /** Tickers em MAIÚSCULAS no texto original (NEAR, SOL, LINK, OP…). */
+  const upperRe = new RegExp(SYMBOL_FROM_NEWS.source, 'g')
+  for (const m of text.match(upperRe) ?? []) {
+    set.add(m.toUpperCase())
+  }
+  for (const m of text.match(CRYPTO_TICKER_CI) ?? []) {
     set.add(m.toUpperCase())
   }
   for (const [pattern, symbol] of CRYPTO_NAME_TO_SYMBOL) {
+    pattern.lastIndex = 0
     if (pattern.test(text)) set.add(symbol)
   }
   return [...set]
@@ -68,10 +78,12 @@ function normalizeHeadlineKey(title: string, link: string): string {
 
 function extractStockSymbols(text: string): string[] {
   const set = new Set<string>()
-  for (const m of text.match(STOCK_SYMBOL_FROM_NEWS) ?? []) {
+  const tickerRe = new RegExp(STOCK_SYMBOL_FROM_NEWS.source, 'g')
+  for (const m of text.match(tickerRe) ?? []) {
     set.add(m.toUpperCase())
   }
   for (const [pattern, ticker] of STOCK_NAME_TO_TICKER) {
+    pattern.lastIndex = 0
     if (pattern.test(text)) set.add(ticker)
   }
   return [...set]
@@ -192,6 +204,12 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
   /** Contagens da aba Notícias alinham com as manchetes mostradas (PT). */
   const ptArticles = articles.filter((a) => !pareceIngles(a.title))
 
+  /**
+   * Top “mais falados”: conta menções em todo o conjunto já curado (inclui títulos
+   * traduzidos que ainda “parecem” EN) — senão o ranking ficava vazio com frequência.
+   */
+  const mentionPool = articles.length ? articles : ptArticles
+
   let positivo = 0
   let neutro = 0
   let negativo = 0
@@ -243,10 +261,10 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     40,
   ).map(({ kind: _kind, ...h }) => h)
 
-  /** Top cripto e ações — todas as manchetes PT (até expandir para 20 na UI). */
+  /** Top cripto e ações — menções no pool curado (até expandir para 20 na UI). */
   const cryptoMentions = new Map<string, number>()
   const stockMentions = new Map<string, number>()
-  for (const a of ptArticles) {
+  for (const a of mentionPool) {
     for (const sym of a.symbols) {
       cryptoMentions.set(sym, (cryptoMentions.get(sym) ?? 0) + 1)
     }

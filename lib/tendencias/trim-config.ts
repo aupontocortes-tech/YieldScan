@@ -79,23 +79,33 @@ export const SYMBOL_FROM_NEWS =
 /**
  * Nomes de cripto → ticker (manchetes PT/EN sem sigla).
  * Sem isto o top “mais falados” fica vazio quando o texto diz “Bitcoin” em vez de “BTC”.
+ * Evitar tickers curtos ambíguos (sol/near/link/ada) — só nomes claros + BTC/ETH/XRP/BNB.
  */
 export const CRYPTO_NAME_TO_SYMBOL: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bbitcoins?\b/i, 'BTC'],
+  [/\bbit\s*coins?\b/i, 'BTC'],
+  [/\bbtc\b/i, 'BTC'],
   [/\bethereums?\b/i, 'ETH'],
   [/\bethers?\b/i, 'ETH'],
+  [/\beth\b/i, 'ETH'],
   [/\bsolanas?\b/i, 'SOL'],
   [/\bripples?\b/i, 'XRP'],
+  [/\bxrp\b/i, 'XRP'],
   [/\bbinance\s*coins?\b/i, 'BNB'],
+  [/\bbnb\b/i, 'BNB'],
   [/\bdogecoins?\b/i, 'DOGE'],
+  [/\bdoge\b/i, 'DOGE'],
   [/\bcardanos?\b/i, 'ADA'],
   [/\bavalanches?\b/i, 'AVAX'],
+  [/\bavax\b/i, 'AVAX'],
   [/\bchainlinks?\b/i, 'LINK'],
   [/\bpolkadots?\b/i, 'DOT'],
   [/\bpolygons?\b/i, 'POL'],
+  [/\bpolygon\b/i, 'POL'],
   [/\buniswaps?\b/i, 'UNI'],
   [/\baaves?\b/i, 'AAVE'],
   [/\barbitrum\b/i, 'ARB'],
+  [/\boptimism\b/i, 'OP'],
   [/\bpepe\b/i, 'PEPE'],
   [/\bshiba\s*inu\b/i, 'SHIB'],
   [/\bshibas?\b/i, 'SHIB'],
@@ -107,7 +117,7 @@ export const CRYPTO_NAME_TO_SYMBOL: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bimmutables?\b/i, 'IMX'],
   [/\baptos\b/i, 'APT'],
   [/\binjective\b/i, 'INJ'],
-  [/\bsui\s*network\b/i, 'SUI'],
+  [/\bsui\s+network\b/i, 'SUI'],
   [/\bbonk\b/i, 'BONK'],
 ]
 
@@ -115,23 +125,39 @@ export const CRYPTO_NAME_TO_SYMBOL: ReadonlyArray<readonly [RegExp, string]> = [
 export const STOCK_SYMBOL_FROM_NEWS =
   /\b(NVDA|MSFT|GOOGL|GOOG|META|AMZN|AAPL|AMD|AVGO|TSM|INTC|MU|QCOM|ARM|SMCI|PLTR|CRM|ORCL|ADBE|NFLX|COIN|MSTR|TSLA|SPY|QQQ|JPM|BAC|WMT|DIS|BA|XOM|JNJ|V|MA|HD|PG|UNH|COST|IBM|CSCO|UBER|ABNB|NKE|SBUX|PYPL|SHOP|SQ|SNOW|INTU|NOW|PANW|CRWD)\b/g
 
-/** Nomes de empresa → ticker (menções sem sigla). */
+/** Nomes de empresa → ticker (menções sem sigla, PT/EN). */
 export const STOCK_NAME_TO_TICKER: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bNVIDIA\b/i, 'NVDA'],
+  [/\bNvidia\b/, 'NVDA'],
   [/\bMicrosoft\b/i, 'MSFT'],
   [/\bApple\b/i, 'AAPL'],
   [/\bAlphabet\b/i, 'GOOGL'],
   [/\bGoogle\b/i, 'GOOGL'],
+  [/\bMeta\s+Platforms\b/i, 'META'],
   [/\bMeta\b/i, 'META'],
+  [/\bFacebook\b/i, 'META'],
   [/\bAmazon\b/i, 'AMZN'],
   [/\bTesla\b/i, 'TSLA'],
   [/\bNetflix\b/i, 'NFLX'],
   [/\bCoinbase\b/i, 'COIN'],
   [/\bMicroStrategy\b/i, 'MSTR'],
+  [/\bBroadcom\b/i, 'AVGO'],
   [/\bAMD\b/i, 'AMD'],
   [/\bIntel\b/i, 'INTC'],
   [/\bPalantir\b/i, 'PLTR'],
+  [/\bOracle\b/i, 'ORCL'],
+  [/\bAdobe\b/i, 'ADBE'],
+  [/\bUber\b/i, 'UBER'],
+  [/\bAirbnb\b/i, 'ABNB'],
+  [/\bPaypal\b/i, 'PYPL'],
+  [/\bPayPal\b/i, 'PYPL'],
+  [/\bShopify\b/i, 'SHOP'],
+  [/\bSalesforce\b/i, 'CRM'],
+  [/\bSnowflake\b/i, 'SNOW'],
+  [/\bCrowdstrike\b/i, 'CRWD'],
+  [/\bCrowdStrike\b/i, 'CRWD'],
   [/\bS&P\s*500\b/i, 'SPY'],
   [/\bNasdaq\b/i, 'QQQ'],
   [/\bWall Street\b/i, 'SPY'],
+  [/\bDow\s*Jones\b/i, 'SPY'],
 ]
