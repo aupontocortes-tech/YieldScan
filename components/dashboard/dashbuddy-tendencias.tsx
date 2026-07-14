@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { type TrimClass, SCORE_MERCADO_NOME, SCORE_TENDENCIA_FORMULA, SCORE_TENDENCIA_NOME } from '@/lib/tendencias/trim-config'
+import { headlineMatchesMentionFilter } from '@/lib/tendencias/news-mention-match'
 import { cn } from '@/lib/utils'
 import {
   getGfSpeechActiveId,
@@ -64,18 +65,10 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-
-type NewsMentionFilter = { kind: 'crypto' | 'stock'; symbol: string }
-
-function headlineMatchesMention(h: TendenciasNewsHeadline, filter: NewsMentionFilter): boolean {
-  const sym = filter.symbol.toUpperCase()
-  if (filter.kind === 'crypto') {
-    return h.symbols.some((s) => s.toUpperCase() === sym)
-  }
-  return (h.stockSymbols ?? []).some((s) => s.toUpperCase() === sym)
-}
 import Link from 'next/link'
 import { DefiTendenciasPanel } from '@/components/dashboard/defi-tendencias-panel'
+
+type NewsMentionFilter = { kind: 'crypto' | 'stock'; symbol: string }
 
 const PERIOD_LABEL: Record<MomentumPeriod, string> = {
   '24h': '24 horas',
@@ -895,12 +888,31 @@ export function DashbuddyTendencias() {
   }, [data, tokenFilter])
 
   const displayedNewsHeadlines = useMemo(() => {
-    const all = data?.news.headlines ?? []
+    const diversified = data?.news.headlines ?? []
+    const pool =
+      data?.news.headlinesAll?.length ? data.news.headlinesAll : diversified
+
     if (mentionFilter) {
-      return all.filter((h) => headlineMatchesMention(h, mentionFilter))
+      return pool
+        .filter((h) => headlineMatchesMentionFilter(h, mentionFilter))
+        .slice(0, 25)
     }
-    return all.slice(0, NEWS_HEADLINES_DEFAULT)
-  }, [data?.news.headlines, mentionFilter])
+    return diversified.slice(0, NEWS_HEADLINES_DEFAULT)
+  }, [data?.news.headlines, data?.news.headlinesAll, mentionFilter])
+
+  const filteredNewsStats = useMemo(() => {
+    if (!mentionFilter) return null
+    const items = displayedNewsHeadlines
+    let positivo = 0
+    let neutro = 0
+    let negativo = 0
+    for (const h of items) {
+      if (h.sentiment === 'optimista') positivo++
+      else if (h.sentiment === 'pessimista') negativo++
+      else neutro++
+    }
+    return { positivo, neutro, negativo, total: items.length }
+  }, [displayedNewsHeadlines, mentionFilter])
 
   if (!mounted || isLoading) {
     return (
@@ -1288,13 +1300,18 @@ export function DashbuddyTendencias() {
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge className="bg-emerald-500/15 text-emerald-400">
                 <TrendingUp className="mr-1 h-3 w-3" />
-                {news.positivo} positivas
+                {(filteredNewsStats ?? news).positivo} positivas
               </Badge>
-              <Badge variant="outline">{news.neutro} neutras</Badge>
+              <Badge variant="outline">{(filteredNewsStats ?? news).neutro} neutras</Badge>
               <Badge className="bg-red-500/15 text-red-400">
                 <TrendingDown className="mr-1 h-3 w-3" />
-                {news.negativo} negativas
+                {(filteredNewsStats ?? news).negativo} negativas
               </Badge>
+              {mentionFilter && filteredNewsStats ? (
+                <Badge variant="outline" className="border-yellow-500/40 text-yellow-500">
+                  {filteredNewsStats.total} sobre {mentionFilter.symbol}
+                </Badge>
+              ) : null}
             </div>
             <NewsTopMentionsSection
               topCrypto={
@@ -1356,6 +1373,19 @@ export function DashbuddyTendencias() {
                   </Link>
                 </p>
               )}
+            {mentionFilter && displayedNewsHeadlines.length > 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                A mostrar só manchetes de {mentionFilter.symbol}
+                {mentionFilter.kind === 'stock' ? ' (ação US)' : ' (cripto)'}.{' '}
+                <button
+                  type="button"
+                  className="font-medium text-yellow-500 hover:underline"
+                  onClick={() => setMentionFilter(null)}
+                >
+                  Ver todas
+                </button>
+              </p>
+            ) : null}
             <Link
               href="/news/noticias"
               className="text-sm font-medium text-yellow-500 hover:underline"

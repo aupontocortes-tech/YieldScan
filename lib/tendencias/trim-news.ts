@@ -279,26 +279,38 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     .filter((n) => n.mentionCount > 0)
     .sort((a, b) => b.mentionCount - a.mentionCount)
 
-  const headlines: TendenciasNewsHeadline[] = balanceHeadlines(
-    ptArticles.map((a) => ({
-      titulo: a.title,
-      impacto: a.sentiment,
-      categoria: a.kind === 'stocks' ? 'ACOES' : 'CRIPTO',
-      link: a.link,
-      sentiment: a.sentiment === 'POSITIVO' ? 'optimista' : a.sentiment === 'NEGATIVO' ? 'pessimista' : 'neutro',
-      relevance: clamp(a.sentimentScore, 0, 100),
-      intensity: clamp(
-        (a.symbols.length + a.stockSymbols.length) * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0),
-        0,
-        100,
-      ),
-      mentionCount: a.symbols.length + a.stockSymbols.length,
-      symbols: a.symbols,
-      stockSymbols: a.stockSymbols,
-      kind: a.kind,
-    })),
-    40,
-  ).map(({ kind: _kind, ...h }) => h)
+  const toHeadline = (a: TrimNewsArticle) => ({
+    titulo: a.title,
+    impacto: a.sentiment,
+    categoria: a.kind === 'stocks' ? 'ACOES' : 'CRIPTO',
+    link: a.link,
+    sentiment: (a.sentiment === 'POSITIVO'
+      ? 'optimista'
+      : a.sentiment === 'NEGATIVO'
+        ? 'pessimista'
+        : 'neutro') as TendenciasNewsHeadline['sentiment'],
+    relevance: clamp(a.sentimentScore, 0, 100),
+    intensity: clamp(
+      (a.symbols.length + a.stockSymbols.length) * 20 + (a.sentiment !== 'NEUTRO' ? 15 : 0),
+      0,
+      100,
+    ),
+    mentionCount: a.symbols.length + a.stockSymbols.length,
+    symbols: a.symbols,
+    stockSymbols: a.stockSymbols,
+    kind: a.kind,
+  })
+
+  const allMapped = mentionPool.map(toHeadline)
+  /** Pool completo — o filtro da UI pesquisa aqui (não só no slice diversificado). */
+  const headlinesAll: TendenciasNewsHeadline[] = allMapped
+    .map(({ kind: _kind, ...h }) => h)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, 80)
+
+  const headlines: TendenciasNewsHeadline[] = balanceHeadlines(allMapped, 40).map(
+    ({ kind: _kind, ...h }) => h,
+  )
 
   /** Top cripto e ações — menções no pool curado (até expandir para 20 na UI). */
   const cryptoMentions = new Map<string, number>()
@@ -314,7 +326,7 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
   const topCryptoMentions = topMentionList(cryptoMentions, 20)
   const topStockMentions = topMentionList(stockMentions, 20)
 
-  for (const h of headlines) {
+  for (const h of headlinesAll) {
     for (const sym of h.symbols) {
       tokenMentions.set(sym, (tokenMentions.get(sym) ?? 0) + 1)
     }
@@ -330,6 +342,7 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
       topStockMentions,
       dominantNarrative: narrativeStats[0]?.label ?? null,
       headlines,
+      headlinesAll,
     },
     tokenMentions,
     tokenNewsScore,

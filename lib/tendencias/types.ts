@@ -112,7 +112,10 @@ export type TendenciasNewsInsight = {
   /** Período usado na variação de preço mostrada ao lado do ticker. */
   rankingPeriod?: MomentumPeriod
   dominantNarrative: string | null
+  /** Manchetes diversificadas (vista por defeito). */
   headlines: TendenciasNewsHeadline[]
+  /** Pool completo para o filtro “mais falados” (cripto/ação). */
+  headlinesAll?: TendenciasNewsHeadline[]
 }
 
 export type TendenciasMarketPanel = {
