@@ -66,7 +66,8 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
   const url = new URL(GNEWS_SEARCH)
   url.searchParams.set('q', q)
   url.searchParams.set('lang', 'pt')
-  url.searchParams.set('country', 'pt')
+  /** BR: mais volume de manchetes PT cripto; PT sozinho deixava o feed vazio com frequência. */
+  url.searchParams.set('country', 'br')
   /** Mais recentes primeiro (default da API é relevance → artigos velhos populares no topo). */
   url.searchParams.set('sortby', 'publishedAt')
   url.searchParams.set('max', '25')
@@ -144,6 +145,8 @@ export async function fetchGnewsStocksAsArticles(): Promise<NewsDataArticle[]> {
         if (!mapped) continue
         out.push({
           ...mapped,
+          /** Feed de bolsa é EN — não marcar como pt (senão salta tradução e o filtro apaga tudo). */
+          language: 'en',
           article_id: `gnews-stocks-${mapped.article_id ?? hashId(mapped.link ?? '')}`,
         })
       }

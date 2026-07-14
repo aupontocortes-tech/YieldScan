@@ -141,21 +141,26 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
   tokenNewsScore: Map<string, number>
   narratives: TrimNarrativeStats[]
 } {
-  let positivo = 0
-  let neutro = 0
-  let negativo = 0
   const tokenMentions = new Map<string, number>()
   const tokenNewsScore = new Map<string, number>()
 
   for (const a of articles) {
-    if (a.sentiment === 'POSITIVO') positivo++
-    else if (a.sentiment === 'NEGATIVO') negativo++
-    else neutro++
-
     for (const sym of a.symbols) {
       const prev = tokenNewsScore.get(sym) ?? 50
       tokenNewsScore.set(sym, clamp((prev + a.sentimentScore) / 2, 0, 100))
     }
+  }
+
+  /** Contagens da aba Notícias alinham com as manchetes mostradas (PT). */
+  const ptArticles = articles.filter((a) => !pareceIngles(a.title))
+
+  let positivo = 0
+  let neutro = 0
+  let negativo = 0
+  for (const a of ptArticles) {
+    if (a.sentiment === 'POSITIVO') positivo++
+    else if (a.sentiment === 'NEGATIVO') negativo++
+    else neutro++
   }
 
   const narrativeStats: TrimNarrativeStats[] = TRIM_NARRATIVE_RULES.map((rule) => {
@@ -178,8 +183,6 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
   })
     .filter((n) => n.mentionCount > 0)
     .sort((a, b) => b.mentionCount - a.mentionCount)
-
-  const ptArticles = articles.filter((a) => !pareceIngles(a.title))
 
   const headlines: TendenciasNewsHeadline[] = ptArticles
     .map((a) => ({

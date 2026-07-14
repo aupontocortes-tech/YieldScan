@@ -37,9 +37,11 @@ async function traduzirCampos(a: NewsDataArticle): Promise<NewsDataArticle> {
 export function filtrarArtigosPortuguesParaFeed(articles: NewsDataArticle[]): NewsDataArticle[] {
   return articles.filter((a) => {
     const title = String(a.title ?? '').trim()
-    if (!title || pareceIngles(title)) return false
+    if (!title) return false
     const lang = String(a.language ?? '').toLowerCase()
+    /** Fonte GNews / tradução bem-sucedida: confiar no idioma (evita apagar “Bitcoin sobe…”). */
     if (lang.startsWith('pt')) return true
+    if (pareceIngles(title)) return false
     const bloco = `${title} ${a.description ?? ''}`
     return parecePortugues(bloco)
   })

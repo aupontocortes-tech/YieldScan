@@ -63,9 +63,16 @@ const fetchRaw = unstable_cache(
       28_000,
       null,
     )
-    /** Só português: traduzidas ou, se timeout, só fontes já PT (ex. GNews). */
+    /**
+     * Só português: traduzidas; se timeout OU tradução devolveu 0 (quota MyMemory, etc.),
+     * cai para fontes já PT (ex. GNews) — `[]` é truthy e antes engolia o fallback.
+     */
+    const traduzidasOk =
+      newsArticlesTranslated != null && newsArticlesTranslated.length > 0
+        ? newsArticlesTranslated
+        : null
     const newsArticles =
-      newsArticlesTranslated ?? filtrarArtigosPortuguesParaFeed(newsArticlesRaw)
+      traduzidasOk ?? filtrarArtigosPortuguesParaFeed(newsArticlesRaw)
 
     const now = Date.now()
     const unlocks = (emissions.data ?? [])
@@ -115,7 +122,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v14'],
+  ['tendencias-trim-v15'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -151,7 +158,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v14',
+          'X-Tendencias-Cache': 'trim-v15',
         }
 
     return NextResponse.json(
