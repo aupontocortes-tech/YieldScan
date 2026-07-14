@@ -158,6 +158,4 @@ export const STOCK_NAME_TO_TICKER: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bCrowdStrike\b/i, 'CRWD'],
   [/\bS&P\s*500\b/i, 'SPY'],
   [/\bNasdaq\b/i, 'QQQ'],
-  [/\bWall Street\b/i, 'SPY'],
-  [/\bDow\s*Jones\b/i, 'SPY'],
 ]

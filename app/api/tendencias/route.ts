@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidateTag, unstable_cache } from 'next/cache'
 import { fetchCryptoCvAsArticles } from '@/lib/crypto-cv-news'
+import { fetchCryptopanicAsNewsDataArticles } from '@/lib/cryptopanic'
 import { fetchGnewsAsArticles, fetchGnewsStocksAsArticles } from '@/lib/gnews'
 import { fetchCoindeskAsArticles } from '@/lib/tendencias/fetch-coindesk'
 import {
@@ -33,7 +34,7 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, gnewsTrim, gnewsStocks, cvNews, coindeskNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
+    const [markets, global, trending, gnewsTrim, gnewsStocks, cvNews, coindeskNews, cryptopanicNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
         fetchTendenciasMarkets(70),
         fetchTendenciasGlobal(),
@@ -42,6 +43,7 @@ const fetchRaw = unstable_cache(
         fetchGnewsStocksAsArticles(),
         fetchCryptoCvAsArticles(),
         fetchCoindeskAsArticles(45),
+        fetchCryptopanicAsNewsDataArticles(),
         fetchFmpCryptoQuotes(),
         withTimeout(fetchUsEquitiesSnapshot(), 10_000, null),
         Promise.race([
@@ -57,12 +59,17 @@ const fetchRaw = unstable_cache(
       ])
 
     /**
-     * Cripto primeiro (GNews PT → CoinDesk → cv), ações US depois.
-     * Antes stocks ocupavam slots da tradução e a cripto (EN) ficava de fora do feed.
+     * Cripto diversificada (GNews multi-query → CoinDesk → CryptoPanic → cv), ações US depois.
      */
-    const newsArticlesRaw = mergeTrimNewsArticles(gnewsTrim, coindeskNews, cvNews, gnewsStocks)
+    const newsArticlesRaw = mergeTrimNewsArticles(
+      gnewsTrim,
+      coindeskNews,
+      cryptopanicNews,
+      cvNews,
+      gnewsStocks,
+    )
     const newsArticlesTranslated = await withTimeout(
-      traduzirArtigosBrutos(newsArticlesRaw, 55),
+      traduzirArtigosBrutos(newsArticlesRaw, 60),
       28_000,
       null,
     )
@@ -125,7 +132,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v17'],
+  ['tendencias-trim-v18'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -161,7 +168,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v17',
+          'X-Tendencias-Cache': 'trim-v18',
         }
 
     return NextResponse.json(

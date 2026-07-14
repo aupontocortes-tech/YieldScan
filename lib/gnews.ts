@@ -55,24 +55,20 @@ function mapArticle(raw: Record<string, unknown>): NewsDataArticle | null {
   }
 }
 
-/**
- * Notícias de cripto (PT). Sem chave ou erro de rede devolve array vazio.
- * Query focada em cripto — IA/economia/geopolítica diluíam o feed e empurravam CoinDesk para fora.
- */
-export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
-  const token = process.env.GNEWS_API_KEY?.trim()
-  if (!token) return []
+type GnewsSearchOpts = {
+  lang: 'pt' | 'en'
+  country?: string
+  max: number
+  mark: 'crypto' | 'stocks'
+}
 
-  const q =
-    'bitcoin OR ethereum OR criptomoeda OR cripto OR blockchain OR solana OR "mercado cripto" OR "moeda digital" OR cryptocurrency'
+async function fetchGnewsSearch(token: string, q: string, opts: GnewsSearchOpts): Promise<NewsDataArticle[]> {
   const url = new URL(GNEWS_SEARCH)
   url.searchParams.set('q', q)
-  url.searchParams.set('lang', 'pt')
-  /** BR: mais volume de manchetes PT cripto. */
-  url.searchParams.set('country', 'br')
-  /** Mais recentes primeiro (default da API é relevance → artigos velhos populares no topo). */
+  url.searchParams.set('lang', opts.lang)
+  if (opts.country) url.searchParams.set('country', opts.country)
   url.searchParams.set('sortby', 'publishedAt')
-  url.searchParams.set('max', '25')
+  url.searchParams.set('max', String(opts.max))
   url.searchParams.set('token', token)
 
   try {
@@ -98,11 +94,22 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
         if (!r) continue
         const mapped = mapArticle(r)
         if (!mapped) continue
-        out.push({
-          ...mapped,
-          category: ['crypto'],
-          _yieldscanCryptoQuery: true,
-        })
+        if (opts.mark === 'crypto') {
+          out.push({
+            ...mapped,
+            language: opts.lang === 'pt' ? 'pt' : 'en',
+            category: ['crypto'],
+            _yieldscanCryptoQuery: true,
+          })
+        } else {
+          out.push({
+            ...mapped,
+            language: 'en',
+            category: ['stocks'],
+            article_id: `gnews-stocks-${mapped.article_id ?? hashId(mapped.link ?? '')}`,
+            _yieldscanStocksQuery: true,
+          })
+        }
       }
       return out
     } finally {
@@ -113,57 +120,57 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
   }
 }
 
-/** Notícias de bolsa americana (EN + PT). */
+function dedupeByLink(lists: NewsDataArticle[][]): NewsDataArticle[] {
+  const seen = new Set<string>()
+  const out: NewsDataArticle[] = []
+  for (const list of lists) {
+    for (const a of list) {
+      const key = (a.link ?? '').trim().toLowerCase() || (a.title ?? '').trim().toLowerCase()
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push(a)
+    }
+  }
+  return out
+}
+
+/**
+ * Notícias de cripto (PT) — várias queries em paralelo para não ficar só Bitcoin.
+ * Sem chave ou erro de rede devolve array vazio.
+ */
+export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
+  const token = process.env.GNEWS_API_KEY?.trim()
+  if (!token) return []
+
+  const queries = [
+    'bitcoin OR btc',
+    'ethereum OR eth OR ether',
+    'solana OR xrp OR cardano OR avalanche OR dogecoin OR ripple',
+    'criptomoeda OR "mercado cripto" OR defi OR blockchain',
+  ]
+
+  const batches = await Promise.all(
+    queries.map((q) =>
+      fetchGnewsSearch(token, q, { lang: 'pt', country: 'br', max: 10, mark: 'crypto' }),
+    ),
+  )
+  return dedupeByLink(batches).slice(0, 40)
+}
+
+/** Notícias de bolsa americana — queries por tema para diversificar além de índices. */
 export async function fetchGnewsStocksAsArticles(): Promise<NewsDataArticle[]> {
   const token = process.env.GNEWS_API_KEY?.trim()
   if (!token) return []
 
-  const q =
-    'NASDAQ OR NYSE OR "stock market" OR earnings OR NVIDIA OR Apple OR Microsoft OR Tesla OR "Wall Street" OR "S&P 500"'
-  const url = new URL(GNEWS_SEARCH)
-  url.searchParams.set('q', q)
-  url.searchParams.set('lang', 'en')
-  url.searchParams.set('sortby', 'publishedAt')
-  url.searchParams.set('max', '20')
-  url.searchParams.set('token', token)
+  const queries = [
+    'NVIDIA OR AMD OR Broadcom OR semiconductor',
+    'Apple OR Microsoft OR Google OR Amazon OR Meta',
+    'Tesla OR Netflix OR Coinbase OR Palantir',
+    'NASDAQ OR "S&P 500" OR earnings OR "Wall Street"',
+  ]
 
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 12_000)
-    try {
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-        signal: controller.signal,
-      })
-      const data: unknown = await res.json().catch(() => null)
-      const rec = asRecord(data)
-      if (!rec) return []
-
-      const articles = rec.articles
-      if (!Array.isArray(articles)) return []
-
-      const out: NewsDataArticle[] = []
-      for (const item of articles) {
-        const r = asRecord(item)
-        if (!r) continue
-        const mapped = mapArticle(r)
-        if (!mapped) continue
-        out.push({
-          ...mapped,
-          /** Feed de bolsa é EN — não marcar como pt (senão salta tradução e o filtro apaga tudo). */
-          language: 'en',
-          category: ['stocks'],
-          article_id: `gnews-stocks-${mapped.article_id ?? hashId(mapped.link ?? '')}`,
-          _yieldscanStocksQuery: true,
-        })
-      }
-      return out
-    } finally {
-      clearTimeout(timer)
-    }
-  } catch {
-    return []
-  }
+  const batches = await Promise.all(
+    queries.map((q) => fetchGnewsSearch(token, q, { lang: 'en', max: 8, mark: 'stocks' })),
+  )
+  return dedupeByLink(batches).slice(0, 32)
 }

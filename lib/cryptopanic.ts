@@ -77,6 +77,15 @@ function mapPost(raw: Record<string, unknown>): NewsDataArticle | null {
   const desc = str(raw.description)
   const image = str(raw.image)
 
+  const currencyCodes: string[] = []
+  if (Array.isArray(raw.currencies)) {
+    for (const c of raw.currencies) {
+      const rec = asRecord(c)
+      const code = rec ? str(rec.code || rec.symbol).toUpperCase() : ''
+      if (code && /^[A-Z0-9]{2,12}$/.test(code)) currencyCodes.push(code)
+    }
+  }
+
   return {
     article_id: articleId,
     title,
@@ -90,8 +99,9 @@ function mapPost(raw: Record<string, unknown>): NewsDataArticle | null {
     category: ['crypto', 'cryptocurrency'],
     country: null,
     language: source ? str(source.region) || 'en' : 'en',
-    keywords: null,
+    keywords: currencyCodes.length ? currencyCodes : null,
     image_url: image || null,
+    _yieldscanCryptoQuery: true,
   }
 }
 

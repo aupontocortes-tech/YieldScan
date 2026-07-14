@@ -324,8 +324,12 @@ function buildDataSources(input: {
   if (input.hasUsEquities) sources.push('acoes-us')
   const hasCoindesk = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('coindesk-'))
   const hasCv = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('cryptocv-'))
+  const hasGnews = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('gnews-'))
+  const hasPanic = input.newsArticles.some((a) => String(a.article_id ?? '').startsWith('cryptopanic-'))
+  if (hasGnews) sources.push('gnews')
   if (hasCoindesk) sources.push('coindesk')
-  if (hasCv || !hasCoindesk) sources.push('cryptocurrency.cv')
+  if (hasPanic) sources.push('cryptopanic')
+  if (hasCv || (!hasCoindesk && !hasPanic)) sources.push('cryptocurrency.cv')
   return sources
 }
 

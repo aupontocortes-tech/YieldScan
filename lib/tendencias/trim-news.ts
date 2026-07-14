@@ -105,7 +105,7 @@ function classifyArticleKind(
   if (a._yieldscanStocksQuery && !a._yieldscanCryptoQuery) return 'stocks'
   if (a._yieldscanCryptoQuery) return 'crypto'
   const id = String(a.article_id ?? '')
-  if (id.startsWith('coindesk-') || id.startsWith('cryptocv-') || id.startsWith('gnews-')) {
+  if (id.startsWith('coindesk-') || id.startsWith('cryptocv-') || id.startsWith('cryptopanic-') || id.startsWith('gnews-')) {
     if (id.startsWith('gnews-stocks-')) return 'stocks'
     return 'crypto'
   }
@@ -116,17 +116,56 @@ function classifyArticleKind(
   return 'crypto'
 }
 
-/** Lista com cripto à frente, depois ações — evita feed só de bolsa US. */
-function balanceHeadlines<T extends { kind: 'crypto' | 'stocks' | 'mixed'; relevance: number }>(
-  items: T[],
-  limit = 40,
-): T[] {
+/** Chave para diversificar o feed (evita 10 manchetes BTC seguidas). */
+function primaryMentionKey(symbols: string[], stockSymbols: string[], kind: 'crypto' | 'stocks' | 'mixed'): string {
+  if (kind === 'stocks') return stockSymbols[0] ? `s:${stockSymbols[0]}` : 's:geral'
+  if (symbols[0]) return `c:${symbols[0]}`
+  if (stockSymbols[0]) return `s:${stockSymbols[0]}`
+  return kind === 'stocks' ? 's:geral' : 'c:geral'
+}
+
+/**
+ * Round-robin por símbolo principal + quota cripto/ações.
+ * Limita BTC (e outros) a no máximo 3 manchetes no topo do feed.
+ */
+function balanceHeadlines<
+  T extends {
+    kind: 'crypto' | 'stocks' | 'mixed'
+    relevance: number
+    symbols: string[]
+    stockSymbols: string[]
+  },
+>(items: T[], limit = 40): T[] {
   const crypto = items.filter((h) => h.kind !== 'stocks').sort((a, b) => b.relevance - a.relevance)
   const stocks = items.filter((h) => h.kind === 'stocks').sort((a, b) => b.relevance - a.relevance)
-  const cryptoSlots = Math.min(crypto.length, Math.max(28, Math.ceil(limit * 0.7)))
+
+  const MAX_PER_KEY = 3
+  const cryptoSlots = Math.min(crypto.length, Math.max(24, Math.ceil(limit * 0.65)))
   const stockSlots = Math.min(stocks.length, limit - Math.min(cryptoSlots, crypto.length))
-  const out: T[] = [...crypto.slice(0, cryptoSlots), ...stocks.slice(0, stockSlots)]
-  return out.slice(0, limit)
+
+  function takeDiverse(list: T[], slots: number): T[] {
+    const buckets = new Map<string, T[]>()
+    for (const h of list) {
+      const key = primaryMentionKey(h.symbols, h.stockSymbols ?? [], h.kind)
+      const arr = buckets.get(key) ?? []
+      if (arr.length < MAX_PER_KEY) arr.push(h)
+      buckets.set(key, arr)
+    }
+    const queues = [...buckets.values()]
+    const out: T[] = []
+    let guard = 0
+    while (out.length < slots && queues.some((q) => q.length) && guard < slots * 4) {
+      guard++
+      for (const q of queues) {
+        if (out.length >= slots) break
+        const next = q.shift()
+        if (next) out.push(next)
+      }
+    }
+    return out
+  }
+
+  return [...takeDiverse(crypto, cryptoSlots), ...takeDiverse(stocks, stockSlots)].slice(0, limit)
 }
 
 export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsArticle[] {
@@ -154,7 +193,7 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
     const finalScore =
       preset === 'POSITIVO' ? Math.max(score, 65) : preset === 'NEGATIVO' ? Math.min(score, 35) : score
 
-    const bloc = `${title} ${summary}`
+    const bloc = `${title} ${summary} ${(a.keywords ?? []).join(' ')}`
     const symbols = extractSymbols(bloc)
     const stockSymbols = extractStockSymbols(bloc)
     out.push({
@@ -172,7 +211,7 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
     })
   }
 
-  return out.slice(0, 50)
+  return out.slice(0, 70)
 }
 
 export type TrimNarrativeStats = {
