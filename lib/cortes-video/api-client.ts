@@ -212,7 +212,16 @@ export async function fetchYouTubeVideoFile(url: string): Promise<File> {
       const hint = typeof data.hint === 'string' ? data.hint : ''
       throw new Error(hint ? `${err} ${hint}` : err)
     }
-    throw new Error('Falha ao importar do YouTube.')
+    if (res.status === 413) {
+      throw new Error(
+        'O vídeo é demasiado grande para o servidor. Descarrega o MP4 e usa “Seleccionar ficheiro”.',
+      )
+    }
+    throw new Error(
+      res.status === 504 || res.status === 408
+        ? 'Timeout ao obter o vídeo. Tenta um vídeo mais curto ou faz upload do ficheiro.'
+        : 'Falha ao importar do YouTube. Em produção o YouTube bloqueia muitos servidores — usa upload do ficheiro.',
+    )
   }
 
   const blob = await res.blob()

@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-/** Interpreter necessário para decifrar alguns streams. */
+/** Interpreter necessário para decifrar alguns streams (WEB). */
 Platform.shim.eval = async (data: { output: string }) => {
   // eslint-disable-next-line no-new-func
   return new Function(data.output)()
@@ -19,38 +19,62 @@ Platform.shim.eval = async (data: { output: string }) => {
 
 type Body = { url?: string }
 
-type YtClient = 'ANDROID' | 'TV' | 'MWEB' | 'IOS' | 'WEB'
+type YtClient = 'ANDROID' | 'IOS' | 'TV' | 'MWEB' | 'WEB'
 
-const DOWNLOAD_CLIENTS: YtClient[] = ['ANDROID', 'TV', 'MWEB', 'IOS', 'WEB']
+/**
+ * ANDROID/IOS primeiro: funcionam melhor em IPs de datacenter (Vercel)
+ * e evitam muitos erros de decipher que quebram no deploy.
+ */
+const DOWNLOAD_CLIENTS: YtClient[] = ['ANDROID', 'IOS', 'TV', 'MWEB', 'WEB']
+
+const isVercel = Boolean(process.env.VERCEL)
 
 async function getYt() {
-  return Innertube.create({ cache: new UniversalCache(false) })
+  return Innertube.create({
+    cache: new UniversalCache(false),
+    /** Sessão local — mais estável em serverless do que pedir tokens a YT. */
+    generate_session_locally: true,
+  })
 }
 
-async function readStreamLimited(
-  stream: ReadableStream<Uint8Array>,
-): Promise<{ buffer: Buffer } | { error: string; status: number }> {
-  const chunks: Uint8Array[] = []
+/**
+ * Corta a stream se ultrapassar o limite — sem carregar tudo para RAM
+ * (buffer completo rebentava o limite de 4.5 MB do Vercel).
+ */
+function limitStream(
+  source: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): ReadableStream<Uint8Array> {
   let total = 0
-  const reader = stream.getReader()
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    if (!value) continue
-    total += value.byteLength
-    if (total > YOUTUBE_MAX_BYTES) {
-      reader.cancel().catch(() => undefined)
-      return {
-        status: 400,
-        error: `Ficheiro demasiado grande (>${Math.round(YOUTUBE_MAX_BYTES / (1024 * 1024))} MB). Descarrega o vídeo e faz upload manual.`,
+  const reader = source.getReader()
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read()
+        if (done) {
+          controller.close()
+          return
+        }
+        if (!value?.byteLength) return
+        total += value.byteLength
+        if (total > maxBytes) {
+          reader.cancel().catch(() => undefined)
+          controller.error(
+            new Error(
+              `Ficheiro demasiado grande (>${Math.round(maxBytes / (1024 * 1024))} MB). Descarrega o vídeo e faz upload manual.`,
+            ),
+          )
+          return
+        }
+        controller.enqueue(value)
+      } catch (err) {
+        controller.error(err)
       }
-    }
-    chunks.push(value)
-  }
-  if (!total) {
-    return { status: 502, error: 'O YouTube devolveu um ficheiro vazio.' }
-  }
-  return { buffer: Buffer.concat(chunks.map((c) => Buffer.from(c))) }
+    },
+    cancel(reason) {
+      return reader.cancel(reason)
+    },
+  })
 }
 
 function mapYouTubeError(message: string): { error: string; status: number } {
@@ -83,11 +107,18 @@ function mapYouTubeError(message: string): { error: string; status: number } {
         'YouTube bloqueou este vídeo (região/copyright). Descarrega noutra ferramenta e faz upload do ficheiro.',
     }
   }
-  if (/no matching formats|decipher|403|status code 4\d\d/.test(m)) {
+  if (/bot|captcha|unusual traffic|too many requests|rate.?limit|429/.test(m)) {
+    return {
+      status: 503,
+      error:
+        'O YouTube está a bloquear o servidor (IP do hosting). Em produção isto é comum — descarrega o MP4 e usa “Seleccionar ficheiro”.',
+    }
+  }
+  if (/no matching formats|decipher|403|status code 4\d\d|payload.?too.?large|413/.test(m)) {
     return {
       status: 502,
       error:
-        'O YouTube bloqueou o download automático deste link. Solução: descarrega o MP4 e usa “Seleccionar ficheiro”.',
+        'O YouTube bloqueou o download automático neste servidor. Solução: descarrega o MP4 e usa “Seleccionar ficheiro”.',
     }
   }
   if (/unavailable|not available/.test(m)) {
@@ -129,7 +160,6 @@ export async function POST(req: Request) {
     let title = `youtube-${videoId}`
     let duration = 0
 
-    // Metadados — tenta vários clientes
     for (const client of DOWNLOAD_CLIENTS) {
       try {
         const info = await yt.getBasicInfo(videoId, { client })
@@ -160,34 +190,39 @@ export async function POST(req: Request) {
           )
         }
 
-        // Preferir mux video+audio; fallback só vídeo se precisar
-        for (const opts of [
-          { client, type: 'video+audio' as const, quality: 'best' as const },
-          { client, type: 'video+audio' as const, quality: '360p' as const },
-        ]) {
-          try {
-            const stream = await yt.download(videoId, opts)
-            const result = await readStreamLimited(stream)
-            if ('error' in result) {
-              return NextResponse.json({ error: result.error }, { status: result.status })
-            }
+        /**
+         * Em Vercel: 360p primeiro (mais rápido, menos timeout).
+         * Em local: best primeiro (melhor qualidade).
+         */
+        const qualityOrder = isVercel
+          ? (['360p', 'best'] as const)
+          : (['best', '360p'] as const)
 
+        for (const quality of qualityOrder) {
+          try {
+            const stream = await yt.download(videoId, {
+              client,
+              type: 'video+audio',
+              quality,
+            })
+            const limited = limitStream(stream, YOUTUBE_MAX_BYTES)
             const filename = sanitizeYouTubeFilename(title, videoId)
-            return new NextResponse(result.buffer, {
+
+            return new NextResponse(limited, {
               status: 200,
               headers: {
                 'Content-Type': 'video/mp4',
-                'Content-Length': String(result.buffer.byteLength),
                 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
                 'X-Video-Title': encodeURIComponent(title),
                 'X-Video-Id': videoId,
                 'X-Video-Duration': String(duration || 0),
+                'X-Accel-Buffering': 'no',
                 'Cache-Control': 'no-store',
               },
             })
           } catch (dlErr) {
             const msg = dlErr instanceof Error ? dlErr.message : String(dlErr)
-            errors.push(`${client}/${opts.quality}: ${msg}`)
+            errors.push(`${client}/${quality}: ${msg}`)
           }
         }
       } catch (infoErr) {
@@ -197,12 +232,14 @@ export async function POST(req: Request) {
     }
 
     const joined = errors.slice(-3).join(' | ') || 'sem formatos disponíveis'
-    console.error('[cortes-video/youtube]', videoId, joined)
+    console.error('[cortes-video/youtube]', videoId, joined, { vercel: isVercel })
     const mapped = mapYouTubeError(joined)
     return NextResponse.json(
       {
         error: mapped.error,
-        hint: 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.',
+        hint: isVercel
+          ? 'No hosting (Vercel) o YouTube bloqueia muitos IPs. Alternativa fiável: descarrega o MP4 e usa “Seleccionar ficheiro”.'
+          : 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.',
       },
       { status: mapped.status },
     )
