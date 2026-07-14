@@ -106,6 +106,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, userId, linked: true, configured: true })
     }
 
+    if (action === 'unlink') {
+      const userId = userIdFrom(req)
+      if (!userId) {
+        return NextResponse.json({ error: 'ID de dispositivo em falta.' }, { status: 400 })
+      }
+      /** Confirma a senha antes de apagar o vínculo na nuvem. */
+      const rows = await sql`
+        SELECT pass_key FROM yieldscan_sync_passkeys
+        WHERE user_id = ${userId} AND pass_key = ${passKey}
+        LIMIT 1
+      `
+      if (rows.length === 0) {
+        return NextResponse.json(
+          { error: 'Senha incorrecta ou esta conta não tem senha de sync.' },
+          { status: 401 },
+        )
+      }
+      await sql`DELETE FROM yieldscan_sync_passkeys WHERE user_id = ${userId}`
+      return NextResponse.json({ ok: true, unlinked: true, configured: true })
+    }
+
     return NextResponse.json({ error: 'Acção inválida.' }, { status: 400 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro Neon'

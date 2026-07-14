@@ -8,11 +8,12 @@ import { Label } from '@/components/ui/label'
 import {
   getDeviceUserId,
   isDeviceUserIdLockedByEnv,
+  resetDeviceUserId,
   setDeviceUserId,
 } from '@/lib/neon/device-user'
 import { NEON_USER_HEADER } from '@/lib/neon/constants'
 import { maskUserId } from '@/lib/neon/format-user-id'
-import { Cloud, KeyRound, Loader2, Smartphone } from 'lucide-react'
+import { Cloud, KeyRound, Loader2, LogOut, Smartphone, Unplug } from 'lucide-react'
 
 type SyncStatus = {
   configured: boolean
@@ -25,14 +26,16 @@ export function SyncAccountPanel() {
   const [registerPass, setRegisterPass] = useState('')
   const [registerConfirm, setRegisterConfirm] = useState('')
   const [loginPass, setLoginPass] = useState('')
-  const [busy, setBusy] = useState<'register' | 'login' | null>(null)
+  const [unlinkPass, setUnlinkPass] = useState('')
+  const [busy, setBusy] = useState<'register' | 'login' | 'disconnect' | 'unlink' | null>(null)
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [userIdLabel, setUserIdLabel] = useState('')
 
   const envLocked = isDeviceUserIdLockedByEnv()
-  const currentUserId = typeof window !== 'undefined' ? getDeviceUserId() : ''
 
   const refreshStatus = useCallback(async () => {
     setStatus((s) => ({ ...s, loading: true }))
+    setUserIdLabel(maskUserId(getDeviceUserId()))
     try {
       const res = await fetch('/api/sync/auth', {
         headers: { [NEON_USER_HEADER]: getDeviceUserId() },
@@ -58,6 +61,7 @@ export function SyncAccountPanel() {
     setRegisterPass('')
     setRegisterConfirm('')
     setLoginPass('')
+    setUnlinkPass('')
     void refreshStatus()
     window.setTimeout(() => window.location.reload(), 800)
   }
@@ -116,6 +120,61 @@ export function SyncAccountPanel() {
     }
   }
 
+  const handleDisconnectDevice = () => {
+    setMessage(null)
+    if (envLocked) {
+      setMessage({ type: 'err', text: 'O ID está fixo por variável de ambiente neste aparelho.' })
+      return
+    }
+    const ok = window.confirm(
+      'Desligar a sync neste aparelho?\n\nOs dados na nuvem e noutros aparelhos mantêm-se. Este dispositivo passa a usar um ID novo (conta local).',
+    )
+    if (!ok) return
+    setBusy('disconnect')
+    try {
+      resetDeviceUserId()
+      afterSuccess('Conta desligada neste aparelho. A recarregar…')
+    } catch {
+      setMessage({ type: 'err', text: 'Não foi possível desligar neste aparelho.' })
+      setBusy(null)
+    }
+  }
+
+  const handleUnlinkPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setMessage(null)
+    if (envLocked) {
+      setMessage({ type: 'err', text: 'O ID está fixo por variável de ambiente neste aparelho.' })
+      return
+    }
+    const ok = window.confirm(
+      'Remover a senha de sync desta conta na nuvem?\n\nDeixa de poder “Ligar esta conta” noutros aparelhos com esta senha. Os dados financeiros na nuvem não são apagados.',
+    )
+    if (!ok) return
+    setBusy('unlink')
+    try {
+      const res = await fetch('/api/sync/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [NEON_USER_HEADER]: getDeviceUserId(),
+        },
+        body: JSON.stringify({ action: 'unlink', passphrase: unlinkPass }),
+      })
+      const json = (await res.json()) as { error?: string }
+      if (!res.ok) {
+        setMessage({ type: 'err', text: json.error ?? 'Não foi possível remover a senha.' })
+        return
+      }
+      resetDeviceUserId()
+      afterSuccess('Senha de sync removida. Conta desligada neste aparelho.')
+    } catch {
+      setMessage({ type: 'err', text: 'Falha de rede.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <Card className="max-w-xl border-indigo-500/25 bg-gradient-to-br from-indigo-950/30 via-card/40 to-violet-950/20">
       <CardHeader>
@@ -131,7 +190,7 @@ export function SyncAccountPanel() {
         <div className="rounded-lg border border-border/50 bg-background/40 px-3 py-2 text-sm">
           <p className="text-muted-foreground">
             ID deste aparelho:{' '}
-            <span className="font-mono text-xs text-foreground">{maskUserId(currentUserId)}</span>
+            <span className="font-mono text-xs text-foreground">{userIdLabel || '—'}</span>
           </p>
           {status.loading ? (
             <p className="mt-1 text-xs text-muted-foreground">A verificar nuvem…</p>
@@ -150,6 +209,64 @@ export function SyncAccountPanel() {
             </p>
           ) : null}
         </div>
+
+        {status.configured && !envLocked ? (
+          <div className="space-y-3 rounded-xl border border-rose-500/25 bg-rose-950/15 p-4">
+            <div className="flex items-start gap-2">
+              <Unplug className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+              <div>
+                <p className="text-sm font-medium text-rose-200">Desligar conta</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pare a sync neste aparelho. Os dados na nuvem e noutros dispositivos continuam disponíveis.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-rose-500/40 text-rose-200 hover:bg-rose-500/10 hover:text-rose-100"
+              disabled={busy !== null}
+              onClick={handleDisconnectDevice}
+            >
+              {busy === 'disconnect' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="mr-2 h-4 w-4" />
+              )}
+              Desligar neste aparelho
+            </Button>
+
+            {status.linked ? (
+              <form onSubmit={handleUnlinkPassword} className="space-y-3 border-t border-rose-500/20 pt-3">
+                <p className="text-xs text-muted-foreground">
+                  Ou remova a senha de sync na nuvem (pede a senha para confirmar):
+                </p>
+                <div>
+                  <Label htmlFor="sync-unlink-pass">Senha actual</Label>
+                  <Input
+                    id="sync-unlink-pass"
+                    type="password"
+                    autoComplete="current-password"
+                    value={unlinkPass}
+                    onChange={(e) => setUnlinkPass(e.target.value)}
+                    placeholder="Confirme a senha de sync"
+                    disabled={busy !== null}
+                    className="mt-1"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={busy !== null || !unlinkPass}
+                  className="w-full"
+                >
+                  {busy === 'unlink' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Remover senha e desligar
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
 
         {!status.configured ? null : (
           <>

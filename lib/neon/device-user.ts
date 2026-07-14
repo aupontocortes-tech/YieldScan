@@ -1,4 +1,4 @@
-import { NEON_DEVICE_USER_KEY, YIELDSCAN_SYNC_USER_CHANGED_EVENT } from '@/lib/neon/constants'
+import { NEON_DEVICE_USER_KEY, NEON_SYNC_META_KEY, YIELDSCAN_SYNC_USER_CHANGED_EVENT } from '@/lib/neon/constants'
 
 const ENV_USER_ID = process.env.NEXT_PUBLIC_YIELDSCAN_USER_ID?.trim() || ''
 
@@ -39,4 +39,22 @@ export function setDeviceUserId(id: string): void {
   if (!trimmed) return
   localStorage.setItem(NEON_DEVICE_USER_KEY, trimmed)
   window.dispatchEvent(new CustomEvent(YIELDSCAN_SYNC_USER_CHANGED_EVENT))
+}
+
+/**
+ * Desliga a sync neste aparelho: cria um ID local novo.
+ * Não apaga a senha nem os dados na nuvem — noutros aparelhos a conta continua.
+ */
+export function resetDeviceUserId(): string {
+  if (typeof window === 'undefined') return ENV_USER_ID || newId()
+  if (ENV_USER_ID) return ENV_USER_ID
+  const id = newId()
+  localStorage.setItem(NEON_DEVICE_USER_KEY, id)
+  try {
+    localStorage.removeItem(NEON_SYNC_META_KEY)
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent(YIELDSCAN_SYNC_USER_CHANGED_EVENT))
+  return id
 }
