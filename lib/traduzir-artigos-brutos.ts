@@ -55,19 +55,28 @@ export async function traduzirArtigosBrutos(
   if (!articles.length) return articles
 
   const copy = [...articles]
-  const n = Math.min(limit, copy.length)
-  const indices: number[] = []
+  const cryptoNeed: number[] = []
+  const stocksNeed: number[] = []
 
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < copy.length; i++) {
     const a = copy[i]
     const lang = String(a.language ?? '').toLowerCase()
     const bloco = `${a.title ?? ''} ${a.description ?? ''}`
     if (lang.startsWith('pt') || (parecePortugues(bloco) && !pareceIngles(bloco))) {
       copy[i] = { ...a, language: 'pt' }
-    } else {
-      indices.push(i)
+      continue
     }
+    const id = String(a.article_id ?? '')
+    const isStocks =
+      Boolean(a._yieldscanStocksQuery) || id.startsWith('gnews-stocks-')
+    if (isStocks) stocksNeed.push(i)
+    else cryptoNeed.push(i)
   }
+
+  /** Reserva slots: ~70% cripto, resto ações — garante CoinDesk/cv antes da bolsa. */
+  const cryptoBudget = Math.min(cryptoNeed.length, Math.max(1, Math.ceil(limit * 0.72)))
+  const stocksBudget = Math.min(stocksNeed.length, Math.max(0, limit - cryptoBudget))
+  const indices = [...cryptoNeed.slice(0, cryptoBudget), ...stocksNeed.slice(0, stocksBudget)]
 
   for (let b = 0; b < indices.length; b += LOTE_PARALELO) {
     const chunk = indices.slice(b, b + LOTE_PARALELO)

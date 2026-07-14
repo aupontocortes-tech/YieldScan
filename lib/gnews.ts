@@ -56,17 +56,19 @@ function mapArticle(raw: Record<string, unknown>): NewsDataArticle | null {
 }
 
 /**
- * Notícias gerais (PT). Sem chave ou erro de rede devolve array vazio.
+ * Notícias de cripto (PT). Sem chave ou erro de rede devolve array vazio.
+ * Query focada em cripto — IA/economia/geopolítica diluíam o feed e empurravam CoinDesk para fora.
  */
 export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
   const token = process.env.GNEWS_API_KEY?.trim()
   if (!token) return []
 
-  const q = 'criptomoeda OR bitcoin OR ethereum OR cripto OR inteligencia artificial OR economia OR geopolitica'
+  const q =
+    'bitcoin OR ethereum OR criptomoeda OR cripto OR blockchain OR solana OR "mercado cripto" OR "moeda digital" OR cryptocurrency'
   const url = new URL(GNEWS_SEARCH)
   url.searchParams.set('q', q)
   url.searchParams.set('lang', 'pt')
-  /** BR: mais volume de manchetes PT cripto; PT sozinho deixava o feed vazio com frequência. */
+  /** BR: mais volume de manchetes PT cripto. */
   url.searchParams.set('country', 'br')
   /** Mais recentes primeiro (default da API é relevance → artigos velhos populares no topo). */
   url.searchParams.set('sortby', 'publishedAt')
@@ -95,7 +97,12 @@ export async function fetchGnewsAsArticles(): Promise<NewsDataArticle[]> {
         const r = asRecord(item)
         if (!r) continue
         const mapped = mapArticle(r)
-        if (mapped) out.push(mapped)
+        if (!mapped) continue
+        out.push({
+          ...mapped,
+          category: ['crypto'],
+          _yieldscanCryptoQuery: true,
+        })
       }
       return out
     } finally {
@@ -147,7 +154,9 @@ export async function fetchGnewsStocksAsArticles(): Promise<NewsDataArticle[]> {
           ...mapped,
           /** Feed de bolsa é EN — não marcar como pt (senão salta tradução e o filtro apaga tudo). */
           language: 'en',
+          category: ['stocks'],
           article_id: `gnews-stocks-${mapped.article_id ?? hashId(mapped.link ?? '')}`,
+          _yieldscanStocksQuery: true,
         })
       }
       return out

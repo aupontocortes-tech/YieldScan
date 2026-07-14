@@ -6,7 +6,7 @@ function dedupeKey(a: NewsDataArticle): string {
   return (a.title ?? '').trim().toLowerCase()
 }
 
-/** Funde fontes de notícias sem duplicar URLs. CoinDesk primeiro (sentimento nativo). */
+/** Funde fontes sem duplicar URLs. Ordem dos args = prioridade (cripto antes de ações). */
 export function mergeTrimNewsArticles(...lists: NewsDataArticle[][]): NewsDataArticle[] {
   const seen = new Set<string>()
   const out: NewsDataArticle[] = []

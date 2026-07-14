@@ -23,6 +23,8 @@ export type TrimNewsArticle = {
   sentimentScore: number
   symbols: string[]
   stockSymbols: string[]
+  /** Origem/tema: cripto tem prioridade no feed face a ações. */
+  kind: 'crypto' | 'stocks' | 'mixed'
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -82,6 +84,39 @@ function topMentionList(map: Map<string, number>, limit = 10) {
     .map(([symbol, count]) => ({ symbol, count }))
 }
 
+function classifyArticleKind(
+  a: NewsDataArticle,
+  symbols: string[],
+  stockSymbols: string[],
+  text: string,
+): 'crypto' | 'stocks' | 'mixed' {
+  if (a._yieldscanStocksQuery && !a._yieldscanCryptoQuery) return 'stocks'
+  if (a._yieldscanCryptoQuery) return 'crypto'
+  const id = String(a.article_id ?? '')
+  if (id.startsWith('coindesk-') || id.startsWith('cryptocv-') || id.startsWith('gnews-')) {
+    if (id.startsWith('gnews-stocks-')) return 'stocks'
+    return 'crypto'
+  }
+  const cryptoHit = symbols.length > 0 || /\b(bitcoin|ethereum|cripto|crypto|blockchain|defi|solana|btc|eth)\b/i.test(text)
+  const stockHit = stockSymbols.length > 0
+  if (cryptoHit && stockHit) return 'mixed'
+  if (stockHit && !cryptoHit) return 'stocks'
+  return 'crypto'
+}
+
+/** Lista com cripto à frente, depois ações — evita feed só de bolsa US. */
+function balanceHeadlines<T extends { kind: 'crypto' | 'stocks' | 'mixed'; relevance: number }>(
+  items: T[],
+  limit = 40,
+): T[] {
+  const crypto = items.filter((h) => h.kind !== 'stocks').sort((a, b) => b.relevance - a.relevance)
+  const stocks = items.filter((h) => h.kind === 'stocks').sort((a, b) => b.relevance - a.relevance)
+  const cryptoSlots = Math.min(crypto.length, Math.max(28, Math.ceil(limit * 0.7)))
+  const stockSlots = Math.min(stocks.length, limit - Math.min(cryptoSlots, crypto.length))
+  const out: T[] = [...crypto.slice(0, cryptoSlots), ...stocks.slice(0, stockSlots)]
+  return out.slice(0, limit)
+}
+
 export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsArticle[] {
   const out: TrimNewsArticle[] = []
   const seen = new Set<string>()
@@ -108,6 +143,8 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
       preset === 'POSITIVO' ? Math.max(score, 65) : preset === 'NEGATIVO' ? Math.min(score, 35) : score
 
     const bloc = `${title} ${summary}`
+    const symbols = extractSymbols(bloc)
+    const stockSymbols = extractStockSymbols(bloc)
     out.push({
       title,
       summary: summary.slice(0, 320),
@@ -117,8 +154,9 @@ export function processTrimNewsArticles(articles: NewsDataArticle[]): TrimNewsAr
       text,
       sentiment: finalSentiment,
       sentimentScore: finalScore,
-      symbols: extractSymbols(bloc),
-      stockSymbols: extractStockSymbols(bloc),
+      symbols,
+      stockSymbols,
+      kind: classifyArticleKind(a, symbols, stockSymbols, text),
     })
   }
 
@@ -184,11 +222,11 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
     .filter((n) => n.mentionCount > 0)
     .sort((a, b) => b.mentionCount - a.mentionCount)
 
-  const headlines: TendenciasNewsHeadline[] = ptArticles
-    .map((a) => ({
+  const headlines: TendenciasNewsHeadline[] = balanceHeadlines(
+    ptArticles.map((a) => ({
       titulo: a.title,
       impacto: a.sentiment,
-      categoria: 'CRIPTO',
+      categoria: a.kind === 'stocks' ? 'ACOES' : 'CRIPTO',
       link: a.link,
       sentiment: a.sentiment === 'POSITIVO' ? 'optimista' : a.sentiment === 'NEGATIVO' ? 'pessimista' : 'neutro',
       relevance: clamp(a.sentimentScore, 0, 100),
@@ -200,9 +238,10 @@ export function analyzeTrimNews(articles: TrimNewsArticle[]): {
       mentionCount: a.symbols.length + a.stockSymbols.length,
       symbols: a.symbols,
       stockSymbols: a.stockSymbols,
-    }))
-    .sort((a, b) => b.relevance - a.relevance)
-    .slice(0, 40)
+      kind: a.kind,
+    })),
+    40,
+  ).map(({ kind: _kind, ...h }) => h)
 
   /** Top cripto e ações — todas as manchetes PT (até expandir para 20 na UI). */
   const cryptoMentions = new Map<string, number>()

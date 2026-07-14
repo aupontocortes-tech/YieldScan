@@ -56,16 +56,19 @@ const fetchRaw = unstable_cache(
         fetchGlobalTvlChange7d(),
       ])
 
-    /** GNews PT + bolsa; CoinDesk + cv como reforço cripto. */
-    const newsArticlesRaw = mergeTrimNewsArticles(gnewsTrim, gnewsStocks, coindeskNews, cvNews)
+    /**
+     * Cripto primeiro (GNews PT → CoinDesk → cv), ações US depois.
+     * Antes stocks ocupavam slots da tradução e a cripto (EN) ficava de fora do feed.
+     */
+    const newsArticlesRaw = mergeTrimNewsArticles(gnewsTrim, coindeskNews, cvNews, gnewsStocks)
     const newsArticlesTranslated = await withTimeout(
-      traduzirArtigosBrutos(newsArticlesRaw, 40),
+      traduzirArtigosBrutos(newsArticlesRaw, 55),
       28_000,
       null,
     )
     /**
      * Só português: traduzidas; se timeout OU tradução devolveu 0 (quota MyMemory, etc.),
-     * cai para fontes já PT (ex. GNews) — `[]` é truthy e antes engolia o fallback.
+     * cai para fontes já PT (ex. GNews cripto) — `[]` é truthy e antes engolia o fallback.
      */
     const traduzidasOk =
       newsArticlesTranslated != null && newsArticlesTranslated.length > 0
@@ -122,7 +125,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v15'],
+  ['tendencias-trim-v16'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -158,7 +161,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v15',
+          'X-Tendencias-Cache': 'trim-v16',
         }
 
     return NextResponse.json(
