@@ -66,6 +66,21 @@ function extractSymbols(text: string): string[] {
     pattern.lastIndex = 0
     if (pattern.test(text)) set.add(symbol)
   }
+
+  /** Evita homónimos comuns nas manchetes brasileiras. */
+  if (
+    set.has('AVAX') &&
+    /\b(leonardo avalanche|prtb|pré-candidat|presidência|planalto|justiça eleitoral)\b/i.test(text)
+  ) {
+    set.delete('AVAX')
+  }
+  if (
+    set.has('BNB') &&
+    /\b(banco do nordeste|bnb cultural|microcrédito|licitaç|pregões)\b/i.test(text) &&
+    !/\b(token|cripto|blockchain|bnb chain|queima)\b/i.test(text)
+  ) {
+    set.delete('BNB')
+  }
   return [...set]
 }
 
@@ -105,8 +120,13 @@ function classifyArticleKind(
   if (a._yieldscanStocksQuery && !a._yieldscanCryptoQuery) return 'stocks'
   if (a._yieldscanCryptoQuery) return 'crypto'
   const id = String(a.article_id ?? '')
-  if (id.startsWith('coindesk-') || id.startsWith('cryptocv-') || id.startsWith('cryptopanic-') || id.startsWith('gnews-')) {
-    if (id.startsWith('gnews-stocks-')) return 'stocks'
+  if (id.startsWith('gnews-stocks-')) return 'stocks'
+  if (
+    id.startsWith('coindesk-') ||
+    id.startsWith('cryptocv-') ||
+    id.startsWith('cryptopanic-') ||
+    id.startsWith('gnews-')
+  ) {
     return 'crypto'
   }
   const cryptoHit = symbols.length > 0 || /\b(bitcoin|ethereum|cripto|crypto|blockchain|defi|solana|btc|eth)\b/i.test(text)

@@ -16,6 +16,7 @@ import {
   fetchTendenciasTrending,
 } from '@/lib/tendencias/fetch-data'
 import { fetchFmpCryptoQuotes, fmpQuotesToRecord } from '@/lib/tendencias/fetch-fmp'
+import { fetchGoogleNewsMarketArticles } from '@/lib/tendencias/fetch-google-news'
 import { fetchUsEquitiesSnapshot } from '@/lib/tendencias/fetch-us-equities'
 import { mergeTrimNewsArticles } from '@/lib/tendencias/merge-news'
 import { withTimeout } from '@/lib/fetch-timeout'
@@ -34,13 +35,14 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, gnewsTrim, gnewsStocks, cvNews, coindeskNews, cryptopanicNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
+    const [markets, global, trending, gnewsTrim, gnewsStocks, googleNews, cvNews, coindeskNews, cryptopanicNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
       await Promise.all([
         fetchTendenciasMarkets(70),
         fetchTendenciasGlobal(),
         fetchTendenciasTrending(),
         fetchGnewsAsArticles(),
         fetchGnewsStocksAsArticles(),
+        fetchGoogleNewsMarketArticles(),
         fetchCryptoCvAsArticles(),
         fetchCoindeskAsArticles(45),
         fetchCryptopanicAsNewsDataArticles(),
@@ -59,10 +61,11 @@ const fetchRaw = unstable_cache(
       ])
 
     /**
-     * Cripto diversificada (GNews multi-query → CoinDesk → CryptoPanic → cv), ações US depois.
+     * Google News PT-BR garante volume sem chave; APIs dedicadas reforçam o conjunto.
      */
     const newsArticlesRaw = mergeTrimNewsArticles(
       gnewsTrim,
+      googleNews,
       coindeskNews,
       cryptopanicNews,
       cvNews,
@@ -132,7 +135,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v19'],
+  ['tendencias-trim-v21'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -168,7 +171,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v19',
+          'X-Tendencias-Cache': 'trim-v21',
         }
 
     return NextResponse.json(

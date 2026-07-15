@@ -104,7 +104,7 @@ async function fetchGnewsSearch(token: string, q: string, opts: GnewsSearchOpts)
         } else {
           out.push({
             ...mapped,
-            language: 'en',
+            language: opts.lang,
             category: ['stocks'],
             article_id: `gnews-stocks-${mapped.article_id ?? hashId(mapped.link ?? '')}`,
             _yieldscanStocksQuery: true,
@@ -163,14 +163,16 @@ export async function fetchGnewsStocksAsArticles(): Promise<NewsDataArticle[]> {
   if (!token) return []
 
   const queries = [
-    'NVIDIA OR AMD OR Broadcom OR semiconductor',
-    'Apple OR Microsoft OR Google OR Amazon OR Meta',
-    'Tesla OR Netflix OR Coinbase OR Palantir',
-    'NASDAQ OR "S&P 500" OR earnings OR "Wall Street"',
+    '(NVIDIA OR AMD OR Broadcom OR Intel) ações',
+    '(Apple OR Microsoft OR Google OR Amazon OR Meta) ações',
+    '(Tesla OR Netflix OR Coinbase OR Palantir) ações',
+    'NASDAQ OR "S&P 500" OR resultados OR "Wall Street"',
   ]
 
   const batches = await Promise.all(
-    queries.map((q) => fetchGnewsSearch(token, q, { lang: 'en', max: 8, mark: 'stocks' })),
+    queries.map((q) =>
+      fetchGnewsSearch(token, q, { lang: 'pt', country: 'br', max: 8, mark: 'stocks' }),
+    ),
   )
   return dedupeByLink(batches).slice(0, 32)
 }
