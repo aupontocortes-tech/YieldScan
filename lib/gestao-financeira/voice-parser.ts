@@ -1,5 +1,6 @@
 import type { GfParsedVoiceEntry, GfTransactionType } from '@/lib/gestao-financeira/types'
 import { looksLikeScheduledTodo, parseMoneyAmount } from '@/lib/gestao-financeira/time-vs-amount'
+import { inferCategoryFromText } from '@/lib/gestao-financeira/category-hints'
 
 const INCOME_WORDS =
   /\b(recebi|ganhei|entrada|entrou|entrou\s+dinheiro|caiu|salário|salario|folha|depositou|depósito|deposito|renda|rendeu|adicionar|adicionei|coloquei|depositei|creditei|lucrei|vendi|dividendo|dividendos|cashback|estorno|reembolso|devolução|devolucao|herança|heranca|presente|gorjeta|bônus|bonus|gratificação|gratificacao|13º|décimo\s+terceiro|decimo\s+terceiro|pix\s+recebido)\b/i
@@ -16,30 +17,6 @@ const INVESTMENT_MOVE_WORDS =
 /** Entrada direta em caixa sem dizer «ganhei». */
 const DEPOSIT_WORDS =
   /\b(adicionar|adicionei|adiciona|coloquei|colocar|coloca|depositei|depositar|deposita|entrou|creditei)\b/i
-
-const CATEGORY_HINTS: { pattern: RegExp; category: string }[] = [
-  { pattern: /\b(cart[aã]o\s+de\s+cr[eé]dito|fatura\s+do\s+cart[aã]o|anuidade\s+do\s+cart[aã]o)\b/i, category: 'Cartão de crédito' },
-  { pattern: /\b(supermercado|mercado|compras|extra|carrefour|pão de açúcar|pao de acucar|atacadão|atacadao|assai)\b/i, category: 'Mercado' },
-  { pattern: /\b(padaria|padoca|padariao)\b/i, category: 'Padaria' },
-  { pattern: /\b(alimenta|restaurante|lanche|ifood|delivery|mcdonald|burger)\b/i, category: 'Alimentação' },
-  { pattern: /\b(combustível|combustivel|gasolina|posto|etanol|álcool|alcool|abasteci)\b/i, category: 'Combustível' },
-  { pattern: /\b(uber|99|transporte|ônibus|onibus|metrô|metro|taxi|táxi|passagem|estacionamento|pedágio|pedagio)\b/i, category: 'Transporte' },
-  { pattern: /\b(aluguel|moradia|condomínio|condominio|iptu|aluguei|financiamento\s+imobiliário|financiamento\s+imobiliario)\b/i, category: 'Moradia' },
-  { pattern: /\b(internet|wi-?fi|wifi|fibra|claro|vivo|tim|oi\s+internet)\b/i, category: 'Internet' },
-  { pattern: /\b(celular|telefone|plano\s+de\s+celular|operadora|recarga|chip)\b/i, category: 'Telefone' },
-  { pattern: /\b(água|agua|sabesp|copasa)\b/i, category: 'Água' },
-  { pattern: /\b(energia|luz|eletricidade|enel|cpfl|cemig|conta\s+de\s+luz)\b/i, category: 'Energia' },
-  { pattern: /\b(saúde|saude|médico|medico|farmácia|farmacia|plano de saúde|hospital|dentista|consulta)\b/i, category: 'Saúde' },
-  { pattern: /\b(educação|educacao|curso|faculdade|escola|matrícula|matricula|mensalidade\s+escolar)\b/i, category: 'Educação' },
-  { pattern: /\b(lazer|cinema|viagem|festa|jogo|netflix|spotify|disney|amazon\s+prime|bar|pub)\b/i, category: 'Lazer' },
-  { pattern: /\b(salário|salario|folha|pagamento mensal|holerite|contracheque)\b/i, category: 'Salário' },
-  { pattern: /\b(freelance|freela|projeto|cliente|bico|nota\s+fiscal)\b/i, category: 'Freelance' },
-  { pattern: /\b(bitcoin|btc|ethereum|eth|cripto|crypto|binance|solana|usdt|stablecoin)\b/i, category: 'Criptomoedas' },
-  { pattern: /\b(investi|investimento|investimentos|ações|acoes|fii|tesouro|cdb|lci|lca|poupança\s+bancária|poupanca\s+bancaria)\b/i, category: 'Investimentos' },
-  { pattern: /\b(petshop|ração|racao|veterinário|veterinario)\b/i, category: 'Outros' },
-  { pattern: /\b(academia|gym|musculação|musculacao|personal)\b/i, category: 'Lazer' },
-  { pattern: /\b(manicure|cabeleireiro|salão|salao|beleza)\b/i, category: 'Outros' },
-]
 
 /** Mapeia fala → nome da caixa padrão do app (ordem: mais específico primeiro). */
 const CASH_BOX_HINTS: { pattern: RegExp; name: string }[] = [
@@ -136,10 +113,7 @@ function hasTransactionIntent(text: string, categoryName: string | null): boolea
 }
 
 function detectCategory(text: string): string | null {
-  for (const { pattern, category } of CATEGORY_HINTS) {
-    if (pattern.test(text)) return category
-  }
-  return null
+  return inferCategoryFromText(text)
 }
 
 function detectCashBox(text: string): string | null {

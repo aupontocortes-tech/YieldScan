@@ -1,4 +1,5 @@
 import { canonicalHighlightCoinGeckoId } from '@/lib/mercado-highlight-ids'
+import { resolveExpenseCategoryName } from '@/lib/gestao-financeira/category-hints'
 import type {
   GfCryptoHolding,
   GfCryptoWallet,
@@ -337,17 +338,24 @@ export function categoryTotals(
   categories: { id: string; name: string }[],
   type: 'income' | 'expense',
   range?: GfDateRange,
-): { name: string; value: number }[] {
-  const byId = new Map(categories.map((c) => [c.id, c.name]))
-  const totals = new Map<string, number>()
+): { name: string; value: number; count: number }[] {
+  const totals = new Map<string, { value: number; count: number }>()
   for (const t of transactions) {
     if (t.type !== type) continue
     if (range ? !isInRange(t.occurredAt, range) : !inCurrentMonth(t.occurredAt)) continue
-    const name = t.categoryId ? (byId.get(t.categoryId) ?? 'Outros') : 'Outros'
-    totals.set(name, (totals.get(name) ?? 0) + t.amount)
+    const name =
+      type === 'expense'
+        ? resolveExpenseCategoryName(t, categories)
+        : t.categoryId
+          ? (categories.find((c) => c.id === t.categoryId)?.name ?? 'Outros')
+          : resolveExpenseCategoryName(t, categories)
+    const prev = totals.get(name) ?? { value: 0, count: 0 }
+    prev.value += t.amount
+    prev.count += 1
+    totals.set(name, prev)
   }
   return [...totals.entries()]
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, { value, count }]) => ({ name, value, count }))
     .sort((a, b) => b.value - a.value)
 }
 

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { categoryTotals, getMonthRange, isInRange } from '@/lib/gestao-financeira/calculations'
+import { resolveExpenseCategoryName } from '@/lib/gestao-financeira/category-hints'
 import type { GfCategory, GfTransaction } from '@/lib/gestao-financeira/types'
 import { cn } from '@/lib/utils'
 import { ChevronDown, Trash2 } from 'lucide-react'
@@ -73,6 +74,11 @@ export function GfTransactionHistory({ transactions, categories, fmtBrl, onDelet
     [transactions, categories, monthRange],
   )
 
+  const monthExpenseTotal = useMemo(
+    () => expenseByCategory.reduce((s, r) => s + r.value, 0),
+    [expenseByCategory],
+  )
+
   const sortedTransactions = useMemo(
     () => [...transactions].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()),
     [transactions],
@@ -90,8 +96,7 @@ export function GfTransactionHistory({ transactions, categories, fmtBrl, onDelet
     return sortedTransactions.filter((t) => {
       if (t.type !== 'expense') return false
       if (!isInRange(t.occurredAt, monthRange)) return false
-      const name = t.categoryId ? (categories.find((c) => c.id === t.categoryId)?.name ?? 'Outros') : 'Outros'
-      return name === catName
+      return resolveExpenseCategoryName(t, categories) === catName
     })
   }
 
@@ -110,59 +115,79 @@ export function GfTransactionHistory({ transactions, categories, fmtBrl, onDelet
 
   return (
     <div className="space-y-3">
-      <details className="rounded-2xl border border-border/50 overflow-hidden">
-        <summary className="cursor-pointer list-none px-4 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center justify-between gap-2">
-            <span>Gastos por categoria · este mês</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </span>
-        </summary>
-        <div className="border-t border-border/40">
-          {expenseByCategory.length === 0 ? (
-            <p className="px-4 py-3 text-xs text-muted-foreground">Nenhuma despesa neste mês.</p>
-          ) : (
-            <div className="divide-y divide-border/30">
-              {expenseByCategory.map(({ name, value }) => {
-                const open = expandedCat === name
-                const items = open ? txsForCategoryName(name) : []
-                return (
-                  <div key={name}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-sm hover:bg-muted/20"
-                      onClick={() => setExpandedCat(open ? null : name)}
-                    >
+      <div className="rounded-2xl border border-border/50 overflow-hidden">
+        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/40 px-4 py-3">
+          <div>
+            <p className="font-semibold">Gastos por categoria · este mês</p>
+            <p className="text-xs text-muted-foreground">
+              Mercado, gasolina, padaria… juntos com o total de cada um
+            </p>
+          </div>
+          {monthExpenseTotal > 0 ? (
+            <p className="text-sm font-semibold text-red-400">Total {fmtBrl(monthExpenseTotal)}</p>
+          ) : null}
+        </div>
+
+        {expenseByCategory.length === 0 ? (
+          <p className="px-4 py-4 text-xs text-muted-foreground">Nenhuma despesa neste mês.</p>
+        ) : (
+          <div className="divide-y divide-border/30">
+            {expenseByCategory.map(({ name, value, count }) => {
+              const open = expandedCat === name
+              const items = open ? txsForCategoryName(name) : []
+              const pct = monthExpenseTotal > 0 ? Math.round((value / monthExpenseTotal) * 100) : 0
+              return (
+                <div key={name}>
+                  <button
+                    type="button"
+                    className="flex w-full flex-col gap-1.5 px-4 py-3 text-left hover:bg-muted/20"
+                    onClick={() => setExpandedCat(open ? null : name)}
+                    aria-expanded={open}
+                  >
+                    <span className="flex w-full items-center justify-between gap-2 text-sm">
                       <span className="flex min-w-0 items-center gap-1.5 truncate font-medium">
                         <ChevronDown
-                          className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+                          className={cn(
+                            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+                            open && 'rotate-180',
+                          )}
                         />
                         {name}
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {count}x · {pct}%
+                        </span>
                       </span>
                       <span className="shrink-0 font-semibold text-red-400">{fmtBrl(value)}</span>
-                    </button>
-                    {open && items.length > 0 ? (
-                      <div className="max-h-44 overflow-y-auto border-t border-border/20 bg-muted/5 divide-y divide-border/20">
-                        {items.map((t) => (
-                          <TransactionRow
-                            key={t.id}
-                            t={t}
-                            categories={categories}
-                            fmtBrl={fmtBrl}
-                            onDelete={onDelete}
-                          />
-                        ))}
-                      </div>
-                    ) : null}
-                    {open && items.length === 0 ? (
-                      <p className="border-t border-border/20 px-4 py-2 text-xs text-muted-foreground">Sem itens.</p>
-                    ) : null}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </details>
+                    </span>
+                    <span className="ml-5 h-1.5 overflow-hidden rounded-full bg-muted/40">
+                      <span
+                        className="block h-full rounded-full bg-red-500/70"
+                        style={{ width: `${Math.max(pct, 2)}%` }}
+                      />
+                    </span>
+                  </button>
+                  {open && items.length > 0 ? (
+                    <div className="max-h-44 overflow-y-auto border-t border-border/20 bg-muted/5 divide-y divide-border/20">
+                      {items.map((t) => (
+                        <TransactionRow
+                          key={t.id}
+                          t={t}
+                          categories={categories}
+                          fmtBrl={fmtBrl}
+                          onDelete={onDelete}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {open && items.length === 0 ? (
+                    <p className="border-t border-border/20 px-4 py-2 text-xs text-muted-foreground">Sem itens.</p>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="rounded-2xl border border-border/50 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
