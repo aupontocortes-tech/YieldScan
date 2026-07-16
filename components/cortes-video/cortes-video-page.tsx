@@ -81,6 +81,11 @@ import {
   extractAudioFromVideoUrl,
   shouldPreferNativeAudioExtract,
 } from '@/lib/cortes-video/audio-extract'
+import {
+  clearResumeCursor,
+  loadResumeCursor,
+  saveResumeCursor,
+} from '@/lib/cortes-video/resume-cursor'
 import { CORTES_FUTURE_CAPABILITIES } from '@/lib/cortes-video/future-plugins'
 import type { CortesOpenAiSettings } from '@/lib/cortes-video/types'
 import {
@@ -231,6 +236,7 @@ export function CortesVideoPage() {
   const [clips, setClips] = useState<TimelineClip[]>([])
   const [trimPreset, setTrimPreset] = useState<TrimPresetId>('full')
   const [workRange, setWorkRange] = useState<TimeRange>({ start: 0, end: 1 })
+  const [resumeAtSec, setResumeAtSec] = useState<number | null>(null)
   const [customStartTc, setCustomStartTc] = useState('0:00')
   const [customEndTc, setCustomEndTc] = useState('0:00')
   const [manualTimeError, setManualTimeError] = useState<string | null>(null)
@@ -323,8 +329,16 @@ export function CortesVideoPage() {
         const m = await probeVideoFile(f)
         setMeta(m)
         const initialPreset: TrimPresetId = (m.durationSec || 0) > 3 * 60 ? 'last_3' : 'full'
-        const initialRange = resolveTrimPreset(m.durationSec || 1, initialPreset)
-        setTrimPreset(initialPreset)
+        const savedResume = loadResumeCursor(m)
+        setResumeAtSec(savedResume)
+        // Se já havia progresso neste vídeo, começa onde parou (próximos 3 min)
+        const initialRange =
+          savedResume != null && savedResume > 1
+            ? clampTimeRange(savedResume, Math.min(m.durationSec, savedResume + 3 * 60), m.durationSec)
+            : resolveTrimPreset(m.durationSec || 1, initialPreset)
+        const initialPresetApplied: TrimPresetId =
+          savedResume != null && savedResume > 1 ? 'custom' : initialPreset
+        setTrimPreset(initialPresetApplied)
         setWorkRange(initialRange)
         setCustomStartTc(formatTimecode(initialRange.start))
         setCustomEndTc(formatTimecode(initialRange.end))
@@ -431,6 +445,21 @@ export function CortesVideoPage() {
       applyWorkRange(resolveTrimPreset(meta.durationSec, preset), preset)
     },
     [meta, customStartTc, customEndTc, applyWorkRange],
+  )
+
+  const applyContinueFrom = useCallback(
+    (fromSec: number, chunkMin = 3) => {
+      if (!meta) return
+      const start = Math.max(0, Math.min(meta.durationSec - 0.5, fromSec))
+      const end = Math.min(meta.durationSec, start + chunkMin * 60)
+      if (end - start < 1) {
+        setError('Já estás no fim do vídeo — não há mais trecho para continuar.')
+        return
+      }
+      applyWorkRange(clampTimeRange(start, end, meta.durationSec), 'custom')
+      setError(null)
+    },
+    [meta, applyWorkRange],
   )
 
   const setRangeFromPlayhead = (which: 'start' | 'end') => {
@@ -549,6 +578,8 @@ export function CortesVideoPage() {
       setProgress(100)
       setPhase('done')
       setStep('highlights')
+      saveResumeCursor(meta, range.end)
+      setResumeAtSec(range.end)
       await persistProject({ hasTranscript: true })
     } catch (e) {
       setPhase('error')
@@ -1242,6 +1273,36 @@ export function CortesVideoPage() {
                   <div className="space-y-2 rounded-lg border border-border/40 bg-muted/5 p-3">
                     <p className="text-xs font-medium text-foreground">Trecho de trabalho</p>
                     <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        disabled={
+                          busy || ((resumeAtSec == null || resumeAtSec <= 1) && currentTime < 1)
+                        }
+                        onClick={() =>
+                          applyContinueFrom(
+                            resumeAtSec != null && resumeAtSec > 1 ? resumeAtSec : currentTime,
+                            3,
+                          )
+                        }
+                        className="rounded-full border border-amber-500/45 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition-colors hover:border-amber-400/60"
+                        title="Continua 3 min a partir do ponto guardado ou do playhead"
+                      >
+                        Começar onde parou
+                        {resumeAtSec != null && resumeAtSec > 1
+                          ? ` (${formatTimecode(resumeAtSec)})`
+                          : currentTime >= 1
+                            ? ` (${formatTimecode(currentTime)})`
+                            : ''}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy || currentTime < 0.5}
+                        onClick={() => applyContinueFrom(currentTime, 3)}
+                        className="rounded-full border border-border/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        title="Próximos 3 min a partir do tempo actual do player"
+                      >
+                        Daí + 3 min
+                      </button>
                       {TRIM_PRESETS.map((p) => (
                         <button
                           key={p.id}
@@ -1260,6 +1321,24 @@ export function CortesVideoPage() {
                         </button>
                       ))}
                     </div>
+                    {resumeAtSec != null && resumeAtSec > 1 ? (
+                      <p className="text-[11px] text-amber-200/85">
+                        Último ponto guardado: {formatTimecode(resumeAtSec)}. Podes continuar daí ou{' '}
+                        <button
+                          type="button"
+                          className="underline underline-offset-2"
+                          disabled={busy}
+                          onClick={() => {
+                            if (!meta) return
+                            clearResumeCursor(meta)
+                            setResumeAtSec(null)
+                          }}
+                        >
+                          limpar
+                        </button>
+                        .
+                      </p>
+                    ) : null}
                     <div className="grid gap-2 sm:grid-cols-2 sm:max-w-lg">
                       <div className="space-y-1">
                         <Label className="text-[10px]">Início exacto (M:SS ou H:MM:SS)</Label>
