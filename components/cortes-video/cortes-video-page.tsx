@@ -77,6 +77,10 @@ import {
   exportEditedVideo,
   extractAudioMp3,
 } from '@/lib/cortes-video/ffmpeg-client'
+import {
+  extractAudioFromVideoUrl,
+  shouldPreferNativeAudioExtract,
+} from '@/lib/cortes-video/audio-extract'
 import { CORTES_FUTURE_CAPABILITIES } from '@/lib/cortes-video/future-plugins'
 import type { CortesOpenAiSettings } from '@/lib/cortes-video/types'
 import {
@@ -125,7 +129,7 @@ const STEP_GUIDE: Record<
   },
   transcribe: {
     title: 'Escolhe o trecho e transcreve',
-    body: 'Usa atalhos (ex. últimos 30 min) ou tempos exactos. Só depois toca em Transcrever — poupa tempo e OpenAI.',
+    body: 'Prefere 5–10 min (atalhos rápidos). Trechos longos demoram ≈ a duração do trecho a extrair áudio.',
     nextLabel: 'Ver destaques',
     nextHint: 'Transcreve primeiro',
   },
@@ -197,7 +201,11 @@ function estimateEtaSec(progressPct: number, startedAt: number | null, now: numb
   if (progressPct >= 99.5) return 0
   const elapsed = (now - startedAt) / 1000
   if (elapsed < 1.5) return null
-  return Math.max(0, (elapsed * (100 - progressPct)) / progressPct)
+  // Evita ETAs absurdas quando o % quase não avança (ex.: ficheiro enorme no WASM)
+  if (progressPct < 8 && elapsed > 90) return null
+  const raw = (elapsed * (100 - progressPct)) / progressPct
+  if (raw > 3 * 60 * 60) return null
+  return Math.max(0, raw)
 }
 
 function clipId() {
@@ -247,6 +255,7 @@ export function CortesVideoPage() {
   const [nowTick, setNowTick] = useState(() => Date.now())
   const whisperStartRef = useRef<number | null>(null)
   const whisperExpectedSecRef = useRef(60)
+  const extractExpectedSecRef = useRef(60)
 
   const words = useMemo(
     () => (transcript ? flattenWords(transcript.segments) : []),
@@ -488,10 +497,28 @@ export function CortesVideoPage() {
     setProgress(5)
     try {
       const range = workRange.end > workRange.start ? workRange : resolveTrimPreset(meta.durationSec, 'full')
-      await ensureFfmpegLoaded((r) => setProgress(5 + r * 35))
-      const audio = await extractAudioMp3(file, (r) => setProgress(5 + r * 40), range)
-      const durationForCost = rangeDuration(range)
-      // Whisper costuma ser mais rápido que real-time, mas upload+API demoram; estimativa prudente.
+      const rangeDur = rangeDuration(range)
+      // Extracção nativa ≈ duração do trecho (muito mais rápida que FFmpeg.wasm em ficheiros grandes)
+      extractExpectedSecRef.current = Math.max(20, rangeDur * 1.05 + 8)
+
+      let audio: Blob
+      const preferNative = Boolean(objectUrl) && shouldPreferNativeAudioExtract(file.size)
+      if (preferNative && objectUrl) {
+        try {
+          audio = await extractAudioFromVideoUrl(objectUrl, range, (r) =>
+            setProgress(5 + r * 42),
+          )
+        } catch (nativeErr) {
+          console.warn('[cortes] native audio extract failed, fallback ffmpeg', nativeErr)
+          await ensureFfmpegLoaded((r) => setProgress(5 + r * 20))
+          audio = await extractAudioMp3(file, (r) => setProgress(25 + r * 25), range)
+        }
+      } else {
+        await ensureFfmpegLoaded((r) => setProgress(5 + r * 20))
+        audio = await extractAudioMp3(file, (r) => setProgress(25 + r * 25), range)
+      }
+
+      const durationForCost = rangeDur
       whisperExpectedSecRef.current = Math.max(25, durationForCost * 0.45 + 20)
       whisperStartRef.current = Date.now()
       setPhase('transcribe')
@@ -860,7 +887,15 @@ export function CortesVideoPage() {
     return () => window.clearInterval(id)
   }, [busy, phase, jobStartedAt])
 
-  const etaSec = busy ? estimateEtaSec(progress, jobStartedAt, nowTick) : null
+  const etaSec = useMemo(() => {
+    if (!busy || !jobStartedAt) return null
+    if (phase === 'extract_audio') {
+      const elapsed = (nowTick - jobStartedAt) / 1000
+      const expected = Math.max(15, extractExpectedSecRef.current)
+      return Math.max(0, expected - elapsed)
+    }
+    return estimateEtaSec(progress, jobStartedAt, nowTick)
+  }, [busy, jobStartedAt, nowTick, phase, progress])
   const elapsedSec = jobStartedAt && busy ? Math.max(0, (nowTick - jobStartedAt) / 1000) : 0
 
   const doneStepIds = useMemo(() => {
@@ -1286,13 +1321,23 @@ export function CortesVideoPage() {
                   </div>
                 ) : null}
                 <Button type="button" onClick={() => void runTranscribe()} disabled={!file || busy}>
-                  {busy && phase === 'transcribe' ? (
+                  {busy && (phase === 'transcribe' || phase === 'extract_audio') ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
                   )}
                   Transcrever trecho seleccionado
                 </Button>
+                {meta && rangeDuration(workRange) > 10 * 60 ? (
+                  <p className="text-[11px] text-amber-200/90">
+                    Trecho de {formatDuration(rangeDuration(workRange))}: a extracção demora cerca disso.
+                    Para ir mais rápido, usa «Primeiros/Últimos 5 min».
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Em ficheiros grandes, o áudio extrai-se só do trecho (muito mais rápido que antes).
+                  </p>
+                )}
                 {transcript ? (
                   <div className="space-y-2">
                     <Textarea readOnly value={transcript.text} className="min-h-[140px] text-sm" />

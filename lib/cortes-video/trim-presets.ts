@@ -2,6 +2,8 @@ import type { TimelineClip } from '@/lib/cortes-video/types'
 
 export type TrimPresetId =
   | 'full'
+  | 'first_5'
+  | 'last_5'
   | 'first_15'
   | 'last_15'
   | 'first_30'
@@ -18,6 +20,8 @@ export const TRIM_PRESETS: Array<{
   hint: string
 }> = [
   { id: 'full', label: 'Vídeo completo', hint: 'Todo o ficheiro' },
+  { id: 'first_5', label: 'Primeiros 5 min', hint: 'Rápido · recomendado' },
+  { id: 'last_5', label: 'Últimos 5 min', hint: 'Rápido · recomendado' },
   { id: 'first_15', label: 'Primeiros 15 min', hint: 'Início' },
   { id: 'last_15', label: 'Últimos 15 min', hint: 'Final' },
   { id: 'first_30', label: 'Primeiros 30 min', hint: 'Início' },
@@ -46,6 +50,10 @@ export function resolveTrimPreset(
 ): TimeRange {
   const dur = Math.max(0.1, durationSec)
   switch (preset) {
+    case 'first_5':
+      return clampRange(0, Math.min(5 * 60, dur), dur)
+    case 'last_5':
+      return clampRange(Math.max(0, dur - 5 * 60), dur, dur)
     case 'first_15':
       return clampRange(0, Math.min(15 * 60, dur), dur)
     case 'last_15':

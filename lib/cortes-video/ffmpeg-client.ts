@@ -90,23 +90,53 @@ export async function extractAudioMp3(
   }
   const inName = 'input_video'
   const outName = 'audio_out.mp3'
-  await ff.writeFile(inName, await fetchFile(videoFile))
 
-  const args = ['-i', inName]
+  // Progresso durante a cópia para o WASM (antes não havia % → ETA absurdo)
+  onProgress?.(0.02)
+  const bytes = await readFileInChunks(videoFile, (ratio) => {
+    onProgress?.(0.02 + ratio * 0.35)
+  })
+  await ff.writeFile(inName, bytes)
+  onProgress?.(0.4)
+
+  const args: string[] = []
   if (range && range.end > range.start) {
     const start = Math.max(0, range.start)
     const dur = Math.max(0.1, range.end - range.start)
-    // -ss após -i: corte preciso no trecho escolhido
+    // -ss ANTES de -i: seek rápido (não descodifica o vídeo inteiro)
     args.push('-ss', String(start), '-t', String(dur))
   }
-  args.push('-vn', '-ac', '1', '-ar', '16000', '-b:a', '64k', outName)
+  args.push('-i', inName, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '64k', '-y', outName)
 
   await ff.exec(args)
   const data = await ff.readFile(outName)
   await ff.deleteFile(inName).catch(() => undefined)
   await ff.deleteFile(outName).catch(() => undefined)
-  const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data))
-  return new Blob([Uint8Array.from(bytes)], { type: 'audio/mpeg' })
+  const out = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data))
+  onProgress?.(1)
+  return new Blob([Uint8Array.from(out)], { type: 'audio/mpeg' })
+}
+
+async function readFileInChunks(
+  file: File,
+  onRatio?: (ratio: number) => void,
+): Promise<Uint8Array> {
+  const total = file.size
+  if (total <= 8 * 1024 * 1024) {
+    onRatio?.(1)
+    return new Uint8Array(await file.arrayBuffer())
+  }
+  const buf = new Uint8Array(total)
+  const chunkSize = 4 * 1024 * 1024
+  let offset = 0
+  while (offset < total) {
+    const end = Math.min(total, offset + chunkSize)
+    const chunk = new Uint8Array(await file.slice(offset, end).arrayBuffer())
+    buf.set(chunk, offset)
+    offset = end
+    onRatio?.(offset / total)
+  }
+  return buf
 }
 
 /** Exporta timeline (clips) para o perfil, com crop/scale. */
