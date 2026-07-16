@@ -129,7 +129,7 @@ const STEP_GUIDE: Record<
   },
   transcribe: {
     title: 'Escolhe o trecho e transcreve',
-    body: 'Prefere 5–10 min (atalhos rápidos). Trechos longos demoram ≈ a duração do trecho a extrair áudio.',
+    body: 'Para ir rápido, começa com 1–3 min. O vídeo completo é só se quiseres analisar tudo.',
     nextLabel: 'Ver destaques',
     nextHint: 'Transcreve primeiro',
   },
@@ -322,13 +322,14 @@ export function CortesVideoPage() {
         setFile(f)
         const m = await probeVideoFile(f)
         setMeta(m)
-        const full = resolveTrimPreset(m.durationSec || 1, 'full')
-        setTrimPreset('full')
-        setWorkRange(full)
-        setCustomStartTc(formatTimecode(full.start))
-        setCustomEndTc(formatTimecode(full.end))
+        const initialPreset: TrimPresetId = (m.durationSec || 0) > 3 * 60 ? 'last_3' : 'full'
+        const initialRange = resolveTrimPreset(m.durationSec || 1, initialPreset)
+        setTrimPreset(initialPreset)
+        setWorkRange(initialRange)
+        setCustomStartTc(formatTimecode(initialRange.start))
+        setCustomEndTc(formatTimecode(initialRange.end))
         setManualTimeError(null)
-        setClips([rangeToClip(full, clipId)])
+        setClips([rangeToClip(initialRange, clipId)])
         setTranscript(null)
         setSuggestions([])
         setExportBlob(null)
@@ -1331,7 +1332,7 @@ export function CortesVideoPage() {
                 {meta && rangeDuration(workRange) > 10 * 60 ? (
                   <p className="text-[11px] text-amber-200/90">
                     Trecho de {formatDuration(rangeDuration(workRange))}: a extracção demora cerca disso.
-                    Para ir mais rápido, usa «Primeiros/Últimos 5 min».
+                    Para ir mais rápido, usa «Primeiro/Último 1 min» ou «3 min».
                   </p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground">
