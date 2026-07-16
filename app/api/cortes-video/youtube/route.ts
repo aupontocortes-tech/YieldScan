@@ -1,137 +1,116 @@
 import { NextResponse } from 'next/server'
-import { Innertube, Platform, UniversalCache } from 'youtubei.js'
-import {
-  parseYouTubeVideoId,
-  sanitizeYouTubeFilename,
-  YOUTUBE_MAX_BYTES,
-  YOUTUBE_MAX_DURATION_SEC,
-} from '@/lib/cortes-video/youtube'
+import { parseYouTubeVideoId } from '@/lib/cortes-video/youtube'
+import { downloadYouTubeVideo } from '@/lib/cortes-video/youtube-download'
+import { fetchYouTubeViaProxy, getYoutubeProxyConfig } from '@/lib/cortes-video/youtube-proxy'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-/** Interpreter necessário para decifrar alguns streams (WEB). */
-Platform.shim.eval = async (data: { output: string }) => {
-  // eslint-disable-next-line no-new-func
-  return new Function(data.output)()
-}
-
 type Body = { url?: string }
-
-type YtClient = 'ANDROID' | 'IOS' | 'TV' | 'MWEB' | 'WEB'
-
-/**
- * ANDROID/IOS primeiro: funcionam melhor em IPs de datacenter (Vercel)
- * e evitam muitos erros de decipher que quebram no deploy.
- */
-const DOWNLOAD_CLIENTS: YtClient[] = ['ANDROID', 'IOS', 'TV', 'MWEB', 'WEB']
 
 const isVercel = Boolean(process.env.VERCEL)
 
-async function getYt() {
-  return Innertube.create({
-    cache: new UniversalCache(false),
-    /** Sessão local — mais estável em serverless do que pedir tokens a YT. */
-    generate_session_locally: true,
+function videoResponse(opts: {
+  body: ReadableStream<Uint8Array> | Blob | ArrayBuffer | null
+  filename: string
+  title: string
+  videoId: string
+  duration: string
+}): NextResponse {
+  return new NextResponse(opts.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'video/mp4',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(opts.filename)}`,
+      'X-Video-Title': encodeURIComponent(opts.title),
+      'X-Video-Id': opts.videoId,
+      'X-Video-Duration': opts.duration,
+      'X-Accel-Buffering': 'no',
+      'Cache-Control': 'no-store',
+    },
   })
 }
 
-/**
- * Corta a stream se ultrapassar o limite — sem carregar tudo para RAM
- * (buffer completo rebentava o limite de 4.5 MB do Vercel).
- */
-function limitStream(
-  source: ReadableStream<Uint8Array>,
-  maxBytes: number,
-): ReadableStream<Uint8Array> {
-  let total = 0
-  const reader = source.getReader()
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read()
-        if (done) {
-          controller.close()
-          return
-        }
-        if (!value?.byteLength) return
-        total += value.byteLength
-        if (total > maxBytes) {
-          reader.cancel().catch(() => undefined)
-          controller.error(
-            new Error(
-              `Ficheiro demasiado grande (>${Math.round(maxBytes / (1024 * 1024))} MB). Descarrega o vídeo e faz upload manual.`,
-            ),
-          )
-          return
-        }
-        controller.enqueue(value)
-      } catch (err) {
-        controller.error(err)
+/** Se YOUTUBE_PROXY_URL estiver definido, descarrega no VPS/proxy em vez do IP da Vercel. */
+async function tryProxyDownload(youtubeUrl: string, videoId: string): Promise<NextResponse | null> {
+  const proxy = getYoutubeProxyConfig()
+  if (!proxy) return null
+
+  try {
+    const res = await fetchYouTubeViaProxy(youtubeUrl, proxy)
+    const contentType = res.headers.get('content-type') || ''
+
+    if (!res.ok) {
+      let error = 'O proxy YouTube falhou.'
+      let hint: string | undefined
+      if (contentType.includes('application/json')) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string
+          hint?: string
+        } | null
+        if (data?.error) error = data.error
+        if (data?.hint) hint = data.hint
+      } else {
+        const text = await res.text().catch(() => '')
+        if (text) error = text.slice(0, 200)
       }
-    },
-    cancel(reason) {
-      return reader.cancel(reason)
-    },
-  })
-}
+      console.error('[cortes-video/youtube] proxy fail', videoId, res.status, error)
+      return NextResponse.json(
+        {
+          error,
+          hint:
+            hint ||
+            'Confirma que o proxy (YOUTUBE_PROXY_URL) está ligado. Alternativa: descarrega o MP4 e usa “Seleccionar ficheiro”.',
+        },
+        { status: res.status >= 400 && res.status < 600 ? res.status : 502 },
+      )
+    }
 
-function mapYouTubeError(message: string): { error: string; status: number } {
-  const m = message.toLowerCase()
+    if (!res.body) {
+      return NextResponse.json(
+        { error: 'O proxy devolveu uma resposta vazia.', hint: 'Reinicia o servidor proxy e tenta de novo.' },
+        { status: 502 },
+      )
+    }
 
-  if (/private|members.?only|login|sign in|login required/.test(m)) {
-    return {
-      status: 403,
-      error:
-        'Este vídeo é privado ou só para membros. Abre no YouTube, descarrega o ficheiro e faz upload aqui.',
+    const titleHeader = res.headers.get('x-video-title') || encodeURIComponent(`youtube-${videoId}`)
+    const durationHeader = res.headers.get('x-video-duration') || '0'
+    const disposition = res.headers.get('content-disposition')
+    let filename = `youtube-${videoId}.mp4`
+    const m = disposition?.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)
+    if (m) {
+      try {
+        filename = decodeURIComponent(m[1] || m[2] || filename)
+      } catch {
+        filename = m[1] || m[2] || filename
+      }
     }
-  }
-  if (/age|confirm.?your.?age|inappropriate|restricted/.test(m)) {
-    return {
-      status: 403,
-      error:
-        'Vídeo com restrição de idade. Faz download no YouTube (conta com idade) e carrega o ficheiro no app.',
-    }
-  }
-  if (/live|premiere/.test(m)) {
-    return {
-      status: 400,
-      error: 'Lives / estreias em directo não são suportadas. Espera o vídeo acabar e tenta de novo.',
-    }
-  }
-  if (/copyright|blocked|not available in your country|geo/.test(m)) {
-    return {
-      status: 403,
-      error:
-        'YouTube bloqueou este vídeo (região/copyright). Descarrega noutra ferramenta e faz upload do ficheiro.',
-    }
-  }
-  if (/bot|captcha|unusual traffic|too many requests|rate.?limit|429/.test(m)) {
-    return {
-      status: 503,
-      error:
-        'O YouTube está a bloquear o servidor (IP do hosting). Em produção isto é comum — descarrega o MP4 e usa “Seleccionar ficheiro”.',
-    }
-  }
-  if (/no matching formats|decipher|403|status code 4\d\d|payload.?too.?large|413/.test(m)) {
-    return {
-      status: 502,
-      error:
-        'O YouTube bloqueou o download automático neste servidor. Solução: descarrega o MP4 e usa “Seleccionar ficheiro”.',
-    }
-  }
-  if (/unavailable|not available/.test(m)) {
-    return {
-      status: 502,
-      error:
-        'Não foi possível obter este vídeo pelo link. Confirma que é público; se continuar, faz upload do ficheiro.',
-    }
-  }
 
-  return {
-    status: 502,
-    error: `Não foi possível importar do YouTube. Tenta upload do ficheiro. (${message.slice(0, 120)})`,
+    let title = `youtube-${videoId}`
+    try {
+      title = decodeURIComponent(titleHeader)
+    } catch {
+      title = titleHeader
+    }
+
+    return videoResponse({
+      body: res.body,
+      filename,
+      title,
+      videoId,
+      duration: durationHeader,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[cortes-video/youtube] proxy unreachable', videoId, message)
+    return NextResponse.json(
+      {
+        error: 'Não foi possível contactar o proxy YouTube (YOUTUBE_PROXY_URL).',
+        hint: 'Verifica se o VPS está ligado e a URL/secret estão correctos na Vercel. Alternativa: upload do MP4.',
+      },
+      { status: 503 },
+    )
   }
 }
 
@@ -152,107 +131,35 @@ export async function POST(req: Request) {
     )
   }
 
-  const errors: string[] = []
+  // 1) Proxy externo (recomendado em produção)
+  const proxied = await tryProxyDownload(url, videoId)
+  if (proxied) return proxied
 
-  try {
-    const yt = await getYt()
+  // 2) Download directo neste servidor (ok em localhost; frágil na Vercel)
+  const result = await downloadYouTubeVideo(videoId, { preferFastQuality: isVercel })
 
-    let title = `youtube-${videoId}`
-    let duration = 0
-
-    for (const client of DOWNLOAD_CLIENTS) {
-      try {
-        const info = await yt.getBasicInfo(videoId, { client })
-        const basic = info.basic_info
-        title = (basic?.title || title).trim()
-        duration = Number(basic?.duration) || duration
-
-        const playability = (info as { playability_status?: { status?: string; reason?: string } })
-          .playability_status
-        if (playability?.status && playability.status !== 'OK') {
-          errors.push(`${client}: ${playability.reason || playability.status}`)
-          continue
-        }
-
-        if (basic?.is_live) {
-          return NextResponse.json(
-            { error: 'Lives em directo não são suportadas. Aguarda o vídeo terminar.' },
-            { status: 400 },
-          )
-        }
-
-        if (duration > YOUTUBE_MAX_DURATION_SEC) {
-          return NextResponse.json(
-            {
-              error: `Vídeo demasiado longo (${Math.round(duration / 60)} min). Máx. ${YOUTUBE_MAX_DURATION_SEC / 3600} h — faz upload manual.`,
-            },
-            { status: 400 },
-          )
-        }
-
-        /**
-         * Em Vercel: 360p primeiro (mais rápido, menos timeout).
-         * Em local: best primeiro (melhor qualidade).
-         */
-        const qualityOrder = isVercel
-          ? (['360p', 'best'] as const)
-          : (['best', '360p'] as const)
-
-        for (const quality of qualityOrder) {
-          try {
-            const stream = await yt.download(videoId, {
-              client,
-              type: 'video+audio',
-              quality,
-            })
-            const limited = limitStream(stream, YOUTUBE_MAX_BYTES)
-            const filename = sanitizeYouTubeFilename(title, videoId)
-
-            return new NextResponse(limited, {
-              status: 200,
-              headers: {
-                'Content-Type': 'video/mp4',
-                'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-                'X-Video-Title': encodeURIComponent(title),
-                'X-Video-Id': videoId,
-                'X-Video-Duration': String(duration || 0),
-                'X-Accel-Buffering': 'no',
-                'Cache-Control': 'no-store',
-              },
-            })
-          } catch (dlErr) {
-            const msg = dlErr instanceof Error ? dlErr.message : String(dlErr)
-            errors.push(`${client}/${quality}: ${msg}`)
-          }
-        }
-      } catch (infoErr) {
-        const msg = infoErr instanceof Error ? infoErr.message : String(infoErr)
-        errors.push(`${client}/info: ${msg}`)
-      }
-    }
-
-    const joined = errors.slice(-3).join(' | ') || 'sem formatos disponíveis'
-    console.error('[cortes-video/youtube]', videoId, joined, { vercel: isVercel })
-    const mapped = mapYouTubeError(joined)
+  if (!result.ok) {
+    console.error('[cortes-video/youtube]', videoId, result.errors?.slice(-3) || result.error, {
+      vercel: isVercel,
+    })
     return NextResponse.json(
       {
-        error: mapped.error,
-        hint: isVercel
-          ? 'No hosting (Vercel) o YouTube bloqueia muitos IPs. Alternativa fiável: descarrega o MP4 e usa “Seleccionar ficheiro”.'
-          : 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.',
+        error: result.error,
+        hint:
+          result.hint ||
+          (isVercel
+            ? 'Configura YOUTUBE_PROXY_URL (VPS) ou descarrega o MP4 e usa “Seleccionar ficheiro”.'
+            : 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.'),
       },
-      { status: mapped.status },
-    )
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Falha ao obter o vídeo do YouTube.'
-    console.error('[cortes-video/youtube]', videoId, message)
-    const mapped = mapYouTubeError(message)
-    return NextResponse.json(
-      {
-        error: mapped.error,
-        hint: 'Alternativa fiável: descarrega o MP4 no PC e usa “Seleccionar ficheiro”.',
-      },
-      { status: mapped.status },
+      { status: result.status },
     )
   }
+
+  return videoResponse({
+    body: result.stream,
+    filename: result.filename,
+    title: result.title,
+    videoId: result.videoId,
+    duration: String(result.duration || 0),
+  })
 }

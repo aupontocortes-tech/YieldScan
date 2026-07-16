@@ -1026,9 +1026,9 @@ export function CortesVideoPage() {
                   Colar link do YouTube
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  O app tenta descarregar vídeos públicos. No hosting (app online) o YouTube bloqueia
-                  muitos servidores — se falhar, descarrega o MP4 e usa{' '}
-                  <strong>Seleccionar ficheiro</strong> (funciona igual).
+                  O app tenta descarregar vídeos públicos. Em produção o YouTube pode bloquear o
+                  servidor — configura um proxy (YOUTUBE_PROXY_URL) ou, se falhar, descarrega o MP4 e
+                  usa <strong>Seleccionar ficheiro</strong>.
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <div className="relative flex-1">

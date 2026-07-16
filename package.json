@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "youtube-proxy": "node scripts/youtube-proxy-server.mjs",
     "postinstall": "node -e \"const fs=require('fs'),p=require('path');const s=p.join('node_modules','sql.js','dist','sql-wasm.wasm'),d=p.join('public','sql-wasm.wasm');if(fs.existsSync(s)){fs.mkdirSync('public',{recursive:true});fs.copyFileSync(s,d);}\""
   },
   "dependencies": {
