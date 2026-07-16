@@ -145,8 +145,8 @@ const STEP_GUIDE: Record<
     nextLabel: 'Criar capa',
   },
   capa: {
-    title: 'Cria ou deixa a IA fazer a capa',
-    body: 'Frame do vídeo, imagem tua, ou IA. No fim selecciona a capa que queres usar.',
+    title: 'Capa bem chamativa e em tendência',
+    body: 'A IA gera título viral + badge de urgência, alinhado às tendências do momento. Escolhe a capa preferida.',
     nextLabel: 'Ir para exportar',
   },
   export: {
@@ -660,11 +660,47 @@ export function CortesVideoPage() {
     setPhase('copy')
     setProgress(20)
     try {
+      let trendContext = ''
+      try {
+        const tr = await fetch('/api/tendencias', { cache: 'no-store', signal: AbortSignal.timeout(8000) })
+        if (tr.ok) {
+          const tj = (await tr.json()) as {
+            news?: {
+              topCryptoMentions?: Array<{ symbol?: string }>
+              topStockMentions?: Array<{ symbol?: string }>
+              headlines?: Array<{ title?: string }>
+            }
+          }
+          const cryptos = (tj.news?.topCryptoMentions ?? [])
+            .slice(0, 6)
+            .map((x) => x.symbol)
+            .filter(Boolean)
+          const stocks = (tj.news?.topStockMentions ?? [])
+            .slice(0, 5)
+            .map((x) => x.symbol)
+            .filter(Boolean)
+          const heads = (tj.news?.headlines ?? [])
+            .slice(0, 4)
+            .map((h) => h.title)
+            .filter(Boolean)
+          trendContext = [
+            cryptos.length ? `Cripto mais faladas: ${cryptos.join(', ')}` : '',
+            stocks.length ? `Acções em destaque: ${stocks.join(', ')}` : '',
+            heads.length ? `Headlines: ${heads.join(' | ')}` : '',
+          ]
+            .filter(Boolean)
+            .join('. ')
+        }
+      } catch {
+        /* tendência opcional */
+      }
+
       const ideas = await generateCoverIdeas({
         transcriptText: transcript?.text || meta.name,
         platformId,
         durationSec: meta.durationSec,
         generateImage,
+        trendContext: trendContext || undefined,
       })
       setCoverTitle(ideas.title)
       setCoverSubtitle(ideas.subtitle)
@@ -675,12 +711,13 @@ export function CortesVideoPage() {
           baseDataUrl: ideas.imageDataUrl,
           title: ideas.title,
           subtitle: ideas.subtitle,
+          badge: ideas.badge,
           profile,
         })
         addCover({
           id: newCoverId(),
           source: 'ai',
-          label: 'IA · imagem gerada',
+          label: 'IA · capa viral + tendência',
           dataUrl: composed,
         })
       } else {
@@ -701,12 +738,13 @@ export function CortesVideoPage() {
             baseDataUrl: frame,
             title: ideas.title,
             subtitle: ideas.subtitle,
+            badge: ideas.badge,
             profile,
           })
           addCover({
             id: newCoverId(),
             source: 'ai',
-            label: `IA · frame ${formatTimecode(t)}`,
+            label: `IA viral · ${formatTimecode(t)}`,
             dataUrl: frame,
             atSec: t,
           })
@@ -1599,7 +1637,7 @@ export function CortesVideoPage() {
           {step === 'capa' && (
             <CortesPanel
               title="Capa do vídeo"
-              subtitle="Tu defines ou a IA cria — escolhe a preferida"
+              subtitle="Viral, chamativa e actualizada com tendência"
               icon={ImagePlus}
             >
               <div className="space-y-4">
@@ -1666,9 +1704,9 @@ export function CortesVideoPage() {
                     onClick={() => void runAiCover(false)}
                     className="rounded-xl border border-pink-500/25 bg-pink-500/10 p-4 text-left transition-colors hover:border-pink-400/50"
                   >
-                    <p className="text-sm font-semibold text-pink-100">IA cria · frame sugerido</p>
+                    <p className="text-sm font-semibold text-pink-100">IA cria · capa viral</p>
                     <p className="mt-1 text-[11px] text-pink-200/70">
-                      Título + melhor momento (Whisper/texto)
+                      Título gancho + tendência + melhor frame
                     </p>
                   </button>
                   <button
@@ -1679,7 +1717,7 @@ export function CortesVideoPage() {
                   >
                     <p className="text-sm font-semibold text-pink-100">IA cria · imagem nova (DALL·E)</p>
                     <p className="mt-1 text-[11px] text-pink-200/70">
-                      Gasta mais créditos · gera capa do zero
+                      Capa do zero, estilo thumbnail + tendência
                     </p>
                   </button>
                 </div>

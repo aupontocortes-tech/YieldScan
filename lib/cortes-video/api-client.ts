@@ -167,9 +167,11 @@ export async function generateCoverIdeas(opts: {
   platformId: CortesPlatformId
   durationSec: number
   generateImage?: boolean
+  trendContext?: string
 }): Promise<{
   title: string
   subtitle: string
+  badge: string
   suggestedTimeSec: number
   imageDataUrl: string | null
 }> {
@@ -191,6 +193,7 @@ export async function generateCoverIdeas(opts: {
   return {
     title: String(data.title ?? 'Capa'),
     subtitle: String(data.subtitle ?? ''),
+    badge: String(data.badge ?? 'EM ALTA'),
     suggestedTimeSec: Number(data.suggestedTimeSec) || 0,
     imageDataUrl: b64 ? `data:image/png;base64,${b64}` : null,
   }
