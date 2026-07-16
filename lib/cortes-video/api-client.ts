@@ -84,7 +84,8 @@ function parseWhisperToTranscript(raw: unknown): CortesTranscript {
 export async function transcribeVideoAudio(audioBlob: Blob, durationSeconds: number): Promise<CortesTranscript> {
   const settings = loadCortesOpenAiSettings()
   const form = new FormData()
-  form.append('audio', audioBlob, 'audio.mp3')
+  const audioExt = audioExtension(audioBlob.type)
+  form.append('audio', audioBlob, `audio.${audioExt}`)
   form.append('durationSeconds', String(durationSeconds || 1))
 
   const res = await fetch('/api/cortes-video/transcribe', {
@@ -92,12 +93,32 @@ export async function transcribeVideoAudio(audioBlob: Blob, durationSeconds: num
     headers: openaiHeaders(settings),
     body: form,
   })
-  const data = await res.json().catch(() => ({}))
+  const contentType = res.headers.get('content-type') || ''
+  const data = contentType.includes('application/json')
+    ? await res.json().catch(() => ({}))
+    : {}
   if (!res.ok) {
+    if (res.status === 413) {
+      throw new Error(
+        'O áudio ficou grande demais para o servidor. Escolhe um trecho de 1–5 minutos e tenta novamente.',
+      )
+    }
+    if (res.status === 504 || res.status === 408) {
+      throw new Error('A transcrição demorou demais. Escolhe um trecho menor (1–3 minutos).')
+    }
     throw new Error(typeof data.error === 'string' ? data.error : 'Falha na transcrição.')
   }
   if (typeof data.costUsd === 'number') registerCortesOpenAiCall(data.costUsd)
   return parseWhisperToTranscript(data.transcription ?? data)
+}
+
+function audioExtension(mimeType: string): 'webm' | 'mp4' | 'ogg' | 'mp3' | 'wav' {
+  const mime = mimeType.toLowerCase()
+  if (mime.includes('webm')) return 'webm'
+  if (mime.includes('mp4') || mime.includes('m4a')) return 'mp4'
+  if (mime.includes('ogg')) return 'ogg'
+  if (mime.includes('wav')) return 'wav'
+  return 'mp3'
 }
 
 export async function suggestCuts(transcript: CortesTranscript): Promise<CutSuggestion[]> {

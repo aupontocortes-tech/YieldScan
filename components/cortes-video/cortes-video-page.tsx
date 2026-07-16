@@ -485,6 +485,13 @@ export function CortesVideoPage() {
 
   const runTranscribe = async () => {
     if (!file || !meta) return
+    const selectedDuration = rangeDuration(workRange)
+    if (selectedDuration > 5 * 60 + 1) {
+      setError(
+        'Este trecho é longo demais para transcrever no app online. Escolhe 1, 3 ou 5 minutos; depois podes analisar outro trecho.',
+      )
+      return
+    }
     const settings = loadCortesOpenAiSettings()
     const gate = canCallCortesOpenAi(settings)
     if (!gate.ok) {

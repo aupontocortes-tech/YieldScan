@@ -73,7 +73,9 @@ export async function extractAudioFromVideoUrl(
     const chunks: Blob[] = []
     const recorder = new MediaRecorder(dest.stream, {
       ...(mime ? { mimeType: mime } : {}),
-      audioBitsPerSecond: 96_000,
+      // 64 kbps mono é suficiente para voz/Whisper e mantém 5 min abaixo
+      // do limite de request da Vercel.
+      audioBitsPerSecond: 64_000,
     })
 
     recorder.ondataavailable = (e) => {
