@@ -77,14 +77,26 @@ function limitStream(
 export function mapYouTubeError(message: string): { error: string; status: number } {
   const m = message.toLowerCase()
 
-  if (/private|members.?only|login|sign in|login required/.test(m)) {
+  // "Sign in to confirm you're not a bot" NÃO é vídeo privado — é bloqueio de IP.
+  if (
+    /bot|captcha|unusual traffic|too many requests|rate.?limit|429|sign in to confirm|confirm you.?re not a bot|please sign in/.test(
+      m,
+    )
+  ) {
+    return {
+      status: 503,
+      error:
+        'O YouTube está a bloquear o servidor (IP do hosting). Configura YOUTUBE_PROXY_URL ou descarrega o MP4 e usa “Seleccionar ficheiro”.',
+    }
+  }
+  if (/private|members.?only|login required|this video is private/.test(m)) {
     return {
       status: 403,
       error:
         'Este vídeo é privado ou só para membros. Abre no YouTube, descarrega o ficheiro e faz upload aqui.',
     }
   }
-  if (/age|confirm.?your.?age|inappropriate|restricted/.test(m)) {
+  if (/age|confirm.?your.?age|inappropriate|age.?restricted/.test(m)) {
     return {
       status: 403,
       error:
@@ -97,18 +109,11 @@ export function mapYouTubeError(message: string): { error: string; status: numbe
       error: 'Lives / estreias em directo não são suportadas. Espera o vídeo acabar e tenta de novo.',
     }
   }
-  if (/copyright|blocked|not available in your country|geo/.test(m)) {
+  if (/copyright|not available in your country|geo.?block|geo.?restrict/.test(m)) {
     return {
       status: 403,
       error:
         'YouTube bloqueou este vídeo (região/copyright). Descarrega noutra ferramenta e faz upload do ficheiro.',
-    }
-  }
-  if (/bot|captcha|unusual traffic|too many requests|rate.?limit|429/.test(m)) {
-    return {
-      status: 503,
-      error:
-        'O YouTube está a bloquear o servidor (IP do hosting). Em produção isto é comum — descarrega o MP4 e usa “Seleccionar ficheiro”.',
     }
   }
   if (/no matching formats|decipher|403|status code 4\d\d|payload.?too.?large|413/.test(m)) {
