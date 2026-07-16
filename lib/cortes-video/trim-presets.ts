@@ -23,19 +23,19 @@ export const TRIM_PRESETS: Array<{
   label: string
   hint: string
 }> = [
-  { id: 'full', label: 'Vídeo completo', hint: 'Todo o ficheiro' },
-  { id: 'first_1', label: 'Primeiro 1 min', hint: 'Ultra rápido' },
   { id: 'last_1', label: 'Último 1 min', hint: 'Ultra rápido' },
-  { id: 'first_3', label: 'Primeiros 3 min', hint: 'Muito rápido' },
   { id: 'last_3', label: 'Últimos 3 min', hint: 'Muito rápido · recomendado' },
-  { id: 'first_5', label: 'Primeiros 5 min', hint: 'Rápido · recomendado' },
-  { id: 'last_5', label: 'Últimos 5 min', hint: 'Rápido · recomendado' },
+  { id: 'first_1', label: 'Primeiro 1 min', hint: 'Ultra rápido' },
+  { id: 'first_3', label: 'Primeiros 3 min', hint: 'Muito rápido' },
+  { id: 'first_5', label: 'Primeiros 5 min', hint: 'Rápido' },
+  { id: 'last_5', label: 'Últimos 5 min', hint: 'Rápido' },
   { id: 'first_15', label: 'Primeiros 15 min', hint: 'Início' },
   { id: 'last_15', label: 'Últimos 15 min', hint: 'Final' },
   { id: 'first_30', label: 'Primeiros 30 min', hint: 'Início' },
   { id: 'last_30', label: 'Últimos 30 min', hint: 'Final' },
   { id: 'first_half', label: '1.ª metade', hint: '50% inicial' },
   { id: 'last_half', label: '2.ª metade', hint: '50% final' },
+  { id: 'full', label: 'Vídeo completo', hint: 'Mais lento · usa só se precisares' },
 ]
 
 function clampRange(start: number, end: number, durationSec: number): TimeRange {

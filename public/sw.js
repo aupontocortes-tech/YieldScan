@@ -1,4 +1,4 @@
-/* YieldScan — service worker v4.7 (pass-through + lembretes afazeres) */
+/* YieldScan — service worker v4.8 (pass-through + lembretes afazeres) */
 self.addEventListener('install', () => {
   self.skipWaiting()
 })

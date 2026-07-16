@@ -1226,7 +1226,8 @@ export function CortesVideoPage() {
                 <CardTitle className="text-base">Transcrição automática</CardTitle>
                 <CardDescription>
                   Escolhe primeiro o trecho a usar (ex.: últimos 30 min) — assim a OpenAI e o FFmpeg
-                  trabalham só nessa parte, mais rápido e mais barato.
+                  trabalham só nessa parte, mais rápido e mais barato. Atualização: atalhos 1/3 min
+                  aparecem primeiro.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
