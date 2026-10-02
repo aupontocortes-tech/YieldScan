@@ -164,6 +164,15 @@ export type Sma50WeeklySettings = {
   color: string
 }
 
+/** Canal gaussiano (filtro de Ehlers) em fechos semanais. */
+export type GaussianChannelSettings = {
+  enabled: boolean
+  lineWidth: 1 | 2 | 3
+  colorMid: string
+  colorUpper: string
+  colorLower: string
+}
+
 /** Golden Cross / Death Cross — SMA 50 e SMA 200 no diário. */
 export type GoldenCrossDailySettings = {
   enabled: boolean

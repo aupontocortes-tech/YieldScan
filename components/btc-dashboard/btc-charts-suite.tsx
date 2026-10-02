@@ -49,6 +49,8 @@ import {
   computeSma50OnDailyAligned,
   computeSma50OnWeeklyAligned,
 } from '@/lib/btc/cycle-bottom'
+import { computeGaussianChannel, GAUSSIAN_CHANNEL_PERIOD } from '@/lib/btc/gaussian-channel'
+import { createGaussianChannelPrimitive } from '@/lib/btc/gaussian-channel-primitive'
 import { toHeikinAshi } from '@/lib/btc/heikin-ashi'
 import {
   BULL_MARKET_BAND_EMA_WEEKS,
@@ -158,6 +160,8 @@ export function BtcChartsSuite({
     setSma200Daily,
     sma50Weekly,
     setSma50Weekly,
+    gaussianChannel,
+    setGaussianChannel,
     goldenCrossDaily,
     setGoldenCrossDaily,
     trendRadar,
@@ -250,6 +254,11 @@ export function BtcChartsSuite({
     if (!sma50Weekly.enabled || weeklyBarsForSma50.length < 50) return null
     return computeSma50OnWeeklyAligned(bars, weeklyBarsForSma50)
   }, [sma50Weekly.enabled, weeklyBarsForSma50, bars])
+
+  const gaussianOnChart = useMemo(() => {
+    if (!gaussianChannel.enabled || bars.length < GAUSSIAN_CHANNEL_PERIOD + 2) return null
+    return computeGaussianChannel(bars)
+  }, [gaussianChannel.enabled, bars])
 
   /** Pompx: gráfico mensal com velas Heikin Ashi quando a banda está ligada. */
   const candleBars = useMemo(() => {
@@ -353,6 +362,16 @@ export function BtcChartsSuite({
         onRemove: () => setSma50Weekly({ ...sma50Weekly, enabled: false }),
       })
     }
+    if (gaussianChannel.enabled) {
+      list.push({
+        id: 'gaussian-mid',
+        label: 'Canal Gaussiano',
+        colors: ['#f8fafc'],
+        values: gaussianOnChart?.mid ?? [],
+        settingsFocus: 'cycle',
+        onRemove: () => setGaussianChannel({ ...gaussianChannel, enabled: false }),
+      })
+    }
     if (bullBandOnChart) {
       list.push({
         id: 'bmsb-sma',
@@ -413,6 +432,9 @@ export function BtcChartsSuite({
     sma50OnChart,
     sma50Weekly,
     setSma50Weekly,
+    gaussianOnChart,
+    gaussianChannel,
+    setGaussianChannel,
     bullBandOnChart,
     bullMarketBand,
     setBullMarketBand,
@@ -464,6 +486,22 @@ export function BtcChartsSuite({
       close: b.close,
     }))
     candle.setData([...candleData, ...buildFutureWhitespace(candleBars)])
+    if (!focusPrice && gaussianOnChart && gaussianChannel.enabled) {
+      candle.attachPrimitive(createGaussianChannelPrimitive(bars, gaussianOnChart))
+      const midLine = bars
+        .map((b, i) => ({ time: b.time as Time, value: gaussianOnChart.mid[i] }))
+        .filter((d): d is { time: Time; value: number } => d.value != null)
+      if (midLine.length) {
+        const lbl = indicatorLabel('gaussian-mid', 'Gaussiana 144')
+        cMain.addSeries(LineSeries, {
+          color: '#f8fafc',
+          title: lbl.title,
+          lineWidth: 2,
+          priceLineVisible: lbl.priceLineVisible,
+          lastValueVisible: lbl.lastValueVisible,
+        }).setData(midLine)
+      }
+    }
 
     cMain.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
@@ -895,6 +933,8 @@ export function BtcChartsSuite({
     sma200OnChart,
     sma50Weekly,
     sma50OnChart,
+    gaussianChannel,
+    gaussianOnChart,
     goldenCrossDaily,
     goldenSma50OnChart,
     goldenSma200OnChart,
@@ -985,6 +1025,16 @@ export function BtcChartsSuite({
         {sma200Daily.enabled && !sma200Loading && !sma200OnChart && (
           <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-amber-500/30 bg-black/80 px-2 py-1 text-[10px] text-amber-200/90">
             Sem dados diários suficientes para SMA 200. Usa intervalo Diário ou atualiza.
+          </div>
+        )}
+        {gaussianChannel.enabled && bars.length < GAUSSIAN_CHANNEL_PERIOD + 2 && (
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-violet-400/30 bg-black/80 px-2 py-1 text-[10px] text-violet-200">
+            A carregar Canal Gaussiano (dados semanais)…
+          </div>
+        )}
+        {gaussianChannel.enabled && bars.length >= GAUSSIAN_CHANNEL_PERIOD + 2 && !gaussianOnChart && (
+          <div className="pointer-events-none absolute left-2 top-24 z-10 rounded-md border border-violet-400/30 bg-black/80 px-2 py-1 text-[10px] text-violet-200">
+            Sem semanas suficientes para o Canal Gaussiano (mín. {GAUSSIAN_CHANNEL_PERIOD}).
           </div>
         )}
         {sma50Weekly.enabled && sma50Loading && (

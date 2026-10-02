@@ -7,6 +7,7 @@ import {
   type ChartIndicatorQuickMenuState,
 } from '@/components/btc-dashboard/chart-indicator-quick-menu'
 import { CYCLE_BOTTOM_INDICATORS } from '@/lib/btc/cycle-bottom-config'
+import { GAUSSIAN_COLOR_DOWN, GAUSSIAN_COLOR_UP } from '@/lib/btc/gaussian-channel'
 import type { GoldenCrossState } from '@/lib/btc/cycle-bottom'
 import {
   BULL_MARKET_BAND_EMA_WEEKS,
@@ -129,6 +130,8 @@ export function ChartIndicatorLegend({
     setSma200Daily,
     sma50Weekly,
     setSma50Weekly,
+    gaussianChannel,
+    setGaussianChannel,
     goldenCrossDaily,
     setGoldenCrossDaily,
     onChain,
@@ -182,6 +185,19 @@ export function ChartIndicatorLegend({
         label: `SMA 50 (${meta?.timeframeLabel ?? 'Semanal'})`,
         colors: [sma50Weekly.color],
         onRemove: () => setSma50Weekly({ ...sma50Weekly, enabled: false }),
+        settingsFocus: 'cycle',
+      })
+    }
+
+    if (gaussianChannel.enabled) {
+      const meta = CYCLE_BOTTOM_INDICATORS.find((m) => m.id === 'gaussian')
+      list.push({
+        id: 'gaussian',
+        label: meta?.label ?? 'Canal Gaussiano',
+        colors: ['#f8fafc', GAUSSIAN_COLOR_UP, GAUSSIAN_COLOR_DOWN],
+        status: 'Meio: Gaussiana 144 (HLC3)',
+        labelIds: ['gaussian-mid', 'gaussian-upper', 'gaussian-lower'],
+        onRemove: () => setGaussianChannel({ ...gaussianChannel, enabled: false }),
         settingsFocus: 'cycle',
       })
     }
@@ -350,6 +366,8 @@ export function ChartIndicatorLegend({
     setSma200Daily,
     sma50Weekly,
     setSma50Weekly,
+    gaussianChannel,
+    setGaussianChannel,
     bullMarketBand,
     setBullMarketBand,
     mas,

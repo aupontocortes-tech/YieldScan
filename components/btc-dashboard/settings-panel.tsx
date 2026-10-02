@@ -391,8 +391,8 @@ export function SettingsPanel({
 
       <IndicatorSection
         title="Fundos de ciclo · Bull market (Pompx)"
-        subtitle="Golden Cross, SMA 200, SMA 50 semanal, Bull Market Band"
-        helpText="Quatro cartões no mesmo formato. O Golden Cross abre em ecrã inteiro (SMA 50 + 200 no diário)."
+        subtitle="Golden Cross, SMA 200, Bull Market Band, SMA 50 e Canal Gaussiano"
+        helpText="Clica num cartão para o ligar no gráfico. O Golden Cross abre em ecrã inteiro (SMA 50 + 200 no diário)."
       >
         <CycleBottomPanel
           variant="settings"

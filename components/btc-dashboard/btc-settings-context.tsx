@@ -21,6 +21,7 @@ import type {
   BullMarketSupportBandSettings,
   CandlestickSettings,
   Sma200DailySettings,
+  GaussianChannelSettings,
   Sma50WeeklySettings,
   GoldenCrossDailySettings,
   MaConfig,
@@ -198,6 +199,14 @@ const DEFAULT_SMA_50_WEEKLY: Sma50WeeklySettings = {
   color: '#38bdf8',
 }
 
+const DEFAULT_GAUSSIAN_CHANNEL: GaussianChannelSettings = {
+  enabled: false,
+  lineWidth: 2,
+  colorMid: '#0aff68',
+  colorUpper: '#0aff68',
+  colorLower: '#ff1100',
+}
+
 const DEFAULT_GOLDEN_CROSS: GoldenCrossDailySettings = {
   enabled: false,
   lineWidth: 2,
@@ -224,6 +233,7 @@ type BtcPersistV2 = {
   bullMarketBand?: BullMarketSupportBandSettings
   sma200Daily?: Sma200DailySettings
   sma50Weekly?: Sma50WeeklySettings
+  gaussianChannel?: GaussianChannelSettings
   goldenCrossDaily?: GoldenCrossDailySettings
   trendRadar?: TrendRadarSettings
   chartIndicatorDisplay?: ChartIndicatorDisplaySettings
@@ -375,6 +385,8 @@ type Ctx = {
   setSma200Daily: (s: Sma200DailySettings) => void
   sma50Weekly: Sma50WeeklySettings
   setSma50Weekly: (s: Sma50WeeklySettings) => void
+  gaussianChannel: GaussianChannelSettings
+  setGaussianChannel: (g: GaussianChannelSettings) => void
   goldenCrossDaily: GoldenCrossDailySettings
   setGoldenCrossDaily: (g: GoldenCrossDailySettings) => void
   trendRadar: TrendRadarSettings
@@ -413,6 +425,9 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
   }))
   const [sma200Daily, setSma200Daily] = useState<Sma200DailySettings>(() => ({ ...DEFAULT_SMA_200_DAILY }))
   const [sma50Weekly, setSma50Weekly] = useState<Sma50WeeklySettings>(() => ({ ...DEFAULT_SMA_50_WEEKLY }))
+  const [gaussianChannel, setGaussianChannel] = useState<GaussianChannelSettings>(() => ({
+    ...DEFAULT_GAUSSIAN_CHANNEL,
+  }))
   const [goldenCrossDaily, setGoldenCrossDaily] = useState<GoldenCrossDailySettings>(() => ({
     ...DEFAULT_GOLDEN_CROSS,
   }))
@@ -443,6 +458,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     bullMarketBand,
     sma200Daily,
     sma50Weekly,
+    gaussianChannel,
     goldenCrossDaily,
     trendRadar,
     chartIndicatorDisplay,
@@ -501,6 +517,14 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
         })
       } else if (v2.cycleBottomAlerts?.enabled) {
         setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY, enabled: true })
+      }
+      if (v2.gaussianChannel && typeof v2.gaussianChannel === 'object') {
+        const g = v2.gaussianChannel
+        setGaussianChannel({
+          ...DEFAULT_GAUSSIAN_CHANNEL,
+          ...g,
+          lineWidth: g.lineWidth === 1 || g.lineWidth === 3 ? g.lineWidth : 2,
+        })
       }
       if (v2.goldenCrossDaily && typeof v2.goldenCrossDaily === 'object') {
         const g = v2.goldenCrossDaily
@@ -608,6 +632,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     bullMarketBand,
     sma200Daily,
     sma50Weekly,
+    gaussianChannel,
     goldenCrossDaily,
     trendRadar,
     chartIndicatorDisplay,
@@ -678,6 +703,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
     setBullMarketBand({ ...DEFAULT_BULL_MARKET_BAND })
     setSma200Daily({ ...DEFAULT_SMA_200_DAILY })
     setSma50Weekly({ ...DEFAULT_SMA_50_WEEKLY })
+    setGaussianChannel({ ...DEFAULT_GAUSSIAN_CHANNEL })
     setGoldenCrossDaily({ ...DEFAULT_GOLDEN_CROSS })
     setTrendRadar({ ...DEFAULT_TREND_RADAR })
     setChartIndicatorDisplay({ ...DEFAULT_CHART_INDICATOR_DISPLAY })
@@ -719,6 +745,8 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       setSma200Daily,
       sma50Weekly,
       setSma50Weekly,
+      gaussianChannel,
+      setGaussianChannel,
       goldenCrossDaily,
       setGoldenCrossDaily,
       trendRadar,
@@ -742,6 +770,7 @@ export function BtcSettingsProvider({ children }: { children: ReactNode }) {
       bullMarketBand,
       sma200Daily,
       sma50Weekly,
+      gaussianChannel,
       goldenCrossDaily,
       trendRadar,
       chartIndicatorDisplay,

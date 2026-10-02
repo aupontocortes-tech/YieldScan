@@ -38,6 +38,8 @@ export function CycleBottomPanel({
     setBullMarketBand,
     sma50Weekly,
     setSma50Weekly,
+    gaussianChannel,
+    setGaussianChannel,
     goldenCrossDaily,
     setGoldenCrossDaily,
   } = useBtcSettings()
@@ -61,6 +63,10 @@ export function CycleBottomPanel({
     sma50w: {
       checked: sma50Weekly.enabled,
       setEnabled: (v) => setSma50Weekly({ ...sma50Weekly, enabled: v }),
+    },
+    gaussian: {
+      checked: gaussianChannel.enabled,
+      setEnabled: (v) => setGaussianChannel({ ...gaussianChannel, enabled: v }),
     },
   }
 
@@ -166,8 +172,8 @@ export function CycleBottomPanel({
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white">Fundos de ciclo · Bull market (Pompx)</p>
           <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500 sm:text-[11px]">
-            Quatro cartões no mesmo formato. O <span className="text-zinc-400">Golden Cross</span> abre em ecrã inteiro
-            (SMA 50 + 200 no diário).
+            Clica num cartão para o ligar no gráfico. O <span className="text-zinc-400">Golden Cross</span> abre em ecrã
+            inteiro (SMA 50 + 200 no diário).
           </p>
         </div>
       </div>
