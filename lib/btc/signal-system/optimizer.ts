@@ -5,9 +5,9 @@ import { runSignalBacktest } from '@/lib/btc/signal-system/engine'
 type GridOption<T> = T[]
 
 function grid(): SignalEngineParams[] {
-  const adxMins: GridOption<number> = [20, 22]
-  const minScores: GridOption<number> = [52, 56]
-  const minConfluences: GridOption<number> = [7, 8]
+  const adxMins: GridOption<number> = [22, 25]
+  const minScores: GridOption<number> = [58, 64]
+  const minConfluences: GridOption<number> = [8, 9]
   const macdSets: GridOption<Pick<SignalEngineParams, 'macdFast' | 'macdSlow'>> = [
     { macdFast: 12, macdSlow: 26 },
     { macdFast: 8, macdSlow: 21 },
@@ -82,7 +82,7 @@ export function optimizeSignalParams(ctx: SignalOptimizationContext): SignalOpti
     // "Meta atingida" = lucrativo, com acerto decente e amostra suficiente.
     const targetMet =
       backtest.cumulativeProfitPct > 0 &&
-      backtest.winRatePct >= 50 &&
+      backtest.winRatePct >= 58 &&
       backtest.total >= OPTIMIZATION_MIN_TRADES
 
     const entry: SignalOptimizationResult = {

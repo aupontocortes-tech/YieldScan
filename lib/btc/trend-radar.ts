@@ -462,27 +462,28 @@ function canBuy(m: BarMetrics, price: number, regime: TrendRegime): boolean {
 
   return (
     core >= 4 &&
+    m.htf === 'alta' &&
     m.macdCross === 'bullish' &&
     m.ema20 != null &&
     m.ema50 != null &&
     m.ema20 >= m.ema50 &&
     price > m.ema50 &&
-    m.htf !== 'baixa'
+    m.projection !== 'baixa'
   )
 }
 
 function canSell(m: BarMetrics, price: number, regime: TrendRegime): boolean {
   const core = coreSellHits(m)
-  // Bloqueia venda só em alta forte confirmada (HTF + regime bull)
-  if (m.htf === 'alta' && regime === 'bull') return false
+  // Não vende contra tendência maior confirmada
+  if (m.htf === 'alta') return false
 
   if (regime === 'bull') {
     return (
-      core >= 3 &&
+      core >= 4 &&
       m.macdCross === 'bearish' &&
       m.rsi != null &&
-      m.rsi >= 55 &&
-      m.htf !== 'alta'
+      m.rsi >= 60 &&
+      m.htf === 'baixa'
     )
   }
 
@@ -491,23 +492,24 @@ function canSell(m: BarMetrics, price: number, regime: TrendRegime): boolean {
       m.macdCross === 'bearish' || (m.macdHist != null && m.macdHist < 0) || m.projection === 'baixa'
     const shortBear = m.ema9 != null && m.ema21 != null && m.ema9 < m.ema21
     return (
-      core >= 2 &&
+      core >= 3 &&
       bearMomentum &&
       shortBear &&
+      m.htf === 'baixa' &&
       m.ema20 != null &&
       m.ema50 != null &&
       m.ema20 <= m.ema50 &&
-      price <= m.ema50 * 1.01
+      price <= m.ema50 * 1.005
     )
   }
 
   return (
-    core >= 3 &&
+    core >= 4 &&
+    m.htf === 'baixa' &&
     m.ema20 != null &&
     m.ema50 != null &&
     m.ema20 <= m.ema50 &&
-    (m.macdCross === 'bearish' || (m.macdHist != null && m.macdHist < 0)) &&
-    m.htf !== 'alta'
+    (m.macdCross === 'bearish' || (m.macdHist != null && m.macdHist < 0))
   )
 }
 
@@ -1113,7 +1115,7 @@ type RadarSeriesBundle = {
   params: SignalEngineParams
 }
 
-function balanceMarkers(markers: TrendRadarMarker[], maxTotal = 14): TrendRadarMarker[] {
+function balanceMarkers(markers: TrendRadarMarker[], maxTotal = 8): TrendRadarMarker[] {
   const buys = markers.filter((m) => m.type === 'buy')
   const sells = markers.filter((m) => m.type === 'sell')
   const half = Math.ceil(maxTotal / 2)
@@ -1154,8 +1156,8 @@ function collectOperableSignals(
   let lastBuyIdx = -999
   let lastSellIdx = -999
 
-  // Janela do pivô: maior em timeframes longos para apanhar swings reais.
-  const span = bars.length > 400 ? 2 : 3
+  // Janela do pivô maior = menos ruído (só swings confirmados).
+  const span = bars.length > 400 ? 3 : 4
 
   for (let i = MIN_BARS; i < bars.length; i++) {
     const p = closes[i]!
@@ -1182,26 +1184,23 @@ function collectOperableSignals(
     const div = detectRsiDivergence(bars.slice(0, i + 1), bundle.rsiS.slice(0, i + 1))
     const sig = resolveSignal(m, p, reg, div, params)
     const r = m.rsi
-    const adxOk = m.adx == null || m.adx >= params.adxMin - 4
+    const adxOk = m.adx != null && m.adx >= params.adxMin
+    const strongEnough = sig.score >= params.signalStrongScore
 
     let type: 'buy' | 'sell' | null = null
 
-    // SELL só em topo FORTE: pivô de máxima + confirmação real (RSI alto, MACD baixa ou divergência).
-    if (isPivotHigh(bars, i, span)) {
+    // SELL: topo + motor de confluência a dizer SELL (sem pivôs soltos).
+    if (isPivotHigh(bars, i, span) && sig.signal === 'sell' && adxOk && strongEnough) {
       const strongTop =
-        (r != null && r >= 55) || div === 'bearish' || m.macdCross === 'bearish'
-      const notBottom = r == null || r >= 48
-      if (strongTop && notBottom && adxOk && reg !== 'bull') type = 'sell'
-      else if (sig.signal === 'sell') type = 'sell'
+        (r != null && r >= 58) || div === 'bearish' || m.macdCross === 'bearish'
+      if (strongTop && m.htf !== 'alta') type = 'sell'
     }
 
-    // BUY só em fundo FORTE: pivô de mínima + confirmação real (RSI baixo, MACD alta ou divergência).
-    if (!type && isPivotLow(bars, i, span)) {
+    // BUY: fundo + motor de confluência a dizer BUY.
+    if (!type && isPivotLow(bars, i, span) && sig.signal === 'buy' && adxOk && strongEnough) {
       const strongBottom =
-        (r != null && r <= 45) || div === 'bullish' || m.macdCross === 'bullish'
-      const notTop = r == null || r <= 55
-      if (strongBottom && notTop && adxOk && reg !== 'bear') type = 'buy'
-      else if (sig.signal === 'buy') type = 'buy'
+        (r != null && r <= 42) || div === 'bullish' || m.macdCross === 'bullish'
+      if (strongBottom && m.htf !== 'baixa') type = 'buy'
     }
 
     if (!type) continue
@@ -1228,7 +1227,7 @@ function computeFullBacktest(
   const trades: SignalBacktestResult['trades'] = []
 
   // O pivô só é confirmado `span` velas depois — a entrada realista é nessa vela.
-  const span = bars.length > 400 ? 2 : 3
+  const span = bars.length > 400 ? 3 : 4
 
   for (const sig of signals) {
     const pivotIdx = timeToIndex.get(sig.time)
@@ -1355,18 +1354,20 @@ export function computeTrendRadar(
     chartBars: backtest.chartBars,
   }
   const allMarkers = collectOperableSignals(bars, closes, bundle)
-  const deduped = options.skipMarkersLimit ? allMarkers : balanceMarkers(allMarkers, 14)
+  const deduped = options.skipMarkersLimit ? allMarkers : balanceMarkers(allMarkers, 8)
 
-  // Sinal ao vivo: se um topo/fundo acabou de confirmar (pivô recente), reflete-o;
-  // caso contrário, usa a leitura de tendência da última vela.
-  const pivotSpan = bars.length > 400 ? 2 : 3
+  // Sinal ao vivo = só o motor de confluência (não força BUY/SELL por pivô fraco).
+  // Pivô recente só reforça se for do mesmo sentido e score forte.
+  const pivotSpan = bars.length > 400 ? 3 : 4
   const lastMk = allMarkers.length ? allMarkers[allMarkers.length - 1] : null
   let liveSignal = resolved.signal
-  if (lastMk) {
+  if (lastMk && resolved.signal === 'none' && lastMk.score >= params.signalStrongScore) {
     const mkIdx = bars.findIndex((b) => b.time === lastMk.time)
     if (mkIdx >= 0 && (bars.length - 1) - mkIdx <= pivotSpan + 1) {
       liveSignal = lastMk.type
     }
+  } else if (lastMk && resolved.signal === lastMk.type) {
+    liveSignal = lastMk.type
   }
 
   const tpSlSignal =

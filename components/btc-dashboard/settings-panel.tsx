@@ -384,7 +384,7 @@ export function SettingsPanel({
             />
           </div>
           <p className="text-[10px] leading-relaxed text-zinc-500">
-            Painel compacto no canto inferior — clique para expandir. Meta de acerto: 68% (otimização automática).
+            Painel compacto no canto inferior. Modo selectivo: só BUY/SELL fortes com HTF alinhado (usa Semanal/Diário).
           </p>
         </div>
       </IndicatorSection>
