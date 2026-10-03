@@ -1,6 +1,6 @@
 import type { SignalEngineParams } from '@/lib/btc/signal-system/types'
 
-/** Parâmetros padrão — mais selectivos (menos sinais fracos / mais perto do acerto). */
+/** Parâmetros padrão — selectivos: bounce/HTF + TP mais próximo para subir acerto. */
 export const DEFAULT_SIGNAL_PARAMS: SignalEngineParams = {
   rsiPeriod: 14,
   adxPeriod: 14,
@@ -15,14 +15,15 @@ export const DEFAULT_SIGNAL_PARAMS: SignalEngineParams = {
   pocLookback: 60,
   vwapLookback: 50,
   volumeSmaPeriod: 20,
-  signalMinScore: 60,
-  signalStrongScore: 70,
+  signalMinScore: 62,
+  signalStrongScore: 72,
   signalScoreGap: 10,
   minConfluence: 8,
   minCoreConfluence: 4,
-  minSignalGapBars: 12,
-  tpAtrMult: 2.5,
-  slAtrMult: 1.3,
+  minSignalGapBars: 10,
+  /** TP curto + SL um pouco mais largo → mais acertos sem matar o trade cedo. */
+  tpAtrMult: 1.6,
+  slAtrMult: 1.35,
 }
 
 export const OPTIMIZATION_TARGET_WIN_RATE = 68

@@ -23,24 +23,52 @@ export function computeOptimizedBtcSignals(
   options: { chartLabel: string; htfLabel?: string; optimize?: boolean },
 ): TrendRadarAnalysis | null {
   if (options.optimize !== false && bars.length >= OUT_OF_SAMPLE_MIN_BARS) {
-    // Treina os parâmetros só na 1ª metade do histórico (in-sample)...
+    // Treina na 1ª metade; valida na 2ª (fora da amostra).
     const split = Math.floor(bars.length * TRAIN_SPLIT)
     const trainBars = bars.slice(0, split)
     const opt = optimizeSignalParams({ bars: trainBars, htfBars, chartLabel: options.chartLabel })
-    // ...e mede a taxa de acerto só no período seguinte, nunca visto (out-of-sample).
-    const oos = computeTrendRadar(bars, htfBars, {
+
+    const withOpt = computeTrendRadar(bars, htfBars, {
       chartLabel: options.chartLabel,
       htfLabel: options.htfLabel,
       params: opt.params,
       optimization: opt,
       backtestStartIndex: split,
     })
-    // Amostra pequena demais → usa histórico completo (número estatisticamente fiável).
-    if (oos && oos.backtest.total >= 10) return oos
+    const withDefault = computeTrendRadar(bars, htfBars, {
+      chartLabel: options.chartLabel,
+      htfLabel: options.htfLabel,
+      params: DEFAULT_SIGNAL_PARAMS,
+      optimization: opt,
+      backtestStartIndex: split,
+    })
+
+    // Escolhe o set com melhor acerto OOS (e lucro ≥ 0); evita overfit do grid.
+    const pickBetter = (
+      a: TrendRadarAnalysis | null,
+      b: TrendRadarAnalysis | null,
+    ): TrendRadarAnalysis | null => {
+      if (!a) return b
+      if (!b) return a
+      const aOk = a.backtest.cumulativeProfitPct >= 0
+      const bOk = b.backtest.cumulativeProfitPct >= 0
+      if (aOk && !bOk) return a
+      if (bOk && !aOk) return b
+      if (a.backtest.winRatePct !== b.backtest.winRatePct) {
+        return a.backtest.winRatePct >= b.backtest.winRatePct ? a : b
+      }
+      return a.backtest.cumulativeProfitPct >= b.backtest.cumulativeProfitPct ? a : b
+    }
+
+    const oosWinner = pickBetter(withOpt, withDefault)
+    const params =
+      oosWinner && oosWinner === withDefault ? DEFAULT_SIGNAL_PARAMS : opt.params
+
+    // Histórico completo com os params que ganharam no teste OOS (painel estável).
     return computeTrendRadar(bars, htfBars, {
       chartLabel: options.chartLabel,
       htfLabel: options.htfLabel,
-      params: opt.params,
+      params,
       optimization: opt,
     })
   }

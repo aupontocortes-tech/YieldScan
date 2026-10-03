@@ -5,18 +5,18 @@ import { runSignalBacktest } from '@/lib/btc/signal-system/engine'
 type GridOption<T> = T[]
 
 function grid(): SignalEngineParams[] {
-  const adxMins: GridOption<number> = [22, 25]
-  const minScores: GridOption<number> = [58, 64]
+  const adxMins: GridOption<number> = [20, 22, 25]
+  const minScores: GridOption<number> = [64, 70]
   const minConfluences: GridOption<number> = [8, 9]
   const macdSets: GridOption<Pick<SignalEngineParams, 'macdFast' | 'macdSlow'>> = [
     { macdFast: 12, macdSlow: 26 },
     { macdFast: 8, macdSlow: 21 },
   ]
-  // Relação alvo/risco — o fator que mais decide a lucratividade.
+  // Inclui TP mais curto (mais acerto) e alvos longos (mais R:R).
   const tpSlSets: GridOption<Pick<SignalEngineParams, 'tpAtrMult' | 'slAtrMult'>> = [
-    { tpAtrMult: 2, slAtrMult: 1.2 },
+    { tpAtrMult: 1.8, slAtrMult: 1.2 },
+    { tpAtrMult: 2.0, slAtrMult: 1.25 },
     { tpAtrMult: 2.5, slAtrMult: 1.3 },
-    { tpAtrMult: 3, slAtrMult: 1.5 },
   ]
 
   const out: SignalEngineParams[] = []
@@ -42,8 +42,7 @@ function grid(): SignalEngineParams[] {
 }
 
 /**
- * Objetivo: LUCRO robusto, não uma % de acerto arbitrária.
- * (Alto acerto com perda líquida é a armadilha clássica que queremos evitar.)
+ * Lucro + acerto: premia win rate alto sem aceitar curva negativa.
  */
 function rankResult(
   winRatePct: number,
@@ -52,10 +51,11 @@ function rankResult(
   maxDrawdownPct: number,
 ): number {
   if (total < 6) return -Infinity
+  if (cumulativeProfitPct <= 0 && winRatePct < 62) return -Infinity
   const profit = cumulativeProfitPct
-  const ddPenalty = maxDrawdownPct * 0.4
-  const tradeBonus = Math.min(15, total) * 0.6
-  const winBonus = (winRatePct - 50) * 0.4
+  const ddPenalty = maxDrawdownPct * 0.35
+  const tradeBonus = Math.min(12, total) * 0.5
+  const winBonus = (winRatePct - 55) * 0.85
   return profit - ddPenalty + tradeBonus + winBonus
 }
 
@@ -79,10 +79,10 @@ export function optimizeSignalParams(ctx: SignalOptimizationContext): SignalOpti
     )
     if (!Number.isFinite(score)) continue
 
-    // "Meta atingida" = lucrativo, com acerto decente e amostra suficiente.
+    // Meta: lucrativo + acerto ≥68% com amostra mínima.
     const targetMet =
       backtest.cumulativeProfitPct > 0 &&
-      backtest.winRatePct >= 58 &&
+      backtest.winRatePct >= 68 &&
       backtest.total >= OPTIMIZATION_MIN_TRADES
 
     const entry: SignalOptimizationResult = {

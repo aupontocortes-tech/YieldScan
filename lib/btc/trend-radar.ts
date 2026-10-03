@@ -2,9 +2,8 @@
  * Radar de Tendência — 12 componentes institucionais:
  * RSI, ADX, MACD, Volume, HTF, POC, Projeção, EMA20/50/200, ATR, VWAP.
  *
- * Regras de sinal:
- * - BUY só com confirmação multi-timeframe e alinhamento de tendência (ou reversão estrita).
- * - Nunca BUY em queda confirmada (EMA20 < EMA50, preço abaixo das médias, HTF em queda).
+ * Marcações BUY/SELL ancoram em pivôs de fundo/topo confirmados (com bounce),
+ * inclusive em regime de baixa — é aí que os fundos reais se formam.
  */
 
 import { buildBacktestFromTrades, evaluateTradePnl, tpSlFromAtr } from '@/lib/btc/signal-system/backtest'
@@ -1057,9 +1056,9 @@ function backtestHorizonBars(chartLabel: string): number {
     '15m': 40,
     '1h': 32,
     '4h': 24,
-    '1d': 14,
-    '1w': 12,
-    '1M': 8,
+    '1d': 16,
+    '1w': 16,
+    '1M': 10,
     '2mo': 8,
     '3mo': 6,
     '6mo': 5,
@@ -1142,9 +1141,31 @@ function isPivotLow(bars: OhlcvBar[], i: number, span: number): boolean {
   return true
 }
 
+/** Fundo relevante: menor low nos últimos `lookback` barras (evita micro-ruído). */
+function isSwingLow(bars: OhlcvBar[], i: number, span: number, lookback: number): boolean {
+  if (!isPivotLow(bars, i, span)) return false
+  const l = bars[i]!.low
+  const from = Math.max(0, i - lookback)
+  for (let j = from; j < i; j++) {
+    if (bars[j]!.low < l) return false
+  }
+  return true
+}
+
+/** Topo relevante: maior high nos últimos `lookback` barras. */
+function isSwingHigh(bars: OhlcvBar[], i: number, span: number, lookback: number): boolean {
+  if (!isPivotHigh(bars, i, span)) return false
+  const h = bars[i]!.high
+  const from = Math.max(0, i - lookback)
+  for (let j = from; j < i; j++) {
+    if (bars[j]!.high > h) return false
+  }
+  return true
+}
+
 /**
- * Sinais ancorados em TOPOS (SELL) e FUNDOS (BUY) reais, não em cruzamentos
- * a meio da tendência. Cada pivô é confirmado por momentum/RSI para reduzir ruído.
+ * BUY/SELL em fundos/topos — só regras (sem IA-oráculo):
+ * swing + (bounce OU momentum forte) + HTF não contrário (exceto lavagem extrema).
  */
 function collectOperableSignals(
   bars: OhlcvBar[],
@@ -1156,10 +1177,17 @@ function collectOperableSignals(
   let lastBuyIdx = -999
   let lastSellIdx = -999
 
-  // Janela do pivô maior = menos ruído (só swings confirmados).
-  const span = bars.length > 400 ? 3 : 4
+  const span = bars.length > 400 ? 2 : 3
+  const swingLookback = bars.length > 400 ? 10 : 14
+  const gapBars = Math.max(8, Math.min(params.minSignalGapBars, 12))
+  const minScore = Math.min(params.signalMinScore, 64)
 
-  for (let i = MIN_BARS; i < bars.length; i++) {
+  for (let i = MIN_BARS; i < bars.length - span; i++) {
+    const swingHigh = isSwingHigh(bars, i, span, swingLookback)
+    const swingLow = isSwingLow(bars, i, span, swingLookback)
+    if (!swingHigh && !swingLow) continue
+
+    const confirmIdx = i + span
     const p = closes[i]!
     const poc = pocAtIndex(bars, i, params.pocLookback)
     const htf = htfTrendAtTime(htfBars, bars[i]!.time)
@@ -1184,33 +1212,65 @@ function collectOperableSignals(
     const div = detectRsiDivergence(bars.slice(0, i + 1), bundle.rsiS.slice(0, i + 1))
     const sig = resolveSignal(m, p, reg, div, params)
     const r = m.rsi
-    const adxOk = m.adx != null && m.adx >= params.adxMin
-    const strongEnough = sig.score >= params.signalStrongScore
+
+    const bouncedUp =
+      closes[confirmIdx]! > closes[i]! && bars[confirmIdx]!.close > bars[i]!.low * 1.01
+    const bouncedDown =
+      closes[confirmIdx]! < closes[i]! && bars[confirmIdx]!.close < bars[i]!.high * 0.99
+
+    const histPrev = i > 0 ? bundle.macdOut.hist[i - 1] : null
+    const hist = m.macdHist
+    const macdTurningUp =
+      m.macdCross === 'bullish' || (hist != null && histPrev != null && hist > histPrev)
+    const macdTurningDown =
+      m.macdCross === 'bearish' || (hist != null && histPrev != null && hist < histPrev)
+
+    const buyMomentum = (r != null && r <= 42) || div === 'bullish' || macdTurningUp
+    const sellMomentum = (r != null && r >= 55) || div === 'bearish' || macdTurningDown
+
+    // Topo/fundo "maior" (ex.: ATH local) — não bloquear só porque o HTF ainda aponta o mesmo sentido.
+    const majorHigh = isSwingHigh(bars, i, span, Math.max(swingLookback, 20))
+    const majorLow = isSwingLow(bars, i, span, Math.max(swingLookback, 20))
 
     let type: 'buy' | 'sell' | null = null
 
-    // SELL: topo + motor de confluência a dizer SELL (sem pivôs soltos).
-    if (isPivotHigh(bars, i, span) && sig.signal === 'sell' && adxOk && strongEnough) {
-      const strongTop =
-        (r != null && r >= 58) || div === 'bearish' || m.macdCross === 'bearish'
-      if (strongTop && m.htf !== 'alta') type = 'sell'
+    if (swingHigh) {
+      const ok = bouncedDown && (sellMomentum || sig.signal === 'sell')
+      // Tops nascem em alta: HTF alta não veta se for swing major ou RSI esticado.
+      if (ok && (m.htf !== 'alta' || majorHigh || (r != null && r >= 65))) type = 'sell'
     }
 
-    // BUY: fundo + motor de confluência a dizer BUY.
-    if (!type && isPivotLow(bars, i, span) && sig.signal === 'buy' && adxOk && strongEnough) {
-      const strongBottom =
-        (r != null && r <= 42) || div === 'bullish' || m.macdCross === 'bullish'
-      if (strongBottom && m.htf !== 'baixa') type = 'buy'
+    if (!type && swingLow) {
+      const ok = bouncedUp && (buyMomentum || sig.signal === 'buy')
+      if (ok && (m.htf !== 'baixa' || majorLow || (r != null && r <= 36))) type = 'buy'
     }
 
     if (!type) continue
-    if (type === 'buy' && i - lastBuyIdx < params.minSignalGapBars) continue
-    if (type === 'sell' && i - lastSellIdx < params.minSignalGapBars) continue
+
+    const pivot = bars[i]!
+    const pivotPrice = type === 'buy' ? pivot.low : pivot.high
+    const score = Math.max(
+      sig.score,
+      type === 'buy' ? (r != null && r <= 38 ? 74 : 64) : r != null && r >= 68 ? 74 : 64,
+    )
+    if (score < minScore) continue
+
+    // Gap: no mesmo impulso substitui pelo extremo; picos/fundos separados (major) mantêm-se.
+    if (type === 'buy' && i - lastBuyIdx < gapBars) {
+      const prev = out.length ? out[out.length - 1] : null
+      if (prev?.type === 'buy' && pivotPrice < prev.price && i - lastBuyIdx <= span + 3) out.pop()
+      else if (!(prev?.type === 'buy' && pivotPrice < prev.price && majorLow)) continue
+    }
+    if (type === 'sell' && i - lastSellIdx < gapBars) {
+      const prev = out.length ? out[out.length - 1] : null
+      if (prev?.type === 'sell' && pivotPrice > prev.price && i - lastSellIdx <= span + 3) out.pop()
+      else if (!(prev?.type === 'sell' && pivotPrice > prev.price && majorHigh)) continue
+    }
 
     if (type === 'buy') lastBuyIdx = i
     else lastSellIdx = i
 
-    out.push({ time: bars[i]!.time, type, price: p, score: sig.score })
+    out.push({ time: pivot.time, type, price: pivotPrice, score })
   }
   return out
 }
@@ -1226,9 +1286,8 @@ function computeFullBacktest(
   const timeToIndex = new Map(bars.map((b, i) => [b.time, i]))
   const trades: SignalBacktestResult['trades'] = []
 
-  // O pivô só é confirmado `span` velas depois — a entrada realista é nessa vela.
-  const span = bars.length > 400 ? 3 : 4
-
+  // Marker no pivô; entrada realista = confirmação (pivô + span).
+  const span = bars.length > 400 ? 2 : 3
   for (const sig of signals) {
     const pivotIdx = timeToIndex.get(sig.time)
     if (pivotIdx == null) continue
@@ -1354,20 +1413,20 @@ export function computeTrendRadar(
     chartBars: backtest.chartBars,
   }
   const allMarkers = collectOperableSignals(bars, closes, bundle)
-  const deduped = options.skipMarkersLimit ? allMarkers : balanceMarkers(allMarkers, 8)
+  // Mais slots para não esconder SELLs de topos recentes (ATH) nem BUYs de fundos.
+  const deduped = options.skipMarkersLimit ? allMarkers : balanceMarkers(allMarkers, 16)
 
-  // Sinal ao vivo = só o motor de confluência (não força BUY/SELL por pivô fraco).
-  // Pivô recente só reforça se for do mesmo sentido e score forte.
-  const pivotSpan = bars.length > 400 ? 3 : 4
+  // Sinal ao vivo: motor de confluência; pivô recente confirmado reforça o painel.
+  const pivotSpan = bars.length > 400 ? 2 : 3
   const lastMk = allMarkers.length ? allMarkers[allMarkers.length - 1] : null
   let liveSignal = resolved.signal
-  if (lastMk && resolved.signal === 'none' && lastMk.score >= params.signalStrongScore) {
+  if (lastMk) {
     const mkIdx = bars.findIndex((b) => b.time === lastMk.time)
-    if (mkIdx >= 0 && (bars.length - 1) - mkIdx <= pivotSpan + 1) {
+    const barsSincePivot = mkIdx >= 0 ? (bars.length - 1) - mkIdx : 999
+    const recent = barsSincePivot >= pivotSpan && barsSincePivot <= pivotSpan + 3
+    if (recent && (resolved.signal === 'none' || resolved.signal === lastMk.type)) {
       liveSignal = lastMk.type
     }
-  } else if (lastMk && resolved.signal === lastMk.type) {
-    liveSignal = lastMk.type
   }
 
   const tpSlSignal =
