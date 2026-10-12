@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   Building2,
   LineChart,
+  Bot,
   Newspaper,
   SlidersHorizontal,
   Settings,
@@ -61,6 +62,7 @@ const MAIN_NAV: NavItem[] = [
     iconClassName: 'text-orange-400',
   },
   { name: 'Indicadores', href: '/indicator', icon: LineChart, iconClassName: 'text-yellow-400' },
+  { name: 'Treinar', href: '/indicator/treinar', icon: Bot, iconClassName: 'text-lime-400' },
   { name: 'Calculadora', href: '/calculator', icon: Calculator, iconClassName: 'text-violet-400' },
   { name: 'Unlocks', href: '/unlocks', icon: LockKeyhole, iconClassName: 'text-teal-400' },
   {
@@ -89,6 +91,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/pools')) return 'Pools'
   if (pathname.startsWith('/my-liquidity')) return 'A minha liquidez'
   if (pathname.startsWith('/rebalance-pro')) return 'Rebalance Pro'
+  if (pathname.startsWith('/indicator/treinar')) return 'Treinar'
   if (pathname.startsWith('/indicator')) return 'Indicadores'
   if (pathname.startsWith('/calculator')) return 'Calculadora'
   if (pathname.startsWith('/unlocks')) return 'Unlocks'
@@ -164,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     ? { onTouchStart: () => undefined, onTouchEnd: () => undefined }
     : swipeNavRaw
   const isPhone = useIsMobile()
-  const compactHeader = isPhone && pathname.startsWith('/indicator')
+  const compactHeader = isPhone && pathname.startsWith('/indicator') && !pathname.startsWith('/indicator/treinar')
 
   return (
     <SidebarProvider>
@@ -217,8 +220,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 ? pathname.startsWith('/my-liquidity')
                                 : item.href === '/rebalance-pro'
                                   ? pathname.startsWith('/rebalance-pro')
-                                  : item.href === '/indicator'
-                                    ? pathname.startsWith('/indicator')
+                                  : item.href === '/indicator/treinar'
+                                    ? pathname.startsWith('/indicator/treinar')
+                                    : item.href === '/indicator'
+                                    ? pathname.startsWith('/indicator') && !pathname.startsWith('/indicator/treinar')
                                     : item.href === '/calculator'
                                       ? pathname.startsWith('/calculator')
                                       : item.href === '/unlocks'
