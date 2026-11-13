@@ -7,9 +7,20 @@ import { fetchCoindeskAsArticles } from '@/lib/tendencias/fetch-coindesk'
 import {
   fetchDefiChainsTop,
   fetchGlobalTvlChange7d,
+  fetchHoldersBuybacks,
   fetchTopProtocolFees,
   fetchTopYieldPools,
 } from '@/lib/tendencias/fetch-defi'
+import {
+  fetchDexVolumeByChain,
+  fetchLlamaChainsDetailed,
+  fetchLlamaProtocolsLite,
+} from '@/lib/tendencias/fetch-l1'
+import {
+  fetchCategoryCoins,
+  fetchCoinGeckoCategories,
+} from '@/lib/tendencias/fetch-narrative-markets'
+import { pickHotGeckoCategoryIds } from '@/lib/tendencias/narrative-adoption'
 import {
   fetchTendenciasGlobal,
   fetchTendenciasMarkets,
@@ -35,7 +46,7 @@ const TONES = new Set<AnalysisTone>(['conservador', 'neutro', 'agressivo'])
 
 const fetchRaw = unstable_cache(
   async () => {
-    const [markets, global, trending, gnewsTrim, gnewsStocks, googleNews, cvNews, coindeskNews, cryptopanicNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal] =
+    const [markets, global, trending, gnewsTrim, gnewsStocks, googleNews, cvNews, coindeskNews, cryptopanicNews, fmpQuotes, usEquities, emissions, chains, pools, fees, tvlGlobal, llamaChains, llamaProtocols, dexVolumeByChain, cgCategories, holdersBuybacks] =
       await Promise.all([
         fetchTendenciasMarkets(70),
         fetchTendenciasGlobal(),
@@ -58,7 +69,23 @@ const fetchRaw = unstable_cache(
         withTimeout(fetchTopYieldPools(6), 6_000, []),
         withTimeout(fetchTopProtocolFees(20), 8_000, []),
         fetchGlobalTvlChange7d(),
+        fetchLlamaChainsDetailed(36),
+        withTimeout(fetchLlamaProtocolsLite(220), 18_000, []),
+        withTimeout(fetchDexVolumeByChain(), 16_000, {}),
+        withTimeout(fetchCoinGeckoCategories(), 12_000, []),
+        withTimeout(fetchHoldersBuybacks(20), 14_000, {
+          total24h: 0,
+          total7d: 0,
+          change1d: null,
+          change7d: null,
+          protocols: [],
+        }),
       ])
+
+    const hotCats = pickHotGeckoCategoryIds(cgCategories)
+    const seedCats = ['real-world-assets-rwa', 'decentralized-finance-defi', 'artificial-intelligence']
+    const catIds = [...new Set([...seedCats, ...hotCats])].slice(0, 4)
+    const narrativeCoinsByCat = await withTimeout(fetchCategoryCoins(catIds), 42_000, {})
 
     /**
      * Google News PT-BR garante volume sem chave; APIs dedicadas reforçam o conjunto.
@@ -131,11 +158,17 @@ const fetchRaw = unstable_cache(
       defiPools: pools,
       defiFees: fees,
       defiTvlGlobal: tvlGlobal,
+      llamaChains,
+      llamaProtocols,
+      dexVolumeByChain,
+      cgCategories,
+      narrativeCoinsByCat,
+      holdersBuybacks,
       partial,
       error,
     }
   },
-  ['tendencias-trim-v21'],
+  ['tendencias-trim-v28'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -145,7 +178,7 @@ function getTrimPayload(period: MomentumPeriod, tone: AnalysisTone): Promise<Ten
       const raw = await fetchRaw()
       return buildTrimPayload({ ...raw, period, tone })
     },
-    ['tendencias-trim-payload', period, tone],
+    ['tendencias-trim-payload-v28', period, tone],
     { revalidate: 180, tags: ['tendencias'] },
   )()
 }
@@ -171,7 +204,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v21',
+          'X-Tendencias-Cache': 'trim-v28',
         }
 
     return NextResponse.json(
@@ -236,6 +269,7 @@ export async function GET(req: NextRequest) {
           topProtocols: [],
           summary: 'DeFi indisponível.',
         },
+        l1: null,
         equities: null,
         alerts: [],
         partial: true,

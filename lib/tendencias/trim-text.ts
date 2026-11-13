@@ -103,7 +103,7 @@ export function generateDefiInterpretation(input: {
 }): string {
   const { name, tvlChange, feesChange, revenue24h } = input
   if (tvlChange != null && tvlChange > 3 && (feesChange ?? 0) > 0) {
-    return `${name} apresenta crescimento sustentável de TVL junto com aumento de actividade on-chain.`
+    return `${name} apresenta crescimento sustentável de TVL junto com aumento de actividade na cadeia.`
   }
   if (tvlChange != null && tvlChange < -4) {
     return `${name} regista perda de força com contração de TVL na última semana.`

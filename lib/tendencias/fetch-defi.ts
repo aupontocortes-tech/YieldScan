@@ -62,6 +62,125 @@ export async function fetchTopProtocolFees(limit = 40): Promise<RawProtocolFees[
   }
 }
 
+export type RawHoldersBuyback = {
+  name: string
+  slug: string
+  geckoId: string | null
+  symbol: string | null
+  revenue24h: number
+  revenue7d: number
+  change1d: number | null
+  change7d: number | null
+}
+
+export type HoldersBuybackOverview = {
+  total24h: number
+  total7d: number
+  change1d: number | null
+  change7d: number | null
+  protocols: RawHoldersBuyback[]
+}
+
+const HOLDERS_GECKO_SYMBOL: Record<string, string> = {
+  hyperliquid: 'HYPE',
+  uniswap: 'UNI',
+  sky: 'SKY',
+  maker: 'MKR',
+  'aerodrome-finance': 'AERO',
+  gmx: 'GMX',
+  'pump-fun': 'PUMP',
+  binancecoin: 'BNB',
+  'curve-dao-token': 'CRV',
+  tron: 'TRX',
+  ethereum: 'ETH',
+  chainlink: 'LINK',
+  'pancakeswap-token': 'CAKE',
+}
+
+const HOLDERS_SLUG_GECKO: Record<string, string> = {
+  'hyperliquid-perps': 'hyperliquid',
+  'hyperliquid-spot-orderbook': 'hyperliquid',
+  tron: 'tron',
+  ethereum: 'ethereum',
+  'uniswap-v3': 'uniswap',
+  uniswap: 'uniswap',
+  'sky-lending': 'sky',
+  sky: 'sky',
+  'curve-dex': 'curve-dao-token',
+  'aero-slipstream': 'aerodrome-finance',
+  aerodrome: 'aerodrome-finance',
+  'gmx-solana': 'gmx',
+  gmx: 'gmx',
+  'pump.fun': 'pump-fun',
+  'chainlink-staking': 'chainlink',
+  'lighter-perps': 'lighter',
+  'binance-cex': 'binancecoin',
+  makerdao: 'maker',
+  'makerdao-legacy': 'maker',
+  pancake: 'pancakeswap-token',
+  'pancakeswap-amm': 'pancakeswap-token',
+}
+
+export async function fetchHoldersBuybacks(limit = 25): Promise<HoldersBuybackOverview> {
+  const empty: HoldersBuybackOverview = { total24h: 0, total7d: 0, change1d: null, change7d: null, protocols: [] }
+  try {
+    const url =
+      'https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyHoldersRevenue'
+    const res = await fetch(url, {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(18_000),
+    })
+    if (!res.ok) return empty
+    const data = (await res.json()) as {
+      total24h?: number
+      total7d?: number
+      change_1d?: number
+      change_7d?: number
+      protocols?: Array<{
+        name?: string
+        slug?: string
+        gecko_id?: string | null
+        symbol?: string | null
+        total24h?: number
+        total7d?: number
+        change_1d?: number
+        change_7d?: number
+      }>
+    }
+    const protocols = (data.protocols ?? [])
+      .filter((p) => (p.total24h ?? 0) > 50_000)
+      .sort((a, b) => (b.total24h ?? 0) - (a.total24h ?? 0))
+      .slice(0, limit)
+      .map((p) => {
+        const slug = p.slug ?? p.name?.toLowerCase().replace(/\s+/g, '-') ?? ''
+        const geckoId = p.gecko_id ?? HOLDERS_SLUG_GECKO[slug] ?? null
+        return {
+          name: p.name ?? slug,
+          slug,
+          geckoId,
+          symbol: p.symbol
+            ? String(p.symbol).toUpperCase()
+            : geckoId && HOLDERS_GECKO_SYMBOL[geckoId]
+              ? HOLDERS_GECKO_SYMBOL[geckoId]
+              : null,
+          revenue24h: p.total24h ?? 0,
+          revenue7d: p.total7d ?? 0,
+          change1d: typeof p.change_1d === 'number' ? p.change_1d : null,
+          change7d: typeof p.change_7d === 'number' ? p.change_7d : null,
+        }
+      })
+    return {
+      total24h: data.total24h ?? protocols.reduce((s, p) => s + p.revenue24h, 0),
+      total7d: data.total7d ?? protocols.reduce((s, p) => s + p.revenue7d, 0),
+      change1d: typeof data.change_1d === 'number' ? data.change_1d : null,
+      change7d: typeof data.change_7d === 'number' ? data.change_7d : null,
+      protocols,
+    }
+  } catch {
+    return empty
+  }
+}
+
 export function indexProtocolFees(rows: RawProtocolFees[]): {
   byGecko: Map<string, RawProtocolFees>
   bySymbol: Map<string, RawProtocolFees>

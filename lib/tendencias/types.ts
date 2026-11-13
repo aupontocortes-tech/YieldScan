@@ -16,10 +16,25 @@ export type TendenciasNarrativeId =
   | 'stablecoins'
   | 'regulacao'
   | 'layer2'
+  | 'layer1'
   | 'hacks'
   | 'institucionais'
   | 'rwa'
   | 'gaming'
+  | 'restaking'
+  | 'depin'
+  | 'buybacks'
+
+export type TendenciasNarrativeSpotlight = {
+  symbol: string
+  name: string
+  geckoId: string
+  marketCap: number | null
+  change24h: number | null
+  change7d: number | null
+  volume24h: number | null
+  why: string
+}
 
 export type TrimSubScores = {
   momentum: number
@@ -62,7 +77,7 @@ export type TendenciasTokenRow = {
 }
 
 export type TendenciasNarrative = {
-  id: TendenciasNarrativeId
+  id: TendenciasNarrativeId | string
   label: string
   summary: string
   impact: 'alto' | 'medio' | 'baixo'
@@ -70,6 +85,17 @@ export type TendenciasNarrative = {
   relatedSymbols: string[]
   mentionCount: number
   intensity: number
+  /** 0–100: TVL + CoinGecko do sector */
+  adoptionScore?: number
+  /** 0–100: menções nas notícias */
+  attentionScore?: number
+  tvlUsd?: number | null
+  tvlChange7dPct?: number | null
+  marketCapChange24h?: number | null
+  volume24h?: number | null
+  source?: 'adocao' | 'atencao' | 'misto'
+  simple?: string
+  spotlights?: TendenciasNarrativeSpotlight[]
 }
 
 export type TendenciasAlert = {
@@ -129,6 +155,9 @@ export type TendenciasMarketPanel = {
   /** Score de Tendência médio dos top 20 tokens */
   trimMarketScore: number
   dominantNarrative: string | null
+  /** Tema mais falado nas notícias (pode diferir da adoção). */
+  attentionNarrative?: string | null
+  narrativeHint?: string | null
   gainersCount: number
   losersCount: number
 }
@@ -150,6 +179,54 @@ export type TendenciasDefiPanel = {
   topChains: Array<{ name: string; tvlUsd: number }>
   topProtocols: TendenciasDefiProtocol[]
   summary: string
+}
+
+export type TendenciasL1Token = {
+  name: string
+  symbol: string
+  geckoId: string | null
+  protocol: string
+  category: string
+  narrative: string
+  tvlUsd: number
+  change7d: number | null
+  volume24h: number | null
+  about: string
+  url: string | null
+  buyWatch: boolean
+}
+
+export type TendenciasNetworkRow = {
+  name: string
+  kind: 'l1' | 'l2' | 'outra'
+  tvlUsd: number
+  tvlChange7dPct: number | null
+  tvlChange1dPct: number | null
+  /** Dólares de TVL ganhos/perdidos em 7 dias (fluxo, não o cofre). */
+  tvlFlow7dUsd: number | null
+  volume24h: number | null
+  nativeSymbol: string | null
+  nativeGeckoId: string | null
+  nativeChange7d: number | null
+  /** Score antigo (tamanho). Preferir flowScore. */
+  adoptionScore: number
+  /** 0–100: desempenho = fluxo %, actividade e token nativo. Sem favorecer o maior cofre. */
+  flowScore: number
+  narratives: string[]
+  tokens: TendenciasL1Token[]
+}
+
+export type TendenciasL1Watch = TendenciasL1Token & { chain: string }
+
+export type TendenciasL1Panel = {
+  summary: string
+  /** L1 com melhor fluxo (não a maior em TVL). */
+  bestL1: string | null
+  /** L1 com o maior cofre (quase sempre Ethereum). */
+  biggestVault: string | null
+  newsNarrative: string | null
+  networks: TendenciasNetworkRow[]
+  buyWatch: TendenciasL1Watch[]
 }
 
 export type TendenciasEquityRow = {
@@ -205,6 +282,7 @@ export type TendenciasApiResponse = {
   narratives: TendenciasNarrative[]
   buckets: TendenciasTokenBuckets
   defi: TendenciasDefiPanel
+  l1: TendenciasL1Panel | null
   equities: TendenciasEquitiesPanel | null
   alerts: TendenciasAlert[]
   partial: boolean

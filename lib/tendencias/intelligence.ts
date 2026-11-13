@@ -592,6 +592,8 @@ export function buildTendenciasPayload(input: {
     narratives,
     buckets,
     defi,
+    l1: null,
+    equities: null,
     alerts: buildAlerts(input.markets, buckets, news, defi),
     partial: input.partial ?? false,
     error: input.error ?? null,

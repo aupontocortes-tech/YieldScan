@@ -54,6 +54,7 @@ import {
 import {
   AlertTriangle,
   Building2,
+  Globe2,
   Layers,
   Newspaper,
   RefreshCw,
@@ -67,6 +68,8 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { DefiTendenciasPanel } from '@/components/dashboard/defi-tendencias-panel'
+import { L1RedesPanel } from '@/components/dashboard/l1-redes-panel'
+import { NarrativaSimplesPanel } from '@/components/dashboard/narrativa-simples-panel'
 
 type NewsMentionFilter = { kind: 'crypto' | 'stock'; symbol: string }
 
@@ -344,14 +347,15 @@ function NewsTopMentionsSection({
   )
 }
 
-type TabId = 'visao' | 'tokens' | 'acoes' | 'noticias' | 'defi'
+type TabId = 'visao' | 'tokens' | 'acoes' | 'noticias' | 'defi' | 'redes'
 
-const TABS: { id: TabId; label: string; icon: typeof Sparkles }[] = [
-  { id: 'visao', label: 'Visão geral', icon: Sparkles },
-  { id: 'tokens', label: 'Tokens', icon: TrendingUp },
-  { id: 'acoes', label: 'Ações US', icon: Building2 },
-  { id: 'noticias', label: 'Notícias', icon: Newspaper },
-  { id: 'defi', label: 'DeFi', icon: Layers },
+const TABS: { id: TabId; label: string; icon: typeof Sparkles; active: string }[] = [
+  { id: 'visao', label: 'Visão geral', icon: Sparkles, active: 'text-fuchsia-300 ring-fuchsia-500/30' },
+  { id: 'tokens', label: 'Tokens', icon: TrendingUp, active: 'text-emerald-300 ring-emerald-500/30' },
+  { id: 'acoes', label: 'Ações US', icon: Building2, active: 'text-blue-300 ring-blue-500/30' },
+  { id: 'noticias', label: 'Notícias', icon: Newspaper, active: 'text-rose-300 ring-rose-500/30' },
+  { id: 'defi', label: 'DeFi', icon: Layers, active: 'text-cyan-300 ring-cyan-500/30' },
+  { id: 'redes', label: 'Redes', icon: Globe2, active: 'text-teal-300 ring-teal-500/30' },
 ]
 
 const EQUITY_SECTOR_LABEL: Record<TendenciasEquityRow['sectorTag'], string> = {
@@ -454,7 +458,7 @@ function ObserveTodayPanel({
   const parts = text.split(ANALYSIS_HIGHLIGHT_RE)
   const speakText = useMemo(() => {
     const clean = text.replace(/\s+/g, ' ').trim()
-    return `O que observar hoje. Score de tendência ${score} de 100. ${clean}`
+    return `O que observar hoje. Pontuação de tendência ${score} de 100. ${clean}`
   }, [text, score])
 
   const speaking = useSyncExternalStore(
@@ -464,17 +468,17 @@ function ObserveTodayPanel({
   )
 
   return (
-    <Card className="relative overflow-hidden border-yellow-500/30 bg-gradient-to-br from-yellow-500/[0.12] via-card to-amber-950/20 animate-tendencias-glow">
+    <Card className="relative overflow-hidden border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-950/40 via-violet-950/20 to-cyan-950/20 animate-tendencias-glow">
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-yellow-400/80 to-transparent animate-tendencias-shimmer"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-fuchsia-400 via-cyan-400 to-emerald-400 animate-tendencias-shimmer"
         aria-hidden
       />
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight sm:text-lg">
             <span className="flex items-center gap-1.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-500/20 ring-1 ring-yellow-500/35">
-                <Zap className="h-5 w-5 text-yellow-400 animate-pulse" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-500/20 ring-1 ring-fuchsia-500/35">
+                <Zap className="h-5 w-5 text-fuchsia-300 animate-pulse" />
               </span>
               {isGfSpeechSupported() ? (
                 <button
@@ -485,10 +489,10 @@ function ObserveTodayPanel({
                   }}
                   className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-xl border transition-colors',
-                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-500/60',
+                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-fuchsia-500/60',
                     speaking
-                      ? 'border-yellow-500/50 bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/35'
-                      : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20',
+                      ? 'border-cyan-500/50 bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/35'
+                      : 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20',
                   )}
                   title={speaking ? 'Parar leitura' : 'Ouvir resumo do mercado'}
                   aria-label={speaking ? 'Parar leitura do resumo' : 'Ouvir resumo do mercado'}
@@ -502,12 +506,12 @@ function ObserveTodayPanel({
           </CardTitle>
           <Badge
             variant="outline"
-            className="border-yellow-500/40 bg-yellow-500/10 px-2.5 py-1 font-mono text-sm font-bold text-yellow-300 tabular-nums"
+            className="border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 font-mono text-sm font-bold text-cyan-300 tabular-nums"
           >
             {score}/100
           </Badge>
         </div>
-        <p className="text-xs font-medium text-yellow-200/80">Análise do mercado · leitura rápida</p>
+        <p className="text-xs font-medium text-fuchsia-200/80">Análise do mercado · leitura rápida</p>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-base font-medium leading-[1.8] tracking-wide text-foreground/95 sm:text-lg sm:leading-[1.85]">
@@ -523,7 +527,7 @@ function ObserveTodayPanel({
             ),
           )}
         </p>
-        <div className="flex flex-wrap items-center gap-2 border-t border-yellow-500/15 pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-fuchsia-500/15 pt-3">
           <Badge variant="secondary" className="text-[10px] font-medium">
             {periodLabel}
           </Badge>
@@ -935,7 +939,7 @@ export function DashbuddyTendencias() {
     )
   }
 
-  const { market, observeToday, news, narratives, buckets, alerts, defi, equities, meta } = data
+  const { market, observeToday, news, narratives, buckets, alerts, defi, l1, equities, meta } = data
   const sourcesLabel = meta.dataSources?.join(' · ') ?? 'coingecko · defillama'
 
   return (
@@ -982,19 +986,23 @@ export function DashbuddyTendencias() {
         />
         <KpiCard label={SCORE_MERCADO_NOME} value={`${market.trimMarketScore}/100`} accent="gold" />
         <KpiCard
-          label="BTC dominance"
+          label="Domínio do BTC"
           value={market.btcDominance != null ? `${market.btcDominance.toFixed(1)}%` : '—'}
         />
         <KpiCard
-          label="Narrativa"
+          label="Tema (adoção)"
           value={market.dominantNarrative ?? '—'}
-          sub={`${market.gainersCount} altas · ${market.losersCount} quedas`}
+          sub={
+            market.attentionNarrative && market.attentionNarrative !== market.dominantNarrative
+              ? `Notícias: ${market.attentionNarrative}`
+              : 'TVL + CoinGecko'
+          }
         />
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-border/40 bg-muted/20 p-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {TABS.map(({ id, label, icon: Icon, active }) => (
           <button
             key={id}
             type="button"
@@ -1002,15 +1010,12 @@ export function DashbuddyTendencias() {
             className={cn(
               'relative flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200',
               tab === id
-                ? 'scale-[1.02] bg-background text-foreground shadow-md ring-1 ring-yellow-500/25'
+                ? cn('scale-[1.02] bg-background shadow-md ring-1', active)
                 : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
             )}
           >
-            <Icon className={cn('h-3.5 w-3.5 transition-colors', tab === id && 'text-yellow-400')} />
+            <Icon className="h-3.5 w-3.5" />
             {label}
-            {tab === id ? (
-              <span className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-yellow-500/80" aria-hidden />
-            ) : null}
           </button>
         ))}
       </div>
@@ -1073,19 +1078,7 @@ export function DashbuddyTendencias() {
               </Card>
             </div>
 
-            {narratives.length > 0 && (
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">Narrativas cripto activas</p>
-                <div className="flex flex-wrap gap-2">
-                  {narratives.slice(0, 6).map((n) => (
-                    <Badge key={n.id} variant="outline" className="gap-1 text-[10px]">
-                      {n.label}
-                      <span className="text-muted-foreground">· {n.mentionCount}</span>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
+            {narratives.length > 0 && <NarrativaSimplesPanel narratives={narratives} />}
           </section>
 
           {equities && equities.highlights.length > 0 && (
@@ -1403,6 +1396,25 @@ export function DashbuddyTendencias() {
             <DefiTendenciasPanel defi={defi} />
           </CardContent>
         </Card>
+      )}
+
+      {/* Tab: Redes / L1 */}
+      {tab === 'redes' && (
+        <div className="space-y-5">
+          {narratives.length > 0 && (
+            <Card className="border-border/50 bg-card/40">
+              <CardContent className="pt-4">
+                <NarrativaSimplesPanel narratives={narratives} />
+              </CardContent>
+            </Card>
+          )}
+          <Card className="border-border/50 bg-card/40">
+            <CardContent className="pt-4">
+              <h3 className="mb-3 text-sm font-bold tracking-tight">L1 com mais fluxo (adoção agora)</h3>
+              <L1RedesPanel l1={l1} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <p className="text-center text-[10px] text-muted-foreground">

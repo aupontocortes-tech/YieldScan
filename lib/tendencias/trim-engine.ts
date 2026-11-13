@@ -11,10 +11,15 @@ import type { RawGlobal, RawMarketCoin, RawTrending } from '@/lib/tendencias/fet
 import {
   enrichTvlGlobalFromChains,
   indexProtocolFees,
+  type HoldersBuybackOverview,
   type RawChainTvl,
   type RawProtocolFees,
   type RawYieldPool,
 } from '@/lib/tendencias/fetch-defi'
+import { buildL1Panel } from '@/lib/tendencias/l1-engine'
+import type { DexVolumeByChain, RawLlamaChain, RawLlamaProtocol } from '@/lib/tendencias/fetch-l1'
+import { buildAdoptionNarratives } from '@/lib/tendencias/narrative-adoption'
+import type { RawCgCategory } from '@/lib/tendencias/fetch-narrative-markets'
 import { applyRankedNewsMentions } from '@/lib/tendencias/rank-news-mentions'
 import {
   analyzeTrimNews,
@@ -38,6 +43,7 @@ import type {
   TendenciasApiResponse,
   TendenciasDefiPanel,
   TendenciasEquitiesPanel,
+  TendenciasL1Panel,
   TendenciasMarketPanel,
   TendenciasNarrative,
   TendenciasTokenBuckets,
@@ -130,6 +136,7 @@ function buildMarketPanel(
   marketTrim: number,
   newsScore: number,
   narratives: TendenciasNarrative[],
+  extra?: { attentionNarrative: string | null; narrativeHint: string | null },
 ): TendenciasMarketPanel {
   const changes = markets.map((m) => m.price_change_percentage_24h ?? 0).filter(Number.isFinite)
   const avgChange = changes.length ? changes.reduce((a, b) => a + b, 0) / changes.length : 0
@@ -163,6 +170,8 @@ function buildMarketPanel(
     trendIndex: clamp(Math.round(marketTrim + avgChange * 2), 0, 100),
     trimMarketScore: marketTrim,
     dominantNarrative: narratives[0]?.label ?? null,
+    attentionNarrative: extra?.attentionNarrative ?? null,
+    narrativeHint: extra?.narrativeHint ?? null,
     gainersCount,
     losersCount,
   }
@@ -345,6 +354,12 @@ export function buildTrimPayload(input: {
   defiPools?: RawYieldPool[]
   defiFees?: RawProtocolFees[]
   defiTvlGlobal?: { current: number | null; changePct: number | null }
+  llamaChains?: RawLlamaChain[]
+  llamaProtocols?: RawLlamaProtocol[]
+  dexVolumeByChain?: DexVolumeByChain
+  cgCategories?: RawCgCategory[]
+  narrativeCoinsByCat?: Record<string, RawMarketCoin[]>
+  holdersBuybacks?: HoldersBuybackOverview
   fmpQuotes?: FmpQuotesRecord
   usEquities?: UsEquitiesSnapshot | null
   period?: MomentumPeriod
@@ -400,7 +415,27 @@ export function buildTrimPayload(input: {
     fundamentosFortes: byTrim.filter((r) => (r.subScores?.defi ?? 50) >= 62).slice(0, 6),
   }
 
-  const narratives = buildNarratives(newsAnalysis.narratives)
+  const newsById = new Map(
+    newsAnalysis.narratives.map((n) => [String(n.id), n]),
+  )
+  const adoptionNarratives = buildAdoptionNarratives({
+    categories: input.cgCategories ?? [],
+    coinsByCat: input.narrativeCoinsByCat ?? {},
+    protocols: input.llamaProtocols ?? [],
+    newsById,
+    holders: input.holdersBuybacks,
+    markets: input.markets,
+  })
+  const newsNarratives = buildNarratives(newsAnalysis.narratives)
+  const narratives = adoptionNarratives.length > 0 ? adoptionNarratives : newsNarratives
+  const attentionLabel = newsNarratives[0]?.label ?? newsAnalysis.insight.dominantNarrative ?? null
+  const narrativeHint =
+    narratives[0]?.source === 'adocao'
+      ? 'Escolhida pelo dinheiro no sector (TVL + CoinGecko), não só pelas notícias.'
+      : narratives[0]?.source === 'atencao'
+        ? 'Ainda puxada pelas notícias — há pouca adoção medida neste tema.'
+        : 'Mistura adoção (TVL/CoinGecko) com o que as notícias estão a falar.'
+
   const trimScoresArr = [...trimById.values()]
   const mTrim = marketTrimScore(trimScoresArr)
   const newsAggregate =
@@ -415,7 +450,21 @@ export function buildTrimPayload(input: {
     input.defiTvlGlobal ?? { current: null, changePct: null },
   )
 
-  const market = buildMarketPanel(input.global, input.markets, mTrim, newsAggregate, narratives)
+  const l1: TendenciasL1Panel | null =
+    (input.llamaChains?.length ?? 0) > 0
+      ? buildL1Panel({
+          chains: input.llamaChains ?? [],
+          protocols: input.llamaProtocols ?? [],
+          dexVolume: input.dexVolumeByChain ?? {},
+          markets: input.markets,
+          newsNarrative: narratives[0]?.label ?? attentionLabel,
+        })
+      : null
+
+  const market = buildMarketPanel(input.global, input.markets, mTrim, newsAggregate, narratives, {
+    attentionNarrative: attentionLabel,
+    narrativeHint,
+  })
 
   const topAccel = [...input.markets]
     .sort((a, b) => (trimById.get(b.id)?.trimScore ?? 0) - (trimById.get(a.id)?.trimScore ?? 0))[0]
@@ -475,6 +524,7 @@ export function buildTrimPayload(input: {
     narratives,
     buckets,
     defi,
+    l1,
     equities,
     alerts,
     partial: input.partial ?? false,
