@@ -425,6 +425,7 @@ export function buildTrimPayload(input: {
     newsById,
     holders: input.holdersBuybacks,
     markets: input.markets,
+    period,
   })
   const newsNarratives = buildNarratives(newsAnalysis.narratives)
   const narratives = adoptionNarratives.length > 0 ? adoptionNarratives : newsNarratives
@@ -458,6 +459,12 @@ export function buildTrimPayload(input: {
           dexVolume: input.dexVolumeByChain ?? {},
           markets: input.markets,
           newsNarrative: narratives[0]?.label ?? attentionLabel,
+          buybackGeckoIds: (input.holdersBuybacks?.protocols ?? [])
+            .map((p) => p.geckoId)
+            .filter((id): id is string => Boolean(id)),
+          buybackSymbols: (input.holdersBuybacks?.protocols ?? [])
+            .map((p) => p.symbol)
+            .filter((s): s is string => Boolean(s)),
         })
       : null
 

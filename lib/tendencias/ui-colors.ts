@@ -27,6 +27,15 @@ const TONES: Record<string, ThemeTone> = {
     chip: 'border-teal-500/40 bg-teal-500/15 text-teal-200',
     bar: 'bg-teal-400',
   },
+  emprestimos: {
+    label: 'Empréstimos',
+    text: 'text-emerald-300',
+    muted: 'text-emerald-200/80',
+    border: 'border-emerald-500/45',
+    bg: 'from-emerald-950/70 via-teal-950/25 to-card',
+    chip: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+    bar: 'bg-emerald-400',
+  },
   defi: {
     label: 'DeFi',
     text: 'text-cyan-300',
@@ -141,10 +150,17 @@ const BY_LABEL: Record<string, string> = {
   Recompra: 'buybacks',
   Queima: 'buybacks',
   DEX: 'defi',
-  Empréstimos: 'defi',
+  'Bolsa DEX': 'defi',
+  Empréstimos: 'emprestimos',
+  Rendimento: 'defi',
   'Staking líquido': 'restaking',
   Bridges: 'layer2',
+  Pontes: 'layer2',
   Derivativos: 'defi',
+  'Infra-estrutura': 'layer1',
+  Lançamentos: 'defi',
+  Pagamentos: 'defi',
+  'Camada 1': 'layer1',
 }
 
 const FALLBACK: ThemeTone = {

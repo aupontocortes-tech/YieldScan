@@ -853,6 +853,7 @@ export function DashbuddyTendencias() {
   const [prefs, setPrefs] = useState<TendenciasPrefs>(DEFAULT_TENDENCIAS_PREFS)
   const [mounted, setMounted] = useState(false)
   const [tab, setTab] = useState<TabId>('visao')
+  const [nicheFilter, setNicheFilter] = useState<string | null>(null)
   const [tokenFilter, setTokenFilter] = useState<TokenFilter>('destaques')
   const [mentionFilter, setMentionFilter] = useState<NewsMentionFilter | null>(null)
   useEffect(() => {
@@ -1404,14 +1405,20 @@ export function DashbuddyTendencias() {
           {narratives.length > 0 && (
             <Card className="border-border/50 bg-card/40">
               <CardContent className="pt-4">
-                <NarrativaSimplesPanel narratives={narratives} />
+                <NarrativaSimplesPanel
+                  narratives={narratives}
+                  selectedId={nicheFilter}
+                  onSelect={setNicheFilter}
+                  l1={l1}
+                  periodLabel={PERIOD_LABEL[period]}
+                />
               </CardContent>
             </Card>
           )}
           <Card className="border-border/50 bg-card/40">
             <CardContent className="pt-4">
               <h3 className="mb-3 text-sm font-bold tracking-tight">L1 com mais fluxo (adoção agora)</h3>
-              <L1RedesPanel l1={l1} />
+              <L1RedesPanel l1={l1} narratives={narratives} nicheId={nicheFilter} />
             </CardContent>
           </Card>
         </div>

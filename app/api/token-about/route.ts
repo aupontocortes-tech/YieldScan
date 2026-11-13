@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchCoingecko } from '@/lib/coingecko-server'
 import { categoriaCoinGeckoPt } from '@/lib/tendencias/crypto-pt'
+import { geckoIdFromSymbol } from '@/lib/tendencias/gecko-ids'
 import { pareceIngles } from '@/lib/news-lang'
 import { traduzirParaPortugues } from '@/lib/translate'
 
@@ -94,17 +95,47 @@ function explainSupply(circ: number | null, total: number | null, max: number | 
   }
 }
 
-export async function GET(req: NextRequest) {
-  const id = (req.nextUrl.searchParams.get('id') ?? '').trim().toLowerCase()
-  if (!id || id.length > 80 || !/^[a-z0-9-]+$/.test(id)) {
-    return NextResponse.json({ error: 'id inválido' }, { status: 400 })
+async function resolveCoinId(idRaw: string, symbolRaw: string): Promise<string | null> {
+  const id = idRaw.trim().toLowerCase()
+  if (id && /^[a-z0-9-]{2,80}$/.test(id)) return id
+  const mapped = geckoIdFromSymbol(symbolRaw)
+  if (mapped) return mapped
+  const q = (symbolRaw || idRaw).trim()
+  if (q.length < 2) return null
+  const search = await fetchCoingecko(`/search?query=${encodeURIComponent(q.slice(0, 48))}`, {
+    timeoutMs: 10_000,
+  })
+  if (!search.ok) return null
+  const data = (await search.json()) as {
+    coins?: Array<{ id?: string; symbol?: string; market_cap_rank?: number | null }>
   }
+  const want = q.toUpperCase()
+  const coins = data.coins ?? []
+  const exact = coins.filter((c) => (c.symbol ?? '').toUpperCase() === want)
+  const pick = [...exact].sort((a, b) => (a.market_cap_rank ?? 9_999) - (b.market_cap_rank ?? 9_999))[0] ?? coins[0]
+  const found = pick?.id?.trim().toLowerCase()
+  return found && /^[a-z0-9-]{2,80}$/.test(found) ? found : null
+}
+
+export async function GET(req: NextRequest) {
+  const idRaw = req.nextUrl.searchParams.get('id') ?? ''
+  const symbolRaw = req.nextUrl.searchParams.get('symbol') ?? ''
 
   try {
-    const res = await fetchCoingecko(
-      `/coins/${encodeURIComponent(id)}?localization=true&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`,
-      { timeoutMs: 14_000 },
-    )
+    let id = await resolveCoinId(idRaw, symbolRaw)
+    if (!id) {
+      return NextResponse.json({ about: null, error: 'moeda não encontrada' }, { status: 200 })
+    }
+    const coinUrl = (coinId: string) =>
+      `/coins/${encodeURIComponent(coinId)}?localization=true&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`
+    let res = await fetchCoingecko(coinUrl(id), { timeoutMs: 14_000 })
+    if (!res.ok && symbolRaw) {
+      const alt = geckoIdFromSymbol(symbolRaw) ?? (await resolveCoinId('', symbolRaw))
+      if (alt && alt !== id) {
+        id = alt
+        res = await fetchCoingecko(coinUrl(id), { timeoutMs: 14_000 })
+      }
+    }
     if (!res.ok) {
       return NextResponse.json({ about: null, error: `CoinGecko ${res.status}` }, { status: 200 })
     }

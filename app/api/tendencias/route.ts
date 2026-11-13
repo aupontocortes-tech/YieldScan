@@ -20,7 +20,6 @@ import {
   fetchCategoryCoins,
   fetchCoinGeckoCategories,
 } from '@/lib/tendencias/fetch-narrative-markets'
-import { pickHotGeckoCategoryIds } from '@/lib/tendencias/narrative-adoption'
 import {
   fetchTendenciasGlobal,
   fetchTendenciasMarkets,
@@ -82,9 +81,13 @@ const fetchRaw = unstable_cache(
         }),
       ])
 
-    const hotCats = pickHotGeckoCategoryIds(cgCategories)
-    const seedCats = ['real-world-assets-rwa', 'decentralized-finance-defi', 'artificial-intelligence']
-    const catIds = [...new Set([...seedCats, ...hotCats])].slice(0, 4)
+    const seedCats = [
+      'real-world-assets-rwa',
+      'decentralized-finance-defi',
+      'artificial-intelligence',
+      'lending-borrowing',
+    ]
+    const catIds = seedCats
     const narrativeCoinsByCat = await withTimeout(fetchCategoryCoins(catIds), 42_000, {})
 
     /**
@@ -168,7 +171,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v28'],
+  ['tendencias-trim-v36'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -178,7 +181,7 @@ function getTrimPayload(period: MomentumPeriod, tone: AnalysisTone): Promise<Ten
       const raw = await fetchRaw()
       return buildTrimPayload({ ...raw, period, tone })
     },
-    ['tendencias-trim-payload-v28', period, tone],
+    ['tendencias-trim-payload-v36', period, tone],
     { revalidate: 180, tags: ['tendencias'] },
   )()
 }
@@ -204,7 +207,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v28',
+          'X-Tendencias-Cache': 'trim-v36',
         }
 
     return NextResponse.json(

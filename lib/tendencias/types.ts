@@ -24,6 +24,7 @@ export type TendenciasNarrativeId =
   | 'restaking'
   | 'depin'
   | 'buybacks'
+  | 'emprestimos'
 
 export type TendenciasNarrativeSpotlight = {
   symbol: string
@@ -96,6 +97,15 @@ export type TendenciasNarrative = {
   source?: 'adocao' | 'atencao' | 'misto'
   simple?: string
   spotlights?: TendenciasNarrativeSpotlight[]
+  /** Frase curta: porque está neste lugar do ranking. */
+  rankWhy?: string
+  topCoin?: {
+    symbol: string
+    name: string
+    chain: string
+    change7d: number | null
+    geckoId: string | null
+  } | null
 }
 
 export type TendenciasAlert = {
@@ -188,6 +198,8 @@ export type TendenciasL1Token = {
   protocol: string
   category: string
   narrative: string
+  /** Nichos visíveis no cartão: DeFi, RWA, Recompra, IA… */
+  niches: string[]
   tvlUsd: number
   change7d: number | null
   volume24h: number | null

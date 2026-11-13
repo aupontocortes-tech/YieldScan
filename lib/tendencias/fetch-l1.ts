@@ -16,7 +16,9 @@ export type RawLlamaProtocol = {
   chains: string[]
   chainTvls: Record<string, number>
   tvl: number
+  change1d: number | null
   change7d: number | null
+  change1m: number | null
   mcap: number | null
   description: string | null
   url: string | null
@@ -42,7 +44,9 @@ type LlamaProtocolJson = {
   chains?: string[]
   chainTvls?: Record<string, number | { tvl?: number }>
   tvl?: number
+  change_1d?: number | null
   change_7d?: number | null
+  change_1m?: number | null
   mcap?: number | null
   description?: string | null
   url?: string | null
@@ -138,7 +142,9 @@ export async function fetchLlamaProtocolsLite(limit = 220): Promise<RawLlamaProt
         chains: Array.isArray(p.chains) ? p.chains.filter((c) => typeof c === 'string') : [],
         chainTvls: normalizeChainTvls(p.chainTvls),
         tvl: p.tvl ?? 0,
+        change1d: typeof p.change_1d === 'number' ? p.change_1d : null,
         change7d: typeof p.change_7d === 'number' ? p.change_7d : null,
+        change1m: typeof p.change_1m === 'number' ? p.change_1m : null,
         mcap: typeof p.mcap === 'number' ? p.mcap : null,
         description: clipText(p.description),
         url: p.url ?? null,

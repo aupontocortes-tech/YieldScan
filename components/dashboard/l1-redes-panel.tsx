@@ -1,16 +1,31 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Globe2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { TendenciasL1Panel, TendenciasL1Token, TendenciasNetworkRow } from '@/lib/tendencias/types'
+import { toneForNarrative } from '@/lib/tendencias/ui-colors'
+import type {
+  TendenciasL1Panel,
+  TendenciasL1Token,
+  TendenciasNarrative,
+  TendenciasNetworkRow,
+} from '@/lib/tendencias/types'
 import { cn } from '@/lib/utils'
 
 function fmtPct(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return '—'
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
+}
+
+function fmtUsd(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n <= 0) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 1e9) return `${(abs / 1e9).toFixed(1)} B US$`
+  if (abs >= 1e6) return `${(abs / 1e6).toFixed(1)} M US$`
+  if (abs >= 1e3) return `${(abs / 1e3).toFixed(0)} K US$`
+  return `${abs.toFixed(0)} US$`
 }
 
 function fmtCoins(n: number | null | undefined): string {
@@ -35,11 +50,14 @@ type TokenFicha = {
   detail: string
 }
 
-function TokenFichaPanel({ geckoId }: { geckoId: string }) {
+function TokenFichaPanel({ geckoId, symbol }: { geckoId: string | null; symbol: string }) {
   const { data, isLoading } = useQuery({
-    queryKey: ['token-ficha', geckoId],
+    queryKey: ['token-ficha', geckoId ?? '', symbol],
     queryFn: async () => {
-      const res = await fetch(`/api/token-about?id=${encodeURIComponent(geckoId)}`)
+      const q = new URLSearchParams()
+      if (geckoId) q.set('id', geckoId)
+      if (symbol) q.set('symbol', symbol)
+      const res = await fetch(`/api/token-about?${q.toString()}`)
       if (!res.ok) return null
       return (await res.json()) as TokenFicha
     },
@@ -71,6 +89,15 @@ function TokenFichaPanel({ geckoId }: { geckoId: string }) {
         <p className="mt-1 text-sm leading-relaxed text-foreground/90">
           {data.about ?? 'Ainda não há um texto simples para esta moeda.'}
         </p>
+        {(data.categories?.length ?? 0) > 0 && (
+          <p className="mt-2 flex flex-wrap gap-1">
+            {data.categories!.map((c) => (
+              <span key={c} className="rounded-md bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-200">
+                {c}
+              </span>
+            ))}
+          </p>
+        )}
       </div>
 
       <div>
@@ -104,9 +131,11 @@ function TokenFichaPanel({ geckoId }: { geckoId: string }) {
   )
 }
 
-function TokenCard({ token, chain }: { token: TendenciasL1Token; chain: string }) {
+function TokenCard({ token }: { token: TendenciasL1Token }) {
   const [open, setOpen] = useState(false)
   const up = (token.change7d ?? 0) >= 0
+  const niches = token.niches?.length ? token.niches : [token.narrative]
+  const nicheTone = toneForNarrative(niches[0])
 
   return (
     <li>
@@ -114,15 +143,26 @@ function TokenCard({ token, chain }: { token: TendenciasL1Token; chain: string }
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'w-full rounded-xl border px-3 py-3 text-left transition',
-          open
-            ? 'border-cyan-400/40 bg-cyan-950/25'
-            : up
-              ? 'border-emerald-500/25 bg-emerald-950/15 hover:border-emerald-400/40'
-              : 'border-rose-500/25 bg-rose-950/10 hover:border-rose-400/40',
+          'w-full rounded-xl border bg-gradient-to-br px-3 py-3 text-left transition',
+          nicheTone.border,
+          nicheTone.bg,
+          open && 'ring-1 ring-cyan-400/30',
         )}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap gap-1">
+          {niches.map((n) => {
+            const t = toneForNarrative(n)
+            return (
+              <span
+                key={n}
+                className={cn('rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide', t.chip)}
+              >
+                {n}
+              </span>
+            )
+          })}
+        </div>
+        <div className="mt-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-base font-bold tracking-tight">
               {token.symbol}{' '}
@@ -142,24 +182,90 @@ function TokenCard({ token, chain }: { token: TendenciasL1Token; chain: string }
             <p className="mt-1 text-[10px] text-muted-foreground">7 dias</p>
           </div>
         </div>
-        <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-cyan-300">
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold text-foreground/80">
+          <span>Travado {fmtUsd(token.tvlUsd)}</span>
+          <span className="text-muted-foreground">·</span>
+          <span>Volume {fmtUsd(token.volume24h)}</span>
+        </div>
+        <p className={cn('mt-2 flex items-center gap-1 text-[11px] font-medium', nicheTone.text)}>
           {open ? 'Fechar ficha' : 'Clica para ver o que faz e a inflação'}
           <ChevronDown className={cn('h-3.5 w-3.5', open && 'rotate-180')} />
         </p>
       </button>
-      {open && token.geckoId && <TokenFichaPanel geckoId={token.geckoId} />}
-      {open && !token.geckoId && (
-        <p className="mt-2 px-1 text-sm text-muted-foreground">
-          Sem ficha CoinGecko para {token.symbol} em {chain}. {token.about}
-        </p>
-      )}
+      {open && <TokenFichaPanel geckoId={token.geckoId} symbol={token.symbol} />}
     </li>
   )
 }
 
-export function L1RedesPanel({ l1 }: { l1: TendenciasL1Panel | null }) {
+function tokenInNiche(t: TendenciasL1Token, n: TendenciasNarrative): boolean {
+  const label = n.label.toLowerCase()
+  const id = String(n.id).toLowerCase()
+  return (t.niches ?? [t.narrative]).some((x) => {
+    const v = x.toLowerCase()
+    if (v === label || v === id) return true
+    if (id === 'buybacks' && (v.includes('recompra') || v.includes('queima'))) return true
+    if (id === 'emprestimos' && v.includes('empréstimo')) return true
+    if (id === 'defi' && (v === 'defi' || v.includes('bolsa') || v.includes('rendimento'))) return true
+    return false
+  })
+}
+
+function tokenPerform(t: TendenciasL1Token): number {
+  return (t.tvlUsd ?? 0) + (t.volume24h ?? 0) * 0.35 + Math.max(0, t.change7d ?? 0) * 50_000
+}
+
+export function bestCoinForNarrative(
+  l1: TendenciasL1Panel | null,
+  n: TendenciasNarrative,
+): { symbol: string; name: string; chain: string; change7d: number | null; geckoId: string | null } | null {
+  if (!l1) return null
+  let best: { symbol: string; name: string; chain: string; change7d: number | null; geckoId: string | null } | null =
+    null
+  let score = -1
+  for (const net of l1.networks) {
+    for (const t of net.tokens) {
+      if (!tokenInNiche(t, n)) continue
+      const s = tokenPerform(t)
+      if (s > score) {
+        score = s
+        best = {
+          symbol: t.symbol,
+          name: t.name,
+          chain: net.name,
+          change7d: t.change7d,
+          geckoId: t.geckoId,
+        }
+      }
+    }
+  }
+  return best
+}
+
+export function L1RedesPanel({
+  l1,
+  narratives = [],
+  nicheId = null,
+}: {
+  l1: TendenciasL1Panel | null
+  narratives?: TendenciasNarrative[]
+  nicheId?: string | null
+}) {
   const [onlyL1, setOnlyL1] = useState(true)
+  const [showMoreNets, setShowMoreNets] = useState(false)
+  const [showMoreToks, setShowMoreToks] = useState(false)
   const [selected, setSelected] = useState<string | null>(l1?.bestL1 ?? null)
+
+  useEffect(() => {
+    if (!nicheId || !l1) return
+    const n = narratives.find((x) => String(x.id) === nicheId)
+    if (!n) return
+    const pick = bestCoinForNarrative(l1, n)
+    if (pick?.chain) setSelected(pick.chain)
+    setShowMoreToks(false)
+    requestAnimationFrame(() => {
+      document.getElementById('redes-tokens')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [nicheId, l1, narratives])
 
   const networks = useMemo(() => {
     const rows = l1?.networks ?? []
@@ -167,6 +273,35 @@ export function L1RedesPanel({ l1 }: { l1: TendenciasL1Panel | null }) {
   }, [l1, onlyL1])
 
   const active = networks.find((n) => n.name === selected) ?? networks[0] ?? null
+  const niche = narratives.find((n) => String(n.id) === nicheId) ?? null
+  const shownTokens = useMemo(() => {
+    if (!active) return []
+    let list = [...active.tokens]
+    if (niche) list = list.filter((t) => tokenInNiche(t, niche))
+    const order = narratives.map((n) => n.label.toLowerCase())
+    list.sort((a, b) => {
+      if (niche) return tokenPerform(b) - tokenPerform(a)
+      const ia = order.indexOf((a.niches?.[0] ?? a.narrative).toLowerCase())
+      const ib = order.indexOf((b.niches?.[0] ?? b.narrative).toLowerCase())
+      const ra = ia < 0 ? 80 : ia
+      const rb = ib < 0 ? 80 : ib
+      if (ra !== rb) return ra - rb
+      return tokenPerform(b) - tokenPerform(a)
+    })
+    return list.filter((t) => Boolean(t.geckoId) && (t.tvlUsd >= 2_000_000 || (t.volume24h ?? 0) > 50_000))
+  }, [active, niche, narratives])
+
+  const visibleNets = useMemo(() => {
+    if (showMoreNets) return networks
+    const top = networks.slice(0, 5)
+    if (selected && !top.some((n) => n.name === selected)) {
+      const extra = networks.find((n) => n.name === selected)
+      return extra ? [...top, extra] : top
+    }
+    return top
+  }, [networks, showMoreNets, selected])
+
+  const visibleToks = showMoreToks ? shownTokens : shownTokens.slice(0, 5)
 
   if (!l1 || l1.networks.length === 0) {
     return (
@@ -208,13 +343,16 @@ export function L1RedesPanel({ l1 }: { l1: TendenciasL1Panel | null }) {
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">1. Escolhe a rede</h3>
         <ul className="space-y-1.5">
-          {networks.map((n: TendenciasNetworkRow) => {
+          {visibleNets.map((n: TendenciasNetworkRow) => {
             const on = active?.name === n.name
             return (
               <li key={n.name}>
                 <button
                   type="button"
-                  onClick={() => setSelected(n.name)}
+                  onClick={() => {
+                    setSelected(n.name)
+                    setShowMoreToks(false)
+                  }}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left',
                     on ? 'border-cyan-400/50 bg-cyan-500/15 ring-1 ring-cyan-400/30' : 'border-border/35 bg-muted/5',
@@ -237,19 +375,52 @@ export function L1RedesPanel({ l1 }: { l1: TendenciasL1Panel | null }) {
             )
           })}
         </ul>
+        {networks.length > 5 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 w-full"
+            onClick={() => setShowMoreNets((v) => !v)}
+          >
+            {showMoreNets ? 'Ver menos redes' : `Ver mais redes (${networks.length - 5})`}
+          </Button>
+        )}
       </section>
 
       {active && (
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold">2. Tokens a performar em {active.name}</h3>
+        <section id="redes-tokens" className="space-y-3">
+          <h3 className="text-sm font-semibold">
+            2. Tokens em {active.name}
+            {niche ? ` · nicho ${niche.label}` : ''}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            Ordenados pelo que mais subiu em 7 dias. Clica no token para ver o que faz e se ainda vão sair muitas moedas.
+            {niche
+              ? `Só o nicho ${niche.label} (o que escolheste em cima). Ordenados por valor travado + volume.`
+              : 'Ordem = nicho melhor no ranking de cima, depois valor travado e volume. Clica num tema acima para filtrar.'}
           </p>
-          <ul className="space-y-2">
-            {active.tokens.map((t) => (
-              <TokenCard key={`${active.name}-${t.symbol}-${t.protocol}`} token={t} chain={active.name} />
-            ))}
-          </ul>
+          {shownTokens.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum token deste nicho nesta rede agora.</p>
+          ) : (
+            <>
+              <ul className="space-y-2">
+                {visibleToks.map((t) => (
+                  <TokenCard key={`${active.name}-${t.symbol}-${t.protocol}`} token={t} />
+                ))}
+              </ul>
+              {shownTokens.length > 5 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full"
+                  onClick={() => setShowMoreToks((v) => !v)}
+                >
+                  {showMoreToks ? 'Ver menos tokens' : `Ver mais tokens (${shownTokens.length - 5})`}
+                </Button>
+              )}
+            </>
+          )}
         </section>
       )}
     </div>

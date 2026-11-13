@@ -3,7 +3,7 @@ import type { RawMarketCoin } from '@/lib/tendencias/fetch-data'
 import type { RawLlamaProtocol } from '@/lib/tendencias/fetch-l1'
 import type { RawCgCategory } from '@/lib/tendencias/fetch-narrative-markets'
 import { NARRATIVE_GECKO_IDS } from '@/lib/tendencias/fetch-narrative-markets'
-import type { TendenciasNarrative, TendenciasNarrativeSpotlight } from '@/lib/tendencias/types'
+import type { MomentumPeriod, TendenciasNarrative, TendenciasNarrativeSpotlight } from '@/lib/tendencias/types'
 
 export const NARRATIVE_DEFS: Array<{
   id: string
@@ -30,10 +30,18 @@ export const NARRATIVE_DEFS: Array<{
     newsId: 'ia',
   },
   {
+    id: 'emprestimos',
+    label: 'Empréstimos',
+    simple: 'Protocolos de crédito: depositas cripto e recebes juros, ou pedes emprestado.',
+    llamaCats: ['Lending'],
+    geckoIds: NARRATIVE_GECKO_IDS.emprestimos ?? [],
+    newsId: 'defi',
+  },
+  {
     id: 'defi',
     label: 'DeFi',
-    simple: 'Finanças na cadeia: empréstimos, bolsas e rendimento.',
-    llamaCats: ['Dexes', 'Dexs', 'Lending', 'Yield', 'Yield Aggregator', 'CDP'],
+    simple: 'Finanças na cadeia: bolsas, rendimento e crédito colateralizado.',
+    llamaCats: ['Dexes', 'Dexs', 'Yield', 'Yield Aggregator', 'CDP'],
     geckoIds: NARRATIVE_GECKO_IDS.defi ?? [],
     newsId: 'defi',
   },
@@ -110,18 +118,49 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
 }
 
-function llamaFor(def: (typeof NARRATIVE_DEFS)[number], protocols: RawLlamaProtocol[]) {
+function protocolChange(p: RawLlamaProtocol, period: MomentumPeriod): number | null {
+  if (period === '24h') return p.change1d
+  if (period === '7d') return p.change7d
+  return p.change1m
+}
+
+function coinChange(c: RawMarketCoin, period: MomentumPeriod): number | null {
+  if (period === '24h') return c.price_change_percentage_24h
+  if (period === '7d') return c.price_change_percentage_7d_in_currency ?? null
+  if (period === '30d') return c.price_change_percentage_30d_in_currency ?? null
+  return c.price_change_percentage_200d_in_currency ?? null
+}
+
+function coinsPeriodChange(coins: RawMarketCoin[], period: MomentumPeriod): number | null {
+  let w = 0
+  let wSum = 0
+  for (const c of coins) {
+    const ch = coinChange(c, period)
+    const cap = c.market_cap ?? 0
+    if (ch == null || cap <= 0) continue
+    w += ch * cap
+    wSum += cap
+  }
+  return wSum > 0 ? w / wSum : null
+}
+
+function llamaFor(def: (typeof NARRATIVE_DEFS)[number], protocols: RawLlamaProtocol[], period: MomentumPeriod) {
   const cats = new Set(def.llamaCats.map((c) => c.toLowerCase()))
   const rows = protocols.filter((p) => cats.has(p.category.toLowerCase()))
   const tvl = rows.reduce((s, p) => s + (p.tvl > 0 ? p.tvl : 0), 0)
   let w = 0
   let wSum = 0
   for (const p of rows) {
-    if (p.change7d == null || p.tvl <= 0) continue
-    w += p.change7d * p.tvl
+    const ch = protocolChange(p, period)
+    if (ch == null || p.tvl <= 0) continue
+    w += ch * p.tvl
     wSum += p.tvl
   }
-  return { tvl, tvlChange7d: wSum > 0 ? w / wSum : null, symbols: rows.map((p) => p.symbol).filter(Boolean) as string[] }
+  return {
+    tvl,
+    tvlChange: wSum > 0 ? w / wSum : null,
+    symbols: rows.map((p) => p.symbol).filter(Boolean) as string[],
+  }
 }
 
 function cgFor(def: (typeof NARRATIVE_DEFS)[number], categories: RawCgCategory[]) {
@@ -238,39 +277,35 @@ export function buildAdoptionNarratives(input: {
   newsById: Map<string, { mentionCount: number; posCount: number; negCount: number }>
   holders?: HoldersBuybackOverview
   markets?: RawMarketCoin[]
+  period?: MomentumPeriod
 }): TendenciasNarrative[] {
+  const period = input.period ?? '7d'
   const scored = NARRATIVE_DEFS.map((def) => {
-    const llama = llamaFor(def, input.protocols)
+    const llama = llamaFor(def, input.protocols, period)
     const cg = cgFor(def, input.categories)
+    const catCoins = def.geckoIds.flatMap((id) => input.coinsByCat[id] ?? [])
+    const cgPeriod = coinsPeriodChange(catCoins, period) ?? (period === '24h' ? cg.change24h : null)
     const news = def.newsId ? input.newsById.get(def.newsId) : undefined
     const mentionCount = news?.mentionCount ?? 0
-    return { def, llama, cg, mentionCount, pos: news?.posCount ?? 0, neg: news?.negCount ?? 0 }
+    return { def, llama, cg, cgPeriod, mentionCount, pos: news?.posCount ?? 0, neg: news?.negCount ?? 0 }
   })
 
   const tvlVals = scored.map((s) => s.llama.tvl)
-  const tvlChg = scored.map((s) => s.llama.tvlChange7d ?? 0)
-  const cgChg = scored.map((s) => s.cg.change24h ?? 0)
   const newsVals = scored.map((s) => s.mentionCount)
 
   const holders = input.holders
   const rows: TendenciasNarrative[] = scored.map((s) => {
-    let adopt = clamp(
-      Math.round(
-        percentile(s.llama.tvl, tvlVals) * 0.45 +
-          percentile(s.llama.tvlChange7d ?? 0, tvlChg) * 0.3 +
-          percentile(s.cg.change24h ?? 0, cgChg) * 0.25,
-      ),
-      0,
-      100,
-    )
-    if (s.def.id === 'buybacks' && holders && holders.total24h > 0) {
-      const revBoost = Math.min(34, holders.total24h / 180_000)
-      const chg = holders.change7d ?? holders.change1d ?? 0
-      adopt = clamp(Math.round(50 + revBoost + Math.max(-12, Math.min(12, chg * 0.12))), 0, 100)
-    }
+    const isBuy = s.def.id === 'buybacks'
+    const holdersChg =
+      period === '24h' ? holders?.change1d : (holders?.change7d ?? holders?.change1d)
+    const llamaMeaningful = !isBuy && s.llama.tvl >= 200_000_000 && s.llama.tvlChange != null
+    const llamaChg = isBuy ? holdersChg ?? null : llamaMeaningful ? s.llama.tvlChange : null
+    const cgChg = s.cgPeriod ?? (period === '24h' ? s.cg.change24h : null)
+    const parts = [llamaChg, cgChg].filter((v): v is number => v != null)
+    const perform = parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : null
+    const adopt = clamp(Math.round(50 + (perform ?? 0) * 1.1), 0, 100)
     const attention = percentile(s.mentionCount, newsVals)
-    let score = clamp(Math.round(adopt * 0.75 + attention * 0.15 + percentile(s.cg.volume24h ?? 0, scored.map((x) => x.cg.volume24h ?? 0)) * 0.1), 0, 100)
-    if (s.def.id === 'buybacks' && (holders?.total24h ?? 0) > 0) score = Math.max(score, 64)
+    const score = clamp(Math.round(adopt * 0.92 + attention * 0.08), 0, 100)
     const spotlights =
       s.def.id === 'buybacks'
         ? buybackSpotlights(holders, input.markets ?? [])
@@ -287,16 +322,12 @@ export function buildAdoptionNarratives(input: {
           ? `Dinheiro neste tema (TVL): ${(s.llama.tvl / 1e9 >= 1 ? `${(s.llama.tvl / 1e9).toFixed(1)} mil milhões` : `${(s.llama.tvl / 1e6).toFixed(0)} milhões`)} USD.`
           : 'Ainda pouco TVL medido neste tema.'
     const chgBit =
-      s.def.id === 'buybacks' && holders && (holders.change7d ?? holders.change1d) != null
-        ? ` Em 7 dias esta receita ${((holders.change7d ?? holders.change1d) ?? 0) >= 0 ? 'subiu' : 'desceu'} ${Math.abs((holders.change7d ?? holders.change1d) ?? 0).toFixed(1)}%.`
-        : s.llama.tvlChange7d != null
-          ? ` Em 7 dias o TVL ${s.llama.tvlChange7d >= 0 ? 'subiu' : 'desceu'} ${Math.abs(s.llama.tvlChange7d).toFixed(1)}%.`
-          : s.cg.change24h != null
-            ? ` No CoinGecko o sector ${s.cg.change24h >= 0 ? 'sobe' : 'desce'} ${Math.abs(s.cg.change24h).toFixed(1)}% hoje.`
-            : ''
+      perform != null
+        ? ` No período escolhido o nicho ${perform >= 0 ? 'sobe' : 'desce'} ${Math.abs(perform).toFixed(1)}% (DefiLlama TVL e/ou CoinGecko).`
+        : ''
     const talkBit = s.mentionCount > 0 ? ` Nas notícias aparece ${s.mentionCount} vezes.` : ''
 
-    const sentimentScore = 50 + (s.llama.tvlChange7d ?? 0) * 0.6 + (s.cg.change24h ?? 0) * 0.5
+    const sentimentScore = 50 + (perform ?? 0) * 0.6
     const sentiment: TendenciasNarrative['sentiment'] =
       sentimentScore >= 56 ? 'optimista' : sentimentScore <= 44 ? 'pessimista' : 'neutro'
 
@@ -312,7 +343,7 @@ export function buildAdoptionNarratives(input: {
       adoptionScore: adopt,
       attentionScore: attention,
       tvlUsd: s.def.id === 'buybacks' ? holders?.total24h ?? null : s.llama.tvl > 0 ? s.llama.tvl : null,
-      tvlChange7dPct: s.def.id === 'buybacks' ? holders?.change7d ?? holders?.change1d ?? null : s.llama.tvlChange7d,
+      tvlChange7dPct: perform,
       marketCapChange24h: s.cg.change24h,
       volume24h: s.cg.volume24h,
       source: adopt >= attention + 8 ? 'adocao' : attention >= adopt + 15 ? 'atencao' : 'misto',
@@ -322,10 +353,17 @@ export function buildAdoptionNarratives(input: {
   })
 
   const ranked = rows
-    .filter((r) => (r.adoptionScore ?? 0) > 8 || r.mentionCount > 0 || (r.spotlights?.length ?? 0) > 0 || r.id === 'buybacks')
-    .sort((a, b) => (b.intensity ?? 0) - (a.intensity ?? 0))
-  const buybacks = ranked.find((r) => r.id === 'buybacks')
-  const others = ranked.filter((r) => r.id !== 'buybacks').slice(0, 7)
-  const mixed = buybacks ? [...others, buybacks] : others
-  return mixed.sort((a, b) => (b.intensity ?? 0) - (a.intensity ?? 0)).slice(0, 8)
+    .filter((r) => r.tvlChange7dPct != null)
+    .sort((a, b) => (b.tvlChange7dPct ?? -999) - (a.tvlChange7dPct ?? -999))
+    .slice(0, 5)
+    .map((r, i) => {
+      const chg = r.tvlChange7dPct ?? 0
+      const rankWhy =
+        i === 0
+          ? `Nº 1 neste período: ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% (TVL DefiLlama + sector CoinGecko).`
+          : `${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% neste período — TVL travado, fluxo e preço do sector.`
+      return { ...r, intensity: clamp(Math.round(50 + chg * 1.2), 0, 100), rankWhy }
+    })
+
+  return ranked
 }

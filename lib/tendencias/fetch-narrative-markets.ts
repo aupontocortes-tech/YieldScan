@@ -30,6 +30,7 @@ export const NARRATIVE_GECKO_IDS: Record<string, string[]> = {
   rwa: ['real-world-assets-rwa'],
   ia: ['artificial-intelligence'],
   defi: ['decentralized-finance-defi'],
+  emprestimos: ['lending-borrowing', 'decentralized-lending'],
   layer1: ['layer-1'],
   layer2: ['layer-2'],
   memecoins: ['meme-token'],
@@ -77,7 +78,7 @@ export async function fetchCategoryCoins(
   const unique = [...new Set(geckoCategoryIds)].slice(0, 4)
   for (const id of unique) {
     const rows = await cgJson<RawMarketCoin[]>(
-      `/coins/markets?vs_currency=usd&category=${encodeURIComponent(id)}&order=volume_desc&per_page=${perPage}&page=1&sparkline=false&price_change_percentage=24h,7d`,
+      `/coins/markets?vs_currency=usd&category=${encodeURIComponent(id)}&order=volume_desc&per_page=${perPage}&page=1&sparkline=false&price_change_percentage=24h,7d,30d,200d`,
       16_000,
     )
     out[id] = mapMarkets(rows)

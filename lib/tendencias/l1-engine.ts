@@ -4,6 +4,7 @@ import {
   sobreProtocoloPt,
   sobreTokenNativoPt,
 } from '@/lib/tendencias/crypto-pt'
+import { geckoIdFromSymbol } from '@/lib/tendencias/gecko-ids'
 import type { RawMarketCoin } from '@/lib/tendencias/fetch-data'
 import type { DexVolumeByChain, RawLlamaChain, RawLlamaProtocol } from '@/lib/tendencias/fetch-l1'
 import type { TendenciasL1Panel, TendenciasL1Token, TendenciasNetworkRow } from '@/lib/tendencias/types'
@@ -160,16 +161,38 @@ function buyable(token: TendenciasL1Token): boolean {
   return true
 }
 
+function resolveGeckoId(
+  p: { geckoId: string | null; symbol: string | null },
+  market: RawMarketCoin | undefined,
+): string | null {
+  if (market?.id) return market.id
+  const fromSym = geckoIdFromSymbol(p.symbol) ?? geckoIdFromSymbol(market?.symbol)
+  if (fromSym) return fromSym
+  return p.geckoId
+}
+
+function nichesFor(category: string, buyback: boolean): string[] {
+  const cat = narrativaCategoriaPt(category)
+  const out: string[] = []
+  if (buyback) out.push('Recompra')
+  if (cat && !out.includes(cat)) out.push(cat)
+  return out.slice(0, 3)
+}
+
 export function buildL1Panel(input: {
   chains: RawLlamaChain[]
   protocols: RawLlamaProtocol[]
   dexVolume: DexVolumeByChain
   markets: RawMarketCoin[]
   newsNarrative: string | null
+  buybackGeckoIds?: string[]
+  buybackSymbols?: string[]
 }): TendenciasL1Panel {
   const { chains, protocols, dexVolume, markets, newsNarrative } = input
   const marketByGecko = new Map(markets.map((m) => [m.id, m]))
   const marketBySymbol = new Map(markets.map((m) => [m.symbol.toUpperCase(), m]))
+  const buyGecko = new Set((input.buybackGeckoIds ?? []).filter(Boolean))
+  const buySym = new Set((input.buybackSymbols ?? []).map((s) => s.toUpperCase()))
 
   const MIN_TVL_FLOW = 80_000_000
   const tvlVals = chains.map((c) => c.tvl)
@@ -188,7 +211,7 @@ export function buildL1Panel(input: {
     const tvlChange1dPct = pctChange(c.tvl, c.tvlPrevDay)
     const nativeMarket =
       (c.geckoId ? marketByGecko.get(c.geckoId) : undefined) ??
-      (c.tokenSymbol ? marketBySymbol.get(c.tokenSymbol) : undefined)
+      (c.tokenSymbol ? marketBySymbol.get(c.tokenSymbol.toUpperCase()) : undefined)
     const nativeChange7d =
       nativeMarket?.price_change_percentage_7d_in_currency ??
       nativeMarket?.price_change_percentage_24h ??
@@ -239,13 +262,15 @@ export function buildL1Panel(input: {
 
     const tokens: TendenciasL1Token[] = []
     if (nativeMarket || c.tokenSymbol) {
+      const nativeSym = (nativeMarket?.symbol ?? c.tokenSymbol ?? c.name).toUpperCase()
       tokens.push({
-        name: nativeMarket?.name ?? c.name,
-        symbol: (nativeMarket?.symbol ?? c.tokenSymbol ?? c.name).toUpperCase(),
-        geckoId: nativeMarket?.id ?? c.geckoId,
+        name: nativeMarket?.name ?? nomeRedeVisivel(c.name),
+        symbol: nativeSym,
+        geckoId: nativeMarket?.id ?? c.geckoId ?? geckoIdFromSymbol(nativeSym),
         protocol: c.name,
         category: 'Chain',
-        narrative: 'L1',
+        narrative: 'Camada 1',
+        niches: nichesFor('Chain', buyGecko.has(nativeMarket?.id ?? c.geckoId ?? '') || buySym.has(nativeSym)),
         tvlUsd: c.tvl,
         change7d: nativeChange7d,
         volume24h: nativeMarket?.total_volume ?? volume24h,
@@ -269,20 +294,27 @@ export function buildL1Panel(input: {
     for (const { p, tvlOnChain } of rankedProtocols) {
       const m =
         (p.geckoId ? marketByGecko.get(p.geckoId) : undefined) ??
-        (p.symbol ? marketBySymbol.get(p.symbol) : undefined)
+        (p.symbol ? marketBySymbol.get(p.symbol.toUpperCase()) : undefined)
       const symbol = (m?.symbol ?? p.symbol ?? '').toUpperCase().slice(0, 16)
       if (!symbol || symbol === '-') continue
       if (seen.has(symbol)) continue
+      if (/validator|\blst\b|sanctum/i.test(p.name) && !geckoIdFromSymbol(symbol) && !m) continue
+      const geckoId = resolveGeckoId(p, m)
+      if (!m && !geckoIdFromSymbol(symbol)) continue
       seen.add(symbol)
       const change7d =
         m?.price_change_percentage_7d_in_currency ?? p.change7d ?? m?.price_change_percentage_24h ?? null
+      const isBuyback = Boolean(
+        (geckoId && buyGecko.has(geckoId)) || buySym.has(symbol) || (p.geckoId && buyGecko.has(p.geckoId)),
+      )
       const row: TendenciasL1Token = {
         name: p.name,
         symbol,
-        geckoId: m?.id ?? p.geckoId,
+        geckoId,
         protocol: p.name,
         category: p.category,
         narrative: narrativeForCategory(p.category),
+        niches: nichesFor(p.category, isBuyback),
         tvlUsd: tvlOnChain,
         change7d,
         volume24h: m?.total_volume ?? null,
@@ -294,7 +326,11 @@ export function buildL1Panel(input: {
       tokens.push(row)
     }
 
-    tokens.sort((a, b) => (b.change7d ?? -999) - (a.change7d ?? -999))
+    tokens.sort((a, b) => {
+      const pa = (a.tvlUsd ?? 0) + (a.volume24h ?? 0) * 0.35
+      const pb = (b.tvlUsd ?? 0) + (b.volume24h ?? 0) * 0.35
+      return pb - pa
+    })
 
     return {
       name: nomeRedeVisivel(c.name),
