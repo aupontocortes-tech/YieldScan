@@ -119,9 +119,9 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function protocolChange(p: RawLlamaProtocol, period: MomentumPeriod): number | null {
-  if (period === '24h') return p.change1d
-  if (period === '7d') return p.change7d
-  return p.change1m
+  if (period === '24h') return p.change1d ?? p.change7d
+  if (period === '7d') return p.change7d ?? p.change1d
+  return p.change1m ?? p.change7d
 }
 
 function coinChange(c: RawMarketCoin, period: MomentumPeriod): number | null {
@@ -290,14 +290,17 @@ export function buildAdoptionNarratives(input: {
     return { def, llama, cg, cgPeriod, mentionCount, pos: news?.posCount ?? 0, neg: news?.negCount ?? 0 }
   })
 
-  const tvlVals = scored.map((s) => s.llama.tvl)
   const newsVals = scored.map((s) => s.mentionCount)
 
   const holders = input.holders
   const rows: TendenciasNarrative[] = scored.map((s) => {
     const isBuy = s.def.id === 'buybacks'
     const holdersChg =
-      period === '24h' ? holders?.change1d : (holders?.change7d ?? holders?.change1d)
+      period === '24h'
+        ? holders?.change1d ?? null
+        : period === '7d'
+          ? holders?.change7d ?? holders?.change1d ?? null
+          : holders?.change7d ?? null
     const llamaMeaningful = !isBuy && s.llama.tvl >= 200_000_000 && s.llama.tvlChange != null
     const llamaChg = isBuy ? holdersChg ?? null : llamaMeaningful ? s.llama.tvlChange : null
     const cgChg = s.cgPeriod ?? (period === '24h' ? s.cg.change24h : null)
@@ -352,17 +355,25 @@ export function buildAdoptionNarratives(input: {
     }
   })
 
-  const ranked = rows
-    .filter((r) => r.tvlChange7dPct != null)
-    .sort((a, b) => (b.tvlChange7dPct ?? -999) - (a.tvlChange7dPct ?? -999))
+  const ranked = [...rows]
+    .sort((a, b) => {
+      const ap = a.tvlChange7dPct
+      const bp = b.tvlChange7dPct
+      if (ap != null && bp != null) return bp - ap
+      if (ap != null) return -1
+      if (bp != null) return 1
+      return (b.tvlUsd ?? 0) - (a.tvlUsd ?? 0)
+    })
     .slice(0, 5)
     .map((r, i) => {
-      const chg = r.tvlChange7dPct ?? 0
+      const chg = r.tvlChange7dPct
       const rankWhy =
-        i === 0
-          ? `Nº 1 neste período: ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% (TVL DefiLlama + sector CoinGecko).`
-          : `${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% neste período — TVL travado, fluxo e preço do sector.`
-      return { ...r, intensity: clamp(Math.round(50 + chg * 1.2), 0, 100), rankWhy }
+        chg != null
+          ? i === 0
+            ? `Nº 1 neste período: ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% (TVL DefiLlama + sector CoinGecko).`
+            : `${chg >= 0 ? '+' : ''}${chg.toFixed(1)}% neste período — TVL travado, fluxo e preço do sector.`
+          : 'TVL e volume deste tema (ainda sem variação fiável neste período).'
+      return { ...r, intensity: clamp(Math.round(50 + (chg ?? 0) * 1.2), 0, 100), rankWhy }
     })
 
   return ranked

@@ -69,7 +69,7 @@ const fetchRaw = unstable_cache(
         withTimeout(fetchTopProtocolFees(20), 8_000, []),
         fetchGlobalTvlChange7d(),
         fetchLlamaChainsDetailed(36),
-        withTimeout(fetchLlamaProtocolsLite(220), 18_000, []),
+        withTimeout(fetchLlamaProtocolsLite(180), 28_000, []),
         withTimeout(fetchDexVolumeByChain(), 16_000, {}),
         withTimeout(fetchCoinGeckoCategories(), 12_000, []),
         withTimeout(fetchHoldersBuybacks(20), 14_000, {
@@ -171,7 +171,7 @@ const fetchRaw = unstable_cache(
       error,
     }
   },
-  ['tendencias-trim-v36'],
+  ['tendencias-trim-v37'],
   { revalidate: 180, tags: ['tendencias'] },
 )
 
@@ -181,7 +181,7 @@ function getTrimPayload(period: MomentumPeriod, tone: AnalysisTone): Promise<Ten
       const raw = await fetchRaw()
       return buildTrimPayload({ ...raw, period, tone })
     },
-    ['tendencias-trim-payload-v36', period, tone],
+    ['tendencias-trim-payload-v37', period, tone],
     { revalidate: 180, tags: ['tendencias'] },
   )()
 }
@@ -207,7 +207,7 @@ export async function GET(req: NextRequest) {
       ? { 'Cache-Control': 'private, no-store, max-age=0' }
       : {
           'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=420',
-          'X-Tendencias-Cache': 'trim-v36',
+          'X-Tendencias-Cache': 'trim-v37',
         }
 
     return NextResponse.json(
